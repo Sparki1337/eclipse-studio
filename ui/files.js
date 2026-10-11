@@ -264,6 +264,36 @@
     }
   }
 
+  async function checkEclipseStudioRelease() {
+    try {
+      const response = await fetch("https://api.github.com/repos/Sparki1337/eclipse-studio/releases/latest", {
+        headers: { "Accept": "application/vnd.github+json" }
+      });
+      if (!response.ok) return null;
+      const release = await response.json();
+      if (!release || !release.tag_name) return null;
+      const assets = Array.isArray(release.assets) ? release.assets : [];
+      const exeAsset = assets.find((a) => a.name && a.name.toLowerCase().endsWith(".exe")) || assets[0];
+      const url = exeAsset?.browser_download_url || release.html_url;
+      if (!url || !url.startsWith("https://")) return null;
+      const tag = String(release.tag_name).trim();
+      const build = tag.toLowerCase().startsWith("build")
+        ? tag
+        : tag.startsWith("v") || tag.startsWith("V")
+          ? `Build ${tag.slice(1)}`
+          : `Build ${tag}`;
+      return {
+        name: "Eclipse Studio",
+        build: build,
+        url: url,
+        password: "",
+        pinned: true,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
   async function loadCatalog(force = false, silent = false) {
     if (state.refreshing || (state.loaded && !force)) return;
     state.refreshing = true;
@@ -281,6 +311,21 @@
       state.error = "";
       state.loaded = true;
       if (!silent) state.page = 1;
+
+      // Закрепляем последний билд Eclipse Studio возле Crocodile Gena Studio, только если найден на GitHub
+      if (!state.files.some((f) => f.name.toLowerCase() === "eclipse studio")) {
+        try {
+          const eclipseItem = await checkEclipseStudioRelease();
+          if (eclipseItem && !state.files.some((f) => f.name.toLowerCase() === "eclipse studio")) {
+            const crocIndex = state.files.findIndex((f) => f.name.toLowerCase().includes("crocodile gena studio"));
+            if (crocIndex !== -1) {
+              state.files.splice(crocIndex + 1, 0, eclipseItem);
+            } else {
+              state.files.unshift(eclipseItem);
+            }
+          }
+        } catch (_) {}
+      }
     } catch (error) {
       if (!silent) {
         state.files = [];

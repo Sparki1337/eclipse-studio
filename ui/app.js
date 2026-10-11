@@ -158,7 +158,8 @@
     $("#page-title").textContent = viewMeta[name][1];
     if (name === "lua") luaRefresh();
     window.dispatchEvent(new CustomEvent("cgs:view-changed", { detail: name }));
-    $(".main-area").scrollTo({ top: 0, behavior: "smooth" });
+    const mainArea = $(".main-area");
+    if (mainArea) mainArea.scrollTop = 0;
   }
 
   function showModal(title, message, options = {}) {
@@ -2060,18 +2061,33 @@
     });
 
     $("#clear-log").addEventListener("click", () => { $("#activity-log").replaceChildren(); log("Журнал очищен", "system"); });
-    $("#open-personal-channel").addEventListener("click", async () => {
-      try { await call("open_external", { url: "https://t.me/crocodilehub2" }); }
-      catch (error) { toast(errorText(error), "error"); }
+    const telegramModal = $("#telegram-hub-backdrop");
+    const openTelegramHub = () => telegramModal?.classList.remove("hidden");
+    const closeTelegramHub = () => telegramModal?.classList.add("hidden");
+
+    $("#open-telegram-hub")?.addEventListener("click", openTelegramHub);
+    $("#telegram-hub-close")?.addEventListener("click", closeTelegramHub);
+    telegramModal?.addEventListener("click", (event) => {
+      if (event.target === telegramModal) closeTelegramHub();
     });
-    $("#open-fork-channel").addEventListener("click", async () => {
-      try { await call("open_external", { url: "https://t.me/gde_sparki" }); }
-      catch (error) { toast(errorText(error), "error"); }
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && telegramModal && !telegramModal.classList.contains("hidden")) {
+        closeTelegramHub();
+      }
     });
-    $("#open-community-channel").addEventListener("click", async () => {
-      try { await call("open_external", { url: "https://t.me/piratestationn" }); }
+
+    const openChannelUrl = async (url) => {
+      try { await call("open_external", { url }); }
       catch (error) { toast(errorText(error), "error"); }
-    });
+    };
+
+    $("#hub-channel-personal")?.addEventListener("click", () => openChannelUrl("https://t.me/crocodilehub2"));
+    $("#hub-channel-fork")?.addEventListener("click", () => openChannelUrl("https://t.me/gde_sparki"));
+    $("#hub-channel-community")?.addEventListener("click", () => openChannelUrl("https://t.me/piratestationn"));
+
+    $("#open-personal-channel")?.addEventListener("click", () => openChannelUrl("https://t.me/crocodilehub2"));
+    $("#open-fork-channel")?.addEventListener("click", () => openChannelUrl("https://t.me/gde_sparki"));
+    $("#open-community-channel")?.addEventListener("click", () => openChannelUrl("https://t.me/piratestationn"));
     $("#window-minimize").addEventListener("click", () => call("minimize_window").catch(() => {}));
     $("#window-maximize").addEventListener("click", () => call("toggle_maximize_window").catch(() => {}));
     $("#window-close").addEventListener("click", () => call("close_window").catch(() => {}));
@@ -2145,7 +2161,7 @@
       if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
       call("luatools_restore_manifests", { steamPath: state.lua.steamPath || null }).catch(() => {});
     }, 3_000);
-    log("Eclipse Studio 5.2.0 инициализирован", "system");
+    log("Eclipse Studio 6.0.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
     if (invoke) setTimeout(() => checkForUpdates(false), 1800);
   }

@@ -7,7 +7,7 @@
 > **Форк проекта [Crocodile Gena Studio](https://github.com/LeoBanned/crocodile-gena-studio-releases) (автор LeoBanned)**  
 > Репозиторий форка: [https://github.com/Sparki1337/eclipse-studio](https://github.com/Sparki1337/eclipse-studio)
 
-[![Версия](https://img.shields.io/badge/Версия-5.2.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases)
+[![Версия](https://img.shields.io/badge/Версия-6.0.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases)
 [![Платформа](https://img.shields.io/badge/Платформа-Windows_10_|_11_(x64)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
 [![Архитектура](https://img.shields.io/badge/Стек-Rust_Tauri_v2_+_Modern_JS-black?style=for-the-badge&logo=rust&logoColor=orange)](https://tauri.app/)
 [![Безопасность](https://img.shields.io/badge/Защита-Побайтовый_Бэкап-2ea44f?style=for-the-badge&logo=shield)](#-система-безопасности-и-отката)

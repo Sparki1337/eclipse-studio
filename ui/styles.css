@@ -191,9 +191,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .engine-chip span { width:5px; height:5px; background:var(--accent); border-radius:50%; box-shadow:0 0 8px var(--accent); }
 .profile-orb { width:32px; height:32px; display:grid; place-items:center; border-radius:10px; font-size:9px; font-weight:900; color:var(--accent); background:rgba(var(--accent-rgb),.09); border:1px solid rgba(var(--accent-rgb),.2); }
 
-.view { display: none; padding: 0 31px 34px; animation: view-in .35s ease; }
-.view.active { display: block; }
-@keyframes view-in { from { opacity: 0; transform: translateY(5px); } }
+.view { display: none; padding: 0 31px 34px; }
+.view.active { display: block; animation: view-in .25s ease-out both; }
+@keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .premium-panel { position: relative; background: linear-gradient(145deg, rgba(18,22,31,.88), rgba(11,14,21,.86)); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: inset 0 1px rgba(255,255,255,.025), 0 16px 50px rgba(0,0,0,.13); overflow: hidden; }
 .premium-panel::after { content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; background:linear-gradient(115deg,rgba(255,255,255,.025),transparent 28%); }
 
@@ -908,8 +908,8 @@ html, body { background: var(--theme-bg); }
 
 /* ---------- Темы ---------- */
 .theme-picker { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
-.theme-option { display: flex; flex-direction: column; gap: 8px; padding: 7px 7px 9px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); color: #8a94a3; cursor: pointer; text-align: left; transition: border-color .18s, background .18s, color .18s, transform .18s; }
-.theme-option:hover { border-color: rgba(var(--accent-rgb), .26); color: #dfe5eb; transform: translateY(-1px); }
+.theme-option { display: flex; flex-direction: column; gap: 8px; padding: 7px 7px 9px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.02); color: #8a94a3; cursor: pointer; text-align: left; transition: border-color .18s, background .18s, color .18s, box-shadow .18s; }
+.theme-option:hover { border-color: rgba(var(--accent-rgb), .26); color: #dfe5eb; }
 .theme-option.active { border-color: rgba(var(--accent-rgb), .55); background: rgba(var(--accent-rgb), .06); color: var(--text); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .07); }
 .theme-name { padding: 0 3px; font-size: 10px; font-weight: 700; }
 .theme-preview { --a: #0c0f16; --b: #06080d; --s: #0a0d13; --p: #141924; position: relative; display: block; height: 46px; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,.06); background: linear-gradient(145deg, var(--a), var(--b)); }
@@ -1046,10 +1046,10 @@ html.compact .channel-icon { width: 24px; height: 24px; }
    ========================================================================== */
 :root { --ease-out: cubic-bezier(.22, 1, .36, 1); --ease-spring: cubic-bezier(.34, 1.4, .64, 1); }
 
-@keyframes motion-rise { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes motion-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes motion-appear { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 @keyframes motion-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes motion-title { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+@keyframes motion-title { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes motion-pop { 0% { transform: scale(.6); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
 @keyframes motion-shine { from { transform: translateX(-120%) skewX(-20deg); } to { transform: translateX(220%) skewX(-20deg); } }
 
@@ -1067,14 +1067,15 @@ html.motion-recolor *, html.motion-recolor *::before, html.motion-recolor *::aft
 /* Кнопки: мягкое нажатие */
 button { transition-property: background, background-color, border-color, color, box-shadow, transform, opacity; transition-duration: .18s; transition-timing-function: ease; }
 button:not(:disabled):active { transform: scale(.97); }
-.nav-item:not(:disabled):active, .theme-option:not(:disabled):active, .accent:not(:disabled):active { transform: scale(.96); }
+.accent:not(:disabled):active { transform: scale(.96); }
+.nav-item:not(:disabled):active, .theme-option:not(:disabled):active { transform: none; }
 .window-button:active { transform: none; }
 
-/* Меню: иконка и активный индикатор */
-.nav-item svg { transition: transform .25s var(--ease-spring), color .2s, filter .2s; }
-.nav-item:hover svg { transform: translateX(2px) scale(1.08); }
-.nav-item.active svg { animation: motion-pop .45s var(--ease-spring); }
-.nav-item.active { transition: background .3s ease, border-color .3s ease, box-shadow .3s var(--ease-out), color .2s; }
+/* Меню: спокойное и плавное переключение */
+.nav-item svg { transition: color .2s ease, filter .2s ease; }
+.nav-item:hover svg { transform: none; }
+.nav-item.active svg { animation: none; }
+.nav-item.active { transition: background .2s ease, border-color .2s ease, box-shadow .2s ease, color .2s ease; }
 
 /* Плашки Telegram: стрелка */
 .channel-arrow { transition: transform .25s var(--ease-out), color .2s; }
@@ -1107,7 +1108,7 @@ input[type="text"]:focus, input[type="password"]:focus, input:not([type]):focus,
 
 /* Акценты и темы */
 .accent.active::after { animation: motion-pop .4s var(--ease-spring); }
-.theme-option.active .theme-preview { animation: motion-pop .4s var(--ease-spring); }
+.theme-option.active .theme-preview { animation: none; }
 
 /* Прогресс-бары и счётчики */
 [class*="progress"] > span, [class*="progress"] i, .hv-progress-bar { transition: width .35s var(--ease-out); }
@@ -1122,3 +1123,165 @@ html.no-motion *, html.no-motion *::before, html.no-motion *::after {
   transition-duration: .001ms !important; scroll-behavior: auto !important;
 }
 html.no-motion .ambient { animation: none !important; }
+
+/* Telegram Hub Modal */
+.telegram-hub-modal {
+  width: min(480px, calc(100vw - 36px));
+  padding: 28px;
+  position: relative;
+  text-align: left;
+  border-radius: 18px;
+  border: 1px solid var(--line-strong);
+  background: rgba(13, 17, 24, 0.98);
+  box-shadow: 0 35px 100px rgba(0, 0, 0, 0.7);
+  animation: modal-in 0.25s var(--ease-out);
+}
+.telegram-hub-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.telegram-hub-close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: var(--line-strong);
+  transform: scale(1.05);
+}
+.telegram-hub-close svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+}
+.telegram-hub-header {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 22px;
+  padding-right: 36px;
+}
+.telegram-hub-icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(56, 169, 255, 0.12);
+  border: 1px solid rgba(56, 169, 255, 0.26);
+  color: #38a9ff;
+  flex-shrink: 0;
+}
+.telegram-hub-icon svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+.telegram-hub-header h3 {
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+.telegram-hub-header p {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.45;
+}
+.telegram-hub-list {
+  display: grid;
+  gap: 10px;
+}
+.telegram-hub-card {
+  width: 100%;
+  padding: 12px 14px;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+.telegram-hub-card:hover {
+  border-color: rgba(56, 169, 255, 0.32);
+  background: rgba(56, 169, 255, 0.07);
+  transform: translateY(-1px);
+}
+.telegram-hub-card.fork-channel:hover {
+  border-color: rgba(169, 135, 255, 0.32);
+  background: rgba(169, 135, 255, 0.07);
+}
+.telegram-hub-card.community-channel:hover {
+  border-color: rgba(99, 245, 194, 0.3);
+  background: rgba(99, 245, 194, 0.06);
+}
+.telegram-hub-card.community-channel .channel-icon {
+  color: #63f5c2;
+  background: rgba(99, 245, 194, 0.12);
+}
+.telegram-hub-info {
+  min-width: 0;
+  flex: 1;
+}
+.telegram-hub-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.telegram-hub-title-row strong {
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.telegram-hub-info small {
+  display: block;
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.telegram-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #8fa0b3;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.telegram-badge.fork-badge {
+  color: #d1b8ff;
+  background: rgba(169, 135, 255, 0.1);
+  border-color: rgba(169, 135, 255, 0.2);
+}
+.telegram-badge.community-badge {
+  color: #8be5c3;
+  background: rgba(99, 245, 194, 0.09);
+  border-color: rgba(99, 245, 194, 0.18);
+}
+.telegram-hub-trigger {
+  width: 100%;
+}
+.telegram-hub-trigger .channel-icon {
+  color: #4eb5ff;
+  background: rgba(56, 169, 255, 0.12);
+}
+.telegram-hub-trigger:hover {
+  border-color: rgba(56, 169, 255, 0.28);
+  background: rgba(56, 169, 255, 0.07);
+}

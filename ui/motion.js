@@ -58,22 +58,9 @@
 
   /* ---------- Разделы ---------- */
   function animateView(view) {
-    if (!view) return;
-    play(document.getElementById("page-title"), "motion-title", 600);
-    play(document.getElementById("page-eyebrow"), "motion-title", 600);
-    const panels = view.querySelectorAll(
-      ":scope > div > .premium-panel, :scope > div > section, :scope > div > div > .premium-panel, " +
-      ":scope > div > div > section, .settings-layout > section, .home-grid > *, .utilities-grid > *"
-    );
-    const seen = new Set();
-    let index = 0;
-    panels.forEach((panel) => {
-      if (seen.has(panel) || panel.classList.contains("hidden") || panel.offsetParent === null) return;
-      seen.add(panel);
-      panel.style.setProperty("--motion-delay", `${Math.min(index, 10) * 40}ms`);
-      play(panel, "motion-rise", 700 + Math.min(index, 10) * 40);
-      index += 1;
-    });
+    if (!view || !enabled()) return;
+    play(document.getElementById("page-title"), "motion-title", 300);
+    play(document.getElementById("page-eyebrow"), "motion-title", 300);
   }
 
   window.addEventListener("cgs:view-changed", (event) => {
@@ -87,8 +74,7 @@
     if (!tab) return;
     requestAnimationFrame(() => {
       const panel = document.querySelector(`[data-hv-tab-panel="${tab.dataset.hvTab}"]`);
-      play(panel, "motion-fade", 500);
-      staggerChildren(panel, ":scope > div > section, :scope > section", 40, 8);
+      play(panel, "motion-fade", 300);
     });
   });
 

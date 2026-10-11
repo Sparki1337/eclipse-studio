@@ -240,7 +240,7 @@ fn download_file(
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(900))
             .pool_max_idle_per_host(PARALLEL_DOWNLOAD_PARTS as usize)
-            .user_agent("CrocodileGenaStudio/5.2.0")
+            .user_agent("EclipseStudio/6.0.0")
             .build()
             .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
         let head = client
@@ -548,13 +548,69 @@ fn load_catalog(app: &tauri::AppHandle) -> Result<FilesCatalog, String> {
         }
     };
 
-    parse_catalog(&content, cached)
+    let mut catalog = parse_catalog(&content, cached)?;
+
+    if !cached {
+        if let Some(eclipse_item) = fetch_latest_eclipse_studio_file() {
+            if !catalog.files.iter().any(|f| f.name.eq_ignore_ascii_case("Eclipse Studio")) {
+                if let Some(croc_index) = catalog.files.iter().position(|f| f.name.to_ascii_lowercase().contains("crocodile gena studio")) {
+                    catalog.files.insert(croc_index + 1, eclipse_item);
+                } else {
+                    catalog.files.insert(0, eclipse_item);
+                }
+                catalog.total = catalog.files.len();
+            }
+        }
+    }
+
+    Ok(catalog)
+}
+
+fn fetch_latest_eclipse_studio_file() -> Option<FileItem> {
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .user_agent("Eclipse-Studio-Update-Checker")
+        .build()
+        .ok()?;
+    let response = client
+        .get("https://api.github.com/repos/Sparki1337/eclipse-studio/releases/latest")
+        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+        .send()
+        .ok()?;
+    if !response.status().is_success() {
+        return None;
+    }
+    let release: serde_json::Value = response.json().ok()?;
+    let tag = release.get("tag_name")?.as_str()?.trim().to_string();
+    let assets = release.get("assets")?.as_array()?;
+    let exe_asset = assets.iter().find(|a| {
+        let name = a.get("name").and_then(|n| n.as_str()).unwrap_or("").to_ascii_lowercase();
+        name.ends_with(".exe")
+    }).or_else(|| assets.first())?;
+    let download_url = exe_asset.get("browser_download_url")?.as_str()?.to_string();
+    if !download_url.starts_with("https://") {
+        return None;
+    }
+    let build_str = if tag.to_ascii_lowercase().starts_with("build") {
+        tag
+    } else if tag.starts_with('v') || tag.starts_with('V') {
+        format!("Build {}", &tag[1..])
+    } else {
+        format!("Build {}", tag)
+    };
+    Some(FileItem {
+        name: "Eclipse Studio".to_string(),
+        build: build_str,
+        url: download_url,
+        password: String::new(),
+        pinned: true,
+    })
 }
 
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("CrocodileGenaStudio/5.2.0")
+        .user_agent("EclipseStudio/6.0.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =

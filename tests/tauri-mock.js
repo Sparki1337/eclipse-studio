@@ -32,7 +32,7 @@
     },
     files_cancel_download: () => true,
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "5.2.0", latest_version: "5.2.0", currentVersion: "5.2.0", latestVersion: "5.2.0" }),
+    check_for_update: () => ({ available: false, current_version: "6.0.0", latest_version: "6.0.0", currentVersion: "6.0.0", latestVersion: "6.0.0" }),
     luatools_restore_manifests: () => null,
     luatools_detect_steam: () => "C:\\Program Files (x86)\\Steam",
     luatools_status: () => ({ games: [], steamPath: "C:\\Program Files (x86)\\Steam" }),
