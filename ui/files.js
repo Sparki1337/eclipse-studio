@@ -272,11 +272,16 @@
       if (!response.ok) return null;
       const release = await response.json();
       if (!release || !release.tag_name) return null;
-      const exeAsset = assets.find((a) => {
-        const n = String(a.name || "").toLowerCase();
-        return n.endsWith(".exe") && !n.includes("setup") && !n.includes("installer");
-      }) || assets.find((a) => String(a.name || "").toLowerCase().endsWith(".exe")) || assets[0];
-      const url = exeAsset?.browser_download_url || release.html_url;
+      const assets = Array.isArray(release.assets) ? release.assets : [];
+      const match = (a, fn) => fn(String(a?.name || "").toLowerCase());
+      const reversed = [...assets].reverse();
+      const targetAsset = reversed.find((a) => match(a, (n) => n.includes("eclipse") && n.endsWith(".exe") && !n.includes("setup") && !n.includes("installer")))
+        || reversed.find((a) => match(a, (n) => n.includes("eclipse") && !n.includes("setup") && !n.includes("installer")))
+        || reversed.find((a) => match(a, (n) => n.endsWith(".exe") && !n.includes("setup") && !n.includes("installer")))
+        || reversed.find((a) => match(a, (n) => n.includes("eclipse")))
+        || reversed.find((a) => match(a, (n) => n.endsWith(".exe")))
+        || reversed[0];
+      const url = targetAsset?.browser_download_url || release.html_url;
       if (!url || !url.startsWith("https://")) return null;
       const tag = String(release.tag_name).trim();
       const build = tag.toLowerCase().startsWith("build")
@@ -314,7 +319,6 @@
       state.loaded = true;
       if (!silent) state.page = 1;
 
-      // Закрепляем последний билд Eclipse Studio возле Crocodile Gena Studio, только если найден на GitHub
       if (!state.files.some((f) => f.name.toLowerCase() === "eclipse studio")) {
         try {
           const eclipseItem = await checkEclipseStudioRelease();
@@ -451,9 +455,6 @@
     if (listen) {
       listen("files-download-progress", (event) => updateProgress(event.payload ?? event)).catch(() => {});
     }
-    window.setInterval(() => {
-      if ($("#view-files")?.classList.contains("active")) loadCatalog(true, true);
-    }, 3000);
   }
 
   bindEvents();

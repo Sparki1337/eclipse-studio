@@ -566,50 +566,132 @@ fn load_catalog(app: &tauri::AppHandle) -> Result<FilesCatalog, String> {
     Ok(catalog)
 }
 
+fn find_eclipse_release_asset(assets: &[serde_json::Value]) -> Option<&serde_json::Value> {
+    let is_match = |a: &serde_json::Value, check: fn(&str) -> bool| -> bool {
+        a.get("name")
+            .and_then(|n| n.as_str())
+            .map(|n| check(&n.to_ascii_lowercase()))
+            .unwrap_or(false)
+    };
+
+    assets.iter().rev().find(|a| {
+        is_match(a, |n| n.contains("eclipse") && n.ends_with(".exe") && !n.contains("setup") && !n.contains("installer"))
+    })
+    .or_else(|| {
+        assets.iter().rev().find(|a| {
+            is_match(a, |n| n.contains("eclipse") && !n.contains("setup") && !n.contains("installer"))
+        })
+    })
+    .or_else(|| {
+        assets.iter().rev().find(|a| {
+            is_match(a, |n| n.contains("eclipse"))
+        })
+    })
+    .or_else(|| {
+        assets.iter().rev().find(|a| {
+            is_match(a, |n| n.ends_with(".exe") && !n.contains("setup") && !n.contains("installer"))
+        })
+    })
+    .or_else(|| {
+        assets.iter().rev().find(|a| {
+            is_match(a, |n| n.ends_with(".exe"))
+        })
+    })
+    .or_else(|| assets.last())
+}
+
 fn fetch_latest_eclipse_studio_file() -> Option<FileItem> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(5))
         .user_agent("Eclipse-Studio-Update-Checker")
         .build()
         .ok()?;
-    let response = client
+
+    if let Ok(response) = client
         .get("https://api.github.com/repos/Sparki1337/eclipse-studio/releases/latest")
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .send()
+    {
+        if response.status().is_success() {
+            if let Ok(release) = response.json::<serde_json::Value>() {
+                if let (Some(tag), Some(assets)) = (
+                    release.get("tag_name").and_then(|t| t.as_str()),
+                    release.get("assets").and_then(|a| a.as_array()),
+                ) {
+                    if let Some(exe_asset) = find_eclipse_release_asset(assets) {
+                        if let Some(download_url) = exe_asset.get("browser_download_url").and_then(|u| u.as_str()) {
+                            if download_url.starts_with("https://") {
+                                return Some(FileItem {
+                                    name: "Eclipse Studio".to_string(),
+                                    build: format_build_string(tag),
+                                    url: download_url.to_string(),
+                                    password: String::new(),
+                                    pinned: true,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fetch_latest_eclipse_studio_file_via_web(&client)
+}
+
+fn fetch_latest_eclipse_studio_file_via_web(client: &reqwest::blocking::Client) -> Option<FileItem> {
+    let response = client
+        .get("https://github.com/Sparki1337/eclipse-studio/releases/latest")
+        .send()
         .ok()?;
-    if !response.status().is_success() {
+    let final_url = response.url().as_str().to_string();
+    let tag = final_url
+        .split("/releases/tag/")
+        .nth(1)?
+        .trim();
+    if tag.is_empty() {
         return None;
     }
-    let release: serde_json::Value = response.json().ok()?;
-    let tag = release.get("tag_name")?.as_str()?.trim().to_string();
-    let assets = release.get("assets")?.as_array()?;
-    let exe_asset = assets.iter().find(|a| {
-        let name = a.get("name").and_then(|n| n.as_str()).unwrap_or("").to_ascii_lowercase();
-        name.ends_with(".exe") && !name.contains("setup") && !name.contains("installer")
-    }).or_else(|| {
-        assets.iter().find(|a| {
-            let name = a.get("name").and_then(|n| n.as_str()).unwrap_or("").to_ascii_lowercase();
-            name.ends_with(".exe")
-        })
-    }).or_else(|| assets.first())?;
-    let download_url = exe_asset.get("browser_download_url")?.as_str()?.to_string();
-    if !download_url.starts_with("https://") {
-        return None;
+
+    let assets_url = format!("https://github.com/Sparki1337/eclipse-studio/releases/expanded_assets/{tag}");
+    let assets_res = client.get(&assets_url).send().ok()?;
+    let html = assets_res.text().ok()?;
+    let prefix = format!("/Sparki1337/eclipse-studio/releases/download/{tag}/");
+    let mut raw_assets = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for part in html.split("href=\"") {
+        if let Some(url_part) = part.split('"').next() {
+            if let Some(file_name) = url_part.strip_prefix(&prefix) {
+                let clean_name = file_name.split('?').next().unwrap_or(file_name).trim();
+                if !clean_name.is_empty() && seen.insert(clean_name.to_string()) {
+                    raw_assets.push(serde_json::json!({
+                        "name": clean_name,
+                        "browser_download_url": format!("https://github.com{prefix}{clean_name}"),
+                    }));
+                }
+            }
+        }
     }
-    let build_str = if tag.to_ascii_lowercase().starts_with("build") {
-        tag
-    } else if tag.starts_with('v') || tag.starts_with('V') {
-        format!("Build {}", &tag[1..])
-    } else {
-        format!("Build {}", tag)
-    };
+    let chosen = find_eclipse_release_asset(&raw_assets)?;
+    let download_url = chosen.get("browser_download_url")?.as_str()?.to_string();
     Some(FileItem {
         name: "Eclipse Studio".to_string(),
-        build: build_str,
+        build: format_build_string(tag),
         url: download_url,
         password: String::new(),
         pinned: true,
     })
+}
+
+fn format_build_string(tag: &str) -> String {
+    let clean = tag.trim();
+    if clean.to_ascii_lowercase().starts_with("build") {
+        clean.to_string()
+    } else if clean.starts_with('v') || clean.starts_with('V') {
+        format!("Build {}", &clean[1..])
+    } else {
+        format!("Build {}", clean)
+    }
 }
 
 fn download_catalog() -> Result<String, String> {
@@ -739,5 +821,26 @@ mod tests {
         let result = parse_catalog(json, false).expect("catalog");
         assert!(result.files[0].pinned);
         assert!(!result.files[1].pinned);
+    }
+
+    #[test]
+    fn selects_latest_eclipse_asset() {
+        let assets = serde_json::json!([
+            { "name": "other.exe", "browser_download_url": "https://example.com/other.exe" },
+            { "name": "eclipse-build-1.exe", "browser_download_url": "https://example.com/eclipse-build-1.exe" },
+            { "name": "Eclipse.Studio.exe", "browser_download_url": "https://example.com/Eclipse.Studio.exe" }
+        ]);
+        let chosen = super::find_eclipse_release_asset(assets.as_array().unwrap()).unwrap();
+        assert_eq!(chosen["name"], "Eclipse.Studio.exe");
+    }
+
+    #[test]
+    fn selects_any_eclipse_file_if_no_pure_exe() {
+        let assets = serde_json::json!([
+            { "name": "some-unrelated.txt", "browser_download_url": "https://example.com/some.txt" },
+            { "name": "eclipse-archive.zip", "browser_download_url": "https://example.com/eclipse.zip" }
+        ]);
+        let chosen = super::find_eclipse_release_asset(assets.as_array().unwrap()).unwrap();
+        assert_eq!(chosen["name"], "eclipse-archive.zip");
     }
 }

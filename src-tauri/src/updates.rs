@@ -80,16 +80,36 @@ fn portable_url(release: &GithubRelease) -> Option<String> {
     release
         .assets
         .iter()
+        .rev()
         .find(|asset| {
             let name = asset.name.to_ascii_lowercase();
-            name == "eclipse-studio.exe" || name == "crocodile-gena-studio.exe"
+            name.contains("eclipse") && name.ends_with(".exe") && !name.contains("setup") && !name.contains("installer")
         })
         .or_else(|| {
-            release.assets.iter().find(|asset| {
+            release.assets.iter().rev().find(|asset| {
+                let name = asset.name.to_ascii_lowercase();
+                name.contains("eclipse") && !name.contains("setup") && !name.contains("installer")
+            })
+        })
+        .or_else(|| {
+            release.assets.iter().rev().find(|asset| {
                 let name = asset.name.to_ascii_lowercase();
                 name.ends_with(".exe") && !name.contains("setup") && !name.contains("installer")
             })
         })
+        .or_else(|| {
+            release.assets.iter().rev().find(|asset| {
+                let name = asset.name.to_ascii_lowercase();
+                name.contains("eclipse")
+            })
+        })
+        .or_else(|| {
+            release.assets.iter().rev().find(|asset| {
+                let name = asset.name.to_ascii_lowercase();
+                name.ends_with(".exe")
+            })
+        })
+        .or_else(|| release.assets.last())
         .map(|asset| asset.browser_download_url.clone())
 }
 
@@ -106,26 +126,24 @@ fn check_for_update_blocking() -> Result<UpdateInfo, String> {
         .timeout(Duration::from_secs(15))
         .build()
         .map_err(|error| format!("Не удалось подготовить проверку обновлений: {error}"))?;
-    let response = client
+
+    let release = match client
         .get(LATEST_RELEASE_API)
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .send()
-        .map_err(|_| "Не удалось подключиться к GitHub".to_string())?;
+    {
+        Ok(response) if response.status().is_success() => {
+            response.json::<GithubRelease>().map_err(|error| {
+                format!("GitHub вернул некорректный ответ: {error}")
+            })?
+        }
+        Ok(response) if response.status() == reqwest::StatusCode::NOT_FOUND => {
+            return Err("В репозитории пока нет опубликованных релизов".into());
+        }
+        _ => check_for_update_via_web(&client)?,
+    };
 
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err("В репозитории пока нет опубликованных релизов".into());
-    }
-    if !response.status().is_success() {
-        return Err(format!(
-            "GitHub вернул ошибку {} при проверке обновлений",
-            response.status()
-        ));
-    }
-
-    let release: GithubRelease = response
-        .json()
-        .map_err(|error| format!("GitHub вернул некорректный ответ: {error}"))?;
     let latest = release
         .tag_name
         .trim()
@@ -152,6 +170,61 @@ fn check_for_update_blocking() -> Result<UpdateInfo, String> {
         current_version: current,
         latest_version: latest,
     })
+}
+
+fn check_for_update_via_web(client: &Client) -> Result<GithubRelease, String> {
+    let response = client
+        .get("https://github.com/Sparki1337/eclipse-studio/releases/latest")
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .send()
+        .map_err(|error| format!("Не удалось подключиться к странице релизов: {error}"))?;
+    let final_url = response.url().as_str().to_string();
+    let tag = final_url
+        .split("/releases/tag/")
+        .nth(1)
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| "Не удалось определить номер версии со страницы релизов".to_string())?
+        .to_string();
+
+    let assets_url = format!("https://github.com/Sparki1337/eclipse-studio/releases/expanded_assets/{tag}");
+    let assets = if let Ok(assets_res) = client.get(&assets_url).header(reqwest::header::USER_AGENT, USER_AGENT).send() {
+        if let Ok(html) = assets_res.text() {
+            extract_assets_from_html(&html, &tag)
+        } else {
+            Vec::new()
+        }
+    } else {
+        Vec::new()
+    };
+
+    Ok(GithubRelease {
+        tag_name: tag.clone(),
+        name: Some(format!("Eclipse Studio {tag}")),
+        body: None,
+        html_url: final_url,
+        assets,
+    })
+}
+
+fn extract_assets_from_html(html: &str, tag: &str) -> Vec<GithubAsset> {
+    let prefix = format!("/Sparki1337/eclipse-studio/releases/download/{tag}/");
+    let mut assets = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for part in html.split("href=\"") {
+        if let Some(url_part) = part.split('"').next() {
+            if let Some(file_name) = url_part.strip_prefix(&prefix) {
+                let clean_name = file_name.split('?').next().unwrap_or(file_name).trim();
+                if !clean_name.is_empty() && seen.insert(clean_name.to_string()) {
+                    assets.push(GithubAsset {
+                        name: clean_name.to_string(),
+                        browser_download_url: format!("https://github.com{prefix}{clean_name}"),
+                    });
+                }
+            }
+        }
+    }
+    assets
 }
 
 #[tauri::command]
@@ -227,6 +300,54 @@ mod tests {
         assert_eq!(
             portable_url(&release).as_deref(),
             Some("https://example.test/eclipse-studio.exe")
+        );
+    }
+
+    #[test]
+    fn prefers_latest_eclipse_file() {
+        let release = GithubRelease {
+            tag_name: "v6.0.0".into(),
+            name: None,
+            body: None,
+            html_url: "https://example.test/release".into(),
+            assets: vec![
+                GithubAsset {
+                    name: "eclipse-v5.exe".into(),
+                    browser_download_url: "https://example.test/eclipse-v5.exe".into(),
+                },
+                GithubAsset {
+                    name: "Eclipse.Studio.exe".into(),
+                    browser_download_url: "https://example.test/Eclipse.Studio.exe".into(),
+                },
+            ],
+        };
+        assert_eq!(
+            portable_url(&release).as_deref(),
+            Some("https://example.test/Eclipse.Studio.exe")
+        );
+    }
+
+    #[test]
+    fn selects_any_eclipse_file() {
+        let release = GithubRelease {
+            tag_name: "v6.0.0".into(),
+            name: None,
+            body: None,
+            html_url: "https://example.test/release".into(),
+            assets: vec![
+                GithubAsset {
+                    name: "random-tool.exe".into(),
+                    browser_download_url: "https://example.test/random-tool.exe".into(),
+                },
+                GithubAsset {
+                    name: "Eclipse.zip".into(),
+                    browser_download_url: "https://example.test/Eclipse.zip".into(),
+                },
+            ],
+        };
+        assert_eq!(
+            portable_url(&release).as_deref(),
+            Some("https://example.test/Eclipse.zip")
         );
     }
 }
