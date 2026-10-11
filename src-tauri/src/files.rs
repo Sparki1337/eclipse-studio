@@ -585,7 +585,12 @@ fn fetch_latest_eclipse_studio_file() -> Option<FileItem> {
     let assets = release.get("assets")?.as_array()?;
     let exe_asset = assets.iter().find(|a| {
         let name = a.get("name").and_then(|n| n.as_str()).unwrap_or("").to_ascii_lowercase();
-        name.ends_with(".exe")
+        name.ends_with(".exe") && !name.contains("setup") && !name.contains("installer")
+    }).or_else(|| {
+        assets.iter().find(|a| {
+            let name = a.get("name").and_then(|n| n.as_str()).unwrap_or("").to_ascii_lowercase();
+            name.ends_with(".exe")
+        })
     }).or_else(|| assets.first())?;
     let download_url = exe_asset.get("browser_download_url")?.as_str()?.to_string();
     if !download_url.starts_with("https://") {

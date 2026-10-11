@@ -272,8 +272,10 @@
       if (!response.ok) return null;
       const release = await response.json();
       if (!release || !release.tag_name) return null;
-      const assets = Array.isArray(release.assets) ? release.assets : [];
-      const exeAsset = assets.find((a) => a.name && a.name.toLowerCase().endsWith(".exe")) || assets[0];
+      const exeAsset = assets.find((a) => {
+        const n = String(a.name || "").toLowerCase();
+        return n.endsWith(".exe") && !n.includes("setup") && !n.includes("installer");
+      }) || assets.find((a) => String(a.name || "").toLowerCase().endsWith(".exe")) || assets[0];
       const url = exeAsset?.browser_download_url || release.html_url;
       if (!url || !url.startsWith("https://")) return null;
       const tag = String(release.tag_name).trim();
