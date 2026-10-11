@@ -350,10 +350,11 @@ npm run build -- --bundles nsis
 
 <div align="center">
 
-**Eclipse Studio v6.0.0** • *Разработано с заботой о пользователях* • 2026
+**Eclipse Studio v6.0.0** • 2026
+<div align="center">
 
-[![Telegram Channel](https://img.shields.io/badge/Telegram-Пиратская_Станция-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/piratestationn)
-[![Telegram Fork](https://img.shields.io/badge/Telegram-Канал_Eclipse_Studio-a987ff?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/gde_sparki)
-[![Telegram Support](https://img.shields.io/badge/Telegram-Поддержка_Crocodile_Hub-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/crocodilehub2)
+[![Telegram Channel](https://img.shields.io/badge/Telegram-%D0%9F%D0%B8%D1%80%D0%B0%D1%82%D1%81%D0%BA%D0%B0%D1%8F_%D0%A1%D1%82%D0%B0%D0%BD%D1%86%D0%B8%D1%8F-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/piratestationn)
+[![Telegram Crocodile HUB](https://img.shields.io/badge/Telegram-Crocodile_Hub-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/crocodilehub2)
+[![Telegram Fork](https://img.shields.io/badge/Telegram-Eclipse_Studio-a987ff?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/gde_sparki)
 
 </div>
