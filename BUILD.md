@@ -60,7 +60,7 @@ CreamAPI/
 ### Шаг 1. Перейдите в корень проекта
 Откройте терминал (PowerShell или CMD) в папке проекта:
 ```powershell
-cd CrocodileGenaStudio
+cd eclipse-studio
 ```
 
 ### Шаг 2. Установка зависимостей интерфейса
@@ -89,12 +89,11 @@ src-tauri/target/release/bundle/nsis/
 
 Если вам нужен переносимый Portable EXE файл без установщика:
 ```powershell
-cd src-tauri
-cargo build --release
+cargo build --release --manifest-path src-tauri/Cargo.toml
 ```
-Готовый `CrocodileGenaStudio.exe` будет находиться в:
+Готовый `eclipse-studio.exe` будет находиться в:
 ```text
-src-tauri/target/release/CrocodileGenaStudio.exe
+src-tauri/target/release/eclipse-studio.exe
 ```
 
 ---
@@ -105,14 +104,14 @@ src-tauri/target/release/CrocodileGenaStudio.exe
 | :--- | :--- | :--- |
 | `couldn't read ... .millennium/Dist/index.js` | Папка `.millennium` не скопировалась (скрытая папка) | Проверьте наличие `src-tauri/src/assets/crocodile-manifest/.millennium/Dist/` |
 | `couldn't read ... SmokeAPI/SmokeAPI64.dll` | Файлы анлокера переименованы или отсутствуют | Убедитесь, что в корне проекта есть `SmokeAPI/SmokeAPI64.dll` и `SmokeAPI/SmokeAPI86.dll` |
-| `resource path '..\DLCUnlocker\...' doesn't exist` | Папка CreamAPI переименована или отсутствует | Убедитесь, что в корне проекта есть папка `CreamAPI/` с `steam_api.dll` и `steam_api64.dll` |
+| `couldn't read ... CreamAPI/steam_api64.dll` | Папка CreamAPI переименована или отсутствует | Убедитесь, что в корне проекта есть папка `CreamAPI/` с `steam_api.dll` и `steam_api64.dll` |
 | `link.exe not found` | Не установлены инструменты C++ | Установите Visual Studio C++ Build Tools с Windows SDK |
 | Ошибка антивируса при сборке | Windows Defender блокирует временный exe | Добавьте папку проекта в исключения Защитника Windows |
 
 ---
 
 <div align="center">
-  <sub>CrocodileGena Studio • Инструкция по сборке</sub>
+  <sub>Eclipse Studio v6.0.0 • Инструкция по сборке</sub>
 </div>
 
 ## Тесты интерфейса
