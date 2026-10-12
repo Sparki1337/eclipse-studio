@@ -1049,9 +1049,9 @@
     const GIST_URL = 'https://gist.githubusercontent.com/LeoBanned/b314de5f9a3e2293b7e3c22136d49889/raw/cracks.json';
     const FALLBACK_URL = './data/cracks.json';
 
-    fetch(GIST_URL)
+    fetch(GIST_URL, { cache: 'no-store' })
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .catch(() => fetch(FALLBACK_URL).then((r) => r.json()))
+      .catch(() => fetch(`${FALLBACK_URL}?v=6.2.0`, { cache: 'no-store' }).then((r) => r.json()))
       .then((data) => {
         const cracks = Array.isArray(data) ? data : (data?.cracks || []);
         allGames = cracks.filter((c) => c && c.name && c.url);
