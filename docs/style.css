@@ -301,7 +301,23 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .kicker { display: inline-flex; align-items: center; gap: 10px; color: var(--mut); }
 .kicker::before { content: ""; width: 24px; height: 1px; background: var(--mut-2); }
 .section-title { margin: 20px 0 0; font-size: clamp(36px, 5.2vw, 72px); line-height: 1.05; font-weight: 500; letter-spacing: -.01em; }
-.section-lead { max-width: 560px; margin: 20px auto 0; color: var(--mut); font-size: 17px; }
+.section-lead { max-width: 640px; margin: 22px 0 0; color: var(--mut); font-size: 16px; line-height: 1.6; }
+.section-head.center .section-lead { margin: 22px auto 0; text-align: center; }
+.section-lead .tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  margin: 0 3px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .06);
+  border: 1px solid rgba(255, 255, 255, .12);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  vertical-align: 1px;
+  letter-spacing: .02em;
+}
 
 /* ---------- Факты ---------- */
 .facts { padding: 0; }
