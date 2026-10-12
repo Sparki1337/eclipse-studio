@@ -41,8 +41,7 @@ fn display_path(path: &Path) -> String {
     }
 }
 
-// Steam's text KeyValues: do not flatten the file with a regex, since app lists,
-// install depots, and library paths live in different nested sections.
+// Парсинг формата Valve KeyValues (VDF)
 pub(crate) fn parse_vdf(content: &str) -> Result<Value, String> {
     let chars: Vec<char> = content.trim_start_matches('\u{feff}').chars().collect();
     let mut tokens = Vec::new();

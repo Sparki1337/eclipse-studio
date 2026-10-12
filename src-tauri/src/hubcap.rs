@@ -107,7 +107,7 @@ fn hubcap_search_blocking(query: String, api_key: String) -> Result<Vec<RyuuGame
         return Err("Укажите API-ключ HubCap в настройках".into());
     }
     let query = query.trim();
-    // HubCap требует минимум 3 символа в запросе.
+    // Минимальная длина поискового запроса — 3 символа
     if query.chars().count() < 3 {
         return Ok(Vec::new());
     }
@@ -198,7 +198,7 @@ fn hubcap_get_blocking(
         let response = client
             .get(format!("{BASE}/manifest/{clean}"))
             .bearer_auth(key)
-            // Готовый zip — без авто-декомпрессии.
+            // Загрузка zip без авто-распаковки
             .header(reqwest::header::ACCEPT_ENCODING, "identity")
             .send()
             .map_err(|error| format!("HubCap недоступен: {error}"))?;

@@ -6,6 +6,10 @@ dist/
 build/
 *.log
 *.tmp
+__pycache__/
+*.pyc
+build_config.json
+.build_config.json
 
 # OS & IDE temporary files
 .DS_Store

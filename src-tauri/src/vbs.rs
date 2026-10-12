@@ -376,8 +376,7 @@ fn disable_vbs(app: &AppHandle, mode: BootMode) -> Result<VbsChangeResult, Strin
     let mut changed = 0;
     let mut failed = Vec::new();
     if test_mode {
-        // Secure Boot may be unavailable to the probe. Ask BCDEdit first so a
-        // rejected test-signing change leaves the protection settings untouched.
+        // Включение тестового режима через bcdedit
         if let Err(error) = run_command("bcdedit.exe", &["/set", "{current}", "testsigning", "on"])
         {
             if new_snapshot {
@@ -460,7 +459,7 @@ fn restore_vbs(app: &AppHandle, disable_test_mode: bool) -> Result<VbsChangeResu
     let mut changed = 0;
     let mut failed = Vec::new();
     if disable_test_mode {
-        // Do not discard the recovery snapshot if Windows rejects this change.
+        // Отключение тестового режима при откате
         run_command("bcdedit.exe", &["/set", "{current}", "testsigning", "off"])?;
         changed += 1;
     }
@@ -514,9 +513,7 @@ fn restore_vbs(app: &AppHandle, disable_test_mode: bool) -> Result<VbsChangeResu
         }
     }
 
-    // Windows consumes this one-time option during boot. If it is already gone,
-    // BCDEdit returns an error even though there is nothing left to restore.
-    // When the user cancels before rebooting, this best-effort cleanup removes it.
+    // Очистка одноразовых параметров загрузки
     let _ = run_command(
         "bcdedit.exe",
         &["/deletevalue", "{current}", "onetimeadvancedoptions"],
@@ -666,8 +663,7 @@ fn test_signing_from_bcd(text: &str) -> Option<bool> {
             return parts.next().and_then(bcd_boolean);
         }
     }
-    // An absent TESTSIGNING element is the default OFF state, including after
-    // rollback while the running OS still reports test mode until the reboot.
+    // По умолчанию параметр testsigning отключен
     Some(false)
 }
 

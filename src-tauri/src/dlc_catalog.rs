@@ -92,7 +92,7 @@ fn scan(appid: u64, steam_path: Option<String>) -> Result<DlcCatalog, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(10))
         .connect_timeout(Duration::from_secs(4))
-        .user_agent("EclipseStudio/6.0.0")
+        .user_agent("EclipseStudio/6.1.0")
         .build()
         .map_err(|e| e.to_string())?;
     let urls = [
@@ -147,8 +147,7 @@ fn scan(appid: u64, steam_path: Option<String>) -> Result<DlcCatalog, String> {
     if sources.is_empty() {
         return Err("Не удалось получить каталог DLC. Проверьте соединение со Steam и повторите сканирование.".into());
     }
-    // Cached names and Steam's bulk listing are preferred. Bound per-DLC requests
-    // so games with hundreds of DLC cannot hang the scan for several minutes.
+    // Ограничение запросов названий DLC для предотвращения зависания
     let unresolved: Vec<_> = catalog
         .iter()
         .filter(|(id, name)| **name == format!("DLC {id}"))

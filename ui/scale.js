@@ -1,13 +1,4 @@
-/*
- * Crocodile Gena Studio 5.2 — масштабирование интерфейса.
- *
- * Переписывает размеры из styles.css на CSS-переменные один раз при запуске:
- *   --fs  масштаб шрифта        (font-size)
- *   --sp  масштаб отступов      (padding, margin, gap)
- *   --hs  масштаб высоты блоков (height / min-height кнопок, полей, карточек)
- * После этого компактный режим и размер шрифта переключаются мгновенно,
- * простой сменой значений переменных на <html>.
- */
+// Масштабирование интерфейса через CSS-переменные
 (() => {
   "use strict";
 
@@ -37,7 +28,7 @@
   function rewriteStyle(style) {
     const names = [];
     for (let index = 0; index < style.length; index += 1) names.push(style[index]);
-    // Квадратные иконки и аватарки с фиксированной шириной не сжимаем по высоте.
+    // Элементы с фиксированной шириной не масштабируем по высоте
     const fixedWidth = /px/.test(style.getPropertyValue("width"));
     for (const name of names) {
       const value = style.getPropertyValue(name);
@@ -61,8 +52,9 @@
     }
   }
 
+  // Пропуск внешних таблиц стилей
   for (const sheet of document.styleSheets) {
-    try { walk(sheet.cssRules); } catch (_) { /* чужие таблицы стилей пропускаем */ }
+    try { walk(sheet.cssRules); } catch (_) {}
   }
   document.documentElement.classList.add("scale-ready");
 })();

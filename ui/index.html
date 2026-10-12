@@ -32,7 +32,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>6.0.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>6.1.0</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -114,7 +114,7 @@
     <main class="main-area">
       <div class="page-topbar">
         <div>
-          <div class="eyebrow" id="page-eyebrow">ОБЗОР</div>
+          <div class="eyebrow" id="page-eyebrow"></div>
           <h1 id="page-title">Главная</h1>
         </div>
       </div>
@@ -123,20 +123,20 @@
         <div class="home-hero premium-panel">
           <div class="home-glow"></div>
           <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 6.0.0</span>
+            <span class="hero-kicker">ECLIPSE STUDIO 6.1.0</span>
             <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
             <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
           </div>
           <div class="hero-artwork"><img src="./hero-crocodile.png" alt="Фирменная иллюстрация Crocodile Gena" /></div>
         </div>
         <div class="home-grid">
-          <article class="metric-card"><span class="metric-icon mint"><svg viewBox="0 0 24 24"><path d="M6 18L18 6M8 6h10v10"/></svg></span><div><small>Активный модуль</small><strong>Online Fix</strong><p>Готов к установке и восстановлению</p></div></article>
-          <article class="metric-card module-card" data-open-view="saves"><span class="metric-icon blue"><svg viewBox="0 0 24 24"><path d="M5 4h12l2 2v14H5zM8 4v6h8V4M8 15h8v5H8z"/></svg></span><div><small>Модуль 02</small><strong>Менеджер сохранений</strong><p>Поиск и резервное копирование прогресса</p></div></article>
-          <article class="metric-card module-card" data-open-view="dlc"><span class="metric-icon violet"><svg viewBox="0 0 24 24"><path d="M5 10h14v10H5zM8 10V7a4 4 0 018 0M12 14v3"/></svg></span><div><small>Модуль 03</small><strong>DLC Unlocker</strong><p>Выборочная разблокировка дополнений</p></div></article>
-          <article class="metric-card module-card" data-open-view="lua"><span class="metric-icon mint"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M9.5 12.5l1.8 1.8 3.5-3.6"/></svg></span><div><small>Модуль 04</small><strong>CrocLua</strong><p>Игры в библиотеку Steam через манифесты</p></div></article>
-          <article class="metric-card module-card" data-open-view="hypervisor"><span class="metric-icon violet"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 4.8-3.1 8.1-8 9.5C7.1 20.1 4 16.8 4 12V7z"/><path d="M8 12h8M12 8v8"/></svg></span><div><small>Модуль 05</small><strong>Гипервизор</strong><p>Библиотека и запуск игр через профили KVC или DRV</p></div></article>
-          <article class="metric-card module-card" data-open-view="files"><span class="metric-icon blue"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v10H4z"/><path d="M4 7V5h6l2 2"/></svg></span><div><small>Модуль 06</small><strong>Кряки</strong><p>Актуальные кряки с билдом, паролем и загрузкой</p></div></article>
-          <article class="metric-card module-card" data-open-view="utilities"><span class="metric-icon mint"><svg viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 1-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.4 2.4-3-3z"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><div><small>Модуль 07</small><strong>Утилиты</strong><p>Полезные программы и сетевые инструменты</p></div></article>
+          <article class="metric-card"><span class="metric-icon mint"><svg viewBox="0 0 24 24"><path d="M6 18L18 6M8 6h10v10"/></svg></span><div><small>Фикс</small><strong>Online Fix</strong><p>Готов к установке и восстановлению</p></div></article>
+          <article class="metric-card module-card" data-open-view="saves"><span class="metric-icon blue"><svg viewBox="0 0 24 24"><path d="M5 4h12l2 2v14H5zM8 4v6h8V4M8 15h8v5H8z"/></svg></span><div><small>Сохранения</small><strong>Менеджер сохранений</strong><p>Поиск и резервное копирование прогресса</p></div></article>
+          <article class="metric-card module-card" data-open-view="dlc"><span class="metric-icon violet"><svg viewBox="0 0 24 24"><path d="M5 10h14v10H5zM8 10V7a4 4 0 018 0M12 14v3"/></svg></span><div><small>DLC</small><strong>DLC Unlocker</strong><p>Выборочная разблокировка дополнений</p></div></article>
+          <article class="metric-card module-card" data-open-view="lua"><span class="metric-icon mint"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M9.5 12.5l1.8 1.8 3.5-3.6"/></svg></span><div><small>Манифесты</small><strong>CrocLua</strong><p>Игры в библиотеку Steam через манифесты</p></div></article>
+          <article class="metric-card module-card" data-open-view="hypervisor"><span class="metric-icon violet"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 4.8-3.1 8.1-8 9.5C7.1 20.1 4 16.8 4 12V7z"/><path d="M8 12h8M12 8v8"/></svg></span><div><small>Виртуализация</small><strong>Гипервизор</strong><p>Библиотека и запуск игр через профили KVC или DRV</p></div></article>
+          <article class="metric-card module-card" data-open-view="files"><span class="metric-icon blue"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v10H4z"/><path d="M4 7V5h6l2 2"/></svg></span><div><small>Релизы</small><strong>Кряки</strong><p>Актуальные кряки с билдом, паролем и загрузкой</p></div></article>
+          <article class="metric-card module-card" data-open-view="utilities"><span class="metric-icon mint"><svg viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 1-5 5L4 17l3 3 5.5-5.5a4 4 0 0 0 5-5l-2.4 2.4-3-3z"/><path d="m15.5 15.5 4.5 4.5"/></svg></span><div><small>Инструменты</small><strong>Утилиты</strong><p>Полезные программы и сетевые инструменты</p></div></article>
         </div>
       </section>
 
@@ -144,7 +144,7 @@
         <div class="workspace-grid">
           <div class="workspace-main">
             <section class="intro-strip">
-              <div><span class="intro-badge">MODULE 01</span><h2>Universal Online Fix</h2><p>Сканирование, настройка Steam и поддержка Epic Online Services в одном потоке.</p></div>
+              <div><h2>Universal Online Fix</h2><p>Сканирование, настройка Steam и поддержка Epic Online Services в одном потоке.</p></div>
               <div class="intro-art"><span></span><span></span><div>01</div></div>
             </section>
 
@@ -225,7 +225,6 @@
         <div class="saves-layout">
           <section class="premium-panel saves-hero">
             <div>
-              <span class="hero-kicker">MODULE 03</span>
               <h2>DLC Unlocker</h2>
               <p>Найдите установленные игры Steam, выберите игру и настройте её дополнения.</p>
             </div>
@@ -336,7 +335,6 @@
         <div class="saves-layout">
           <section class="premium-panel saves-hero">
             <div>
-              <span class="hero-kicker">MODULE 02</span>
               <h2>Менеджер сохранений</h2>
               <p>Поиск игрового прогресса в стандартных папках Windows, игровых движков, Steam и распространённых эмуляторов.</p>
             </div>
@@ -377,7 +375,6 @@
         <div class="saves-layout">
           <section class="premium-panel saves-hero">
             <div>
-              <span class="hero-kicker">MODULE 04</span>
               <h2>CrocLua</h2>
               <p>Добавляйте игры прямо в библиотеку Steam. Перетащите файлы <code>.lua</code>, <code>.manifest</code> или <code>.zip</code> — программа сама разложит их по нужным папкам Steam. Затем перезапустите Steam, и игра появится в клиенте.</p>
             </div>
@@ -461,82 +458,153 @@
       </section>
 
       <section class="view" id="view-hypervisor" data-view-panel="hypervisor">
-        <div class="hv-module-tabs" role="tablist" aria-label="Разделы модуля 05">
-          <button class="active" data-hv-tab="hypervisor" role="tab" aria-selected="true"><span>🛡️</span>Гипервизор</button>
-          <button data-hv-tab="anticheat" role="tab" aria-selected="false"><span>🔎</span>Античиты</button>
-          <button data-hv-tab="vbs" role="tab" aria-selected="false"><span>🛡️</span>VBS</button>
+        <div class="hv-module-tabs" role="tablist" aria-label="Разделы гипервизора">
+          <button class="active" data-hv-tab="hypervisor" role="tab" aria-selected="true">
+            <svg class="hv-tab-icon" viewBox="0 0 20 20"><path d="M10 2L3 5v5c0 5 3.5 8.5 7 10 3.5-1.5 7-5 7-10V5l-7-3z"/></svg>
+            <span>Гипервизор</span>
+          </button>
+          <button data-hv-tab="anticheat" role="tab" aria-selected="false">
+            <svg class="hv-tab-icon" viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5"/><path d="M12.5 12.5L17 17"/></svg>
+            <span>Античиты</span>
+          </button>
+          <button data-hv-tab="vbs" role="tab" aria-selected="false">
+            <svg class="hv-tab-icon" viewBox="0 0 20 20"><path d="M10 2L3 5v5c0 5 3.5 8.5 7 10 3.5-1.5 7-5 7-10V5l-7-3z"/><path d="M8 10l2 2 4-4"/></svg>
+            <span>VBS</span>
+          </button>
         </div>
         <div class="hv-tab-panel active" data-hv-tab-panel="hypervisor">
           <div class="hv-layout">
-          <section class="premium-panel hv-hero">
-            <div class="hv-hero-copy">
-              <span class="hero-kicker">MODULE 05</span>
-              <h2>Гипервизор</h2>
-              <p>Добавляйте EXE игр, выбирайте профиль KVC или DRV и запускайте подготовленную конфигурацию из одного окна.</p>
-              <div class="hv-warning"><span>!</span><p>Профили работают с системными компонентами Windows. Перед запуском сохраните важные данные: несовместимый драйвер может привести к перезагрузке или BSOD.</p></div>
-            </div>
-            <div class="hv-hero-actions">
-              <button class="hv-control-button" id="hv-help-button"><span class="hv-help-icon">?</span><span>Подсказки</span></button>
-              <button class="hv-add-button" id="hv-add-game"><span class="hv-add-icon">＋</span><span>Добавить игру</span></button>
-            </div>
-          </section>
-
-          <div class="hv-stats">
-            <article class="premium-panel hv-stat"><small>ИГР В БИБЛИОТЕКЕ</small><strong id="hv-games-count">0</strong><span>добавлено в модуль</span></article>
-            <article class="premium-panel hv-stat"><small>ГОТОВНОСТЬ</small><strong id="hv-ready-status">Нет игры</strong><span>файлы выбранного профиля</span></article>
-            <article class="premium-panel hv-stat"><small>ПРАВА ЗАПУСКА</small><strong id="hv-admin-status">Проверка</strong><span>UAC будет запрошен при необходимости</span></article>
-          </div>
-
-          <section class="premium-panel hv-selected-panel">
-            <div class="hv-selected-icon" aria-label="Гипервизор">🛡️</div>
-            <div class="hv-selected-copy">
-              <span class="coming-label">ВЫБРАННАЯ ИГРА</span>
-              <h3 id="hv-selected-title">Игра не выбрана</h3>
-              <p id="hv-selected-path">Добавьте исполняемый файл игры.</p>
-              <div class="hv-selected-meta"><span id="hv-selected-profile">Профиль: —</span><b id="hv-selected-state">Нет игры</b></div>
-            </div>
-            <div class="hv-selected-actions">
-              <div class="hv-selected-profiles" id="hv-selected-profiles"></div>
-              <button class="hv-check-button" id="hv-selected-verify" disabled><svg viewBox="0 0 20 20"><path d="M15.5 6.5A6.5 6.5 0 105 15M15.5 3v3.8h-3.8"/></svg><span>Проверить</span></button>
-              <button class="hv-launch-button" id="hv-launch-button" disabled><span class="hv-play">▶</span><span>Запустить</span></button>
-            </div>
-          </section>
-
-          <div class="hv-workspace">
-            <section class="premium-panel hv-library-panel">
-              <div class="save-browser-header hv-panel-header">
-                <div><span class="coming-label">БИБЛИОТЕКА</span><h3>Добавленные игры</h3><p>Выберите игру и назначьте ей профиль запуска.</p></div>
-                <span class="required-chip" id="hv-library-count">0 игр</span>
+            <section class="premium-panel hv-hero">
+              <div class="hv-hero-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 3L4 6.5v6c0 5.5 4 9.5 8 11.5 4-2 8-6 8-11.5v-6L12 3z"/><path d="M9.5 12l2 2 4-4"/></svg>
               </div>
-              <div class="hv-empty" id="hv-empty"><span>＋</span><h3>Библиотека пустая</h3><p>Нажмите «Добавить EXE» и выберите исполняемый файл игры.</p></div>
-              <div class="hv-game-list hidden" id="hv-game-list"></div>
+              <div class="hv-hero-copy">
+                <h2>Гипервизор</h2>
+                <p>Изолированный запуск игр с профилями обхода KVC и DRV из единого окна.</p>
+                <div class="hv-warning-inline">
+                  <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v4M8 11.5h.01"/></svg>
+                  <span>Профили работают с системными драйверами Windows. Сохраните важные данные перед запуском.</span>
+                </div>
+              </div>
+              <div class="hv-hero-actions">
+                <button class="ghost-button hv-control-button" id="hv-help-button">
+                  <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><path d="M6.5 6.5a1.5 1.5 0 013 .5c0 1-1.5 1.25-1.5 2.25M8 11.5h.01"/></svg>
+                  <span>Подсказки</span>
+                </button>
+                <button class="primary-button hv-add-button" id="hv-add-game">
+                  <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>
+                  <span>Добавить игру</span>
+                </button>
+              </div>
             </section>
 
-            <div class="hv-side-stack">
-              <section class="premium-panel hv-log-panel">
-                <div class="hv-panel-title"><div><span class="coming-label">LIVE LOG</span><h3>Журнал операций</h3></div><div><button class="ghost-button" id="hv-copy-log">Копировать</button><button class="ghost-button" id="hv-clear-log">Очистить</button></div></div>
-                <div class="hv-log" id="hv-log" role="log" aria-live="polite"></div>
-              </section>
-              <section class="premium-panel hv-steps-panel">
-                <div class="hv-panel-title"><div><span class="coming-label">СЦЕНАРИЙ</span><h3>Что делает запуск</h3></div><b id="hv-run-state">Ожидание</b></div>
-                <div class="hv-steps" id="hv-steps"></div>
-              </section>
+            <div class="hv-workspace">
+              <!-- Левая колонка: Библиотека добавленных игр + Журнал -->
+              <div class="hv-col">
+                <section class="premium-panel hv-library-panel">
+                  <div class="hv-panel-header">
+                    <div>
+                      <span class="coming-label">БИБЛИОТЕКА</span>
+                      <h3>Добавленные игры</h3>
+                      <p>Выберите игру для назначения профиля и запуска.</p>
+                    </div>
+                    <div class="hv-header-badge-wrap">
+                      <span class="required-chip" id="hv-library-count">0 игр</span>
+                      <span id="hv-games-count" class="hidden">0</span>
+                    </div>
+                  </div>
+                  <div class="hv-empty" id="hv-empty">
+                    <span class="hv-empty-icon">
+                      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+                    </span>
+                    <h3>Библиотека пустая</h3>
+                    <p>Нажмите «Добавить игру» и выберите исполняемый файл игры (.exe).</p>
+                  </div>
+                  <div class="hv-game-list hidden" id="hv-game-list"></div>
+                </section>
+
+                <section class="premium-panel hv-log-panel">
+                  <div class="hv-panel-title">
+                    <div>
+                      <span class="coming-label">LIVE LOG</span>
+                      <h3>Журнал операций</h3>
+                    </div>
+                    <div class="hv-log-tools">
+                      <button class="ghost-button" id="hv-copy-log">Копировать</button>
+                      <button class="ghost-button" id="hv-clear-log">Очистить</button>
+                    </div>
+                  </div>
+                  <div class="hv-log" id="hv-log" role="log" aria-live="polite"></div>
+                </section>
+              </div>
+
+              <!-- Правая колонка: Управление выбранной игрой + Сценарий -->
+              <div class="hv-col">
+                <section class="premium-panel hv-selected-panel">
+                  <div class="hv-selected-header">
+                    <div class="hv-selected-icon" aria-label="Гипервизор">
+                      <svg viewBox="0 0 24 24"><path d="M12 3L4 6.5v6c0 5.5 4 9.5 8 11.5 4-2 8-6 8-11.5v-6L12 3z"/><path d="M9.5 12l2 2 4-4"/></svg>
+                    </div>
+                    <div class="hv-selected-copy">
+                      <span class="coming-label">ВЫБРАННАЯ ИГРА</span>
+                      <h3 id="hv-selected-title">Игра не выбрана</h3>
+                      <p id="hv-selected-path">Выберите игру из списка слева</p>
+                    </div>
+                  </div>
+
+                  <div class="hv-selected-meta-row">
+                    <div class="hv-selected-profiles" id="hv-selected-profiles"></div>
+                    <div class="hv-chips-group">
+                      <span class="hv-chip"><small>ПРОФИЛЬ</small><b id="hv-selected-profile">Профиль: —</b></span>
+                      <span class="hv-chip"><small>СТАТУС</small><b id="hv-selected-state">Нет игры</b></span>
+                      <span class="hv-chip"><small>ПРАВА</small><b id="hv-admin-status">Через UAC</b></span>
+                      <span id="hv-ready-status" class="hidden">Нет игры</span>
+                    </div>
+                  </div>
+
+                  <div class="hv-selected-actions">
+                    <button class="ghost-button hv-check-button" id="hv-selected-verify" disabled>
+                      <svg viewBox="0 0 20 20"><path d="M15.5 6.5A6.5 6.5 0 105 15M15.5 3v3.8h-3.8"/></svg>
+                      <span>Проверить</span>
+                    </button>
+                    <button class="primary-button hv-launch-button" id="hv-launch-button" disabled>
+                      <span class="hv-play">▶</span>
+                      <span>Запустить</span>
+                    </button>
+                  </div>
+                </section>
+
+                <section class="premium-panel hv-steps-panel">
+                  <div class="hv-panel-title">
+                    <div>
+                      <span class="coming-label">СЦЕНАРИЙ</span>
+                      <h3>Что делает запуск</h3>
+                    </div>
+                    <b id="hv-run-state">Ожидание</b>
+                  </div>
+                  <div class="hv-steps" id="hv-steps"></div>
+                </section>
+              </div>
             </div>
-          </div>
           </div>
         </div>
 
         <div class="hv-tab-panel" data-hv-tab-panel="anticheat">
           <div class="ac-layout">
             <section class="premium-panel ac-hero">
-              <div class="ac-hero-icon">🔎</div>
+              <div class="ac-hero-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5"/><path d="M12.5 12.5L17 17"/></svg>
+              </div>
               <div class="ac-hero-copy">
                 <span class="hero-kicker">SYSTEM SCANNER</span>
                 <h2>Античиты</h2>
                 <p>Поиск установленных служб, драйверов, папок и записей популярных античитов. Перед очисткой создаётся локальная резервная копия.</p>
               </div>
               <div class="ac-hero-actions">
-                <button class="ac-scan-button" id="ac-scan-button"><span>⌕</span>Сканировать</button>
+                <button class="ac-scan-button" id="ac-scan-button">
+                  <svg viewBox="0 0 20 20"><circle cx="8.5" cy="8.5" r="5"/><path d="M12.5 12.5L17 17"/></svg>
+                  <span>Сканировать</span>
+                </button>
                 <button class="ac-remove-all hidden" id="ac-remove-all"><span>🗑</span>Удалить найденные <b id="ac-remove-count">0</b></button>
               </div>
             </section>
@@ -635,7 +703,6 @@
           <section class="premium-panel files-hero">
             <div class="files-hero-icon">📦</div>
             <div class="files-hero-copy">
-              <span class="hero-kicker">MODULE 06</span>
               <h2>Кряки</h2>
               <p>Актуальные кряки из каталога Пиратской Станции с загрузкой прямо внутри приложения.</p>
             </div>
@@ -681,7 +748,6 @@
           <section class="premium-panel utilities-hero">
             <div class="utilities-hero-icon">🧰</div>
             <div class="utilities-hero-copy">
-              <span class="hero-kicker">MODULE 07</span>
               <h2>Утилиты</h2>
             </div>
           </section>
@@ -742,7 +808,7 @@
             <p>Плотность интерфейса, размер текста и язык. Изменения применяются сразу.</p>
             <label class="pref-row">
               <div><strong>Компактный режим</strong><small>Уменьшает отступы и высоту элементов — на экран помещается больше</small></div>
-              <span class="switch"><input type="checkbox" id="compact-mode" /><i></i></span>
+              <span class="switch"><input type="checkbox" id="compact-mode" checked /><i></i></span>
             </label>
             <label class="pref-row">
               <div><strong>Анимации интерфейса</strong><small>Плавное появление разделов, карточек и списков</small></div>
@@ -752,9 +818,9 @@
               <div><strong>Размер шрифта</strong><small>Масштаб всего текста в приложении</small></div>
               <div class="font-size-control">
                 <div class="font-size-picker" role="group" aria-label="Размер шрифта">
-                  <button data-font-preset="90">A<sup>−</sup></button><button class="active" data-font-preset="100">A</button><button data-font-preset="115">A<sup>+</sup></button><button data-font-preset="130">A<sup>++</sup></button>
+                  <button data-font-preset="90">A<sup>−</sup></button><button data-font-preset="100">A</button><button data-font-preset="115">A<sup>+</sup></button><button data-font-preset="130">A<sup>++</sup></button>
                 </div>
-                <div class="font-size-slider"><input type="range" id="font-scale" min="85" max="140" step="5" value="100" aria-label="Размер шрифта" /><b id="font-scale-value">100%</b></div>
+                <div class="font-size-slider"><input type="range" id="font-scale" min="85" max="140" step="5" value="120" aria-label="Размер шрифта" /><b id="font-scale-value">120%</b></div>
               </div>
             </div>
             <div class="language-setting"><div><strong>Язык интерфейса</strong><small>Меняется моментально без перезапуска</small></div><div class="language-picker" role="group" aria-label="Язык интерфейса"><button class="active" data-language="ru">Русский</button><button data-language="en">English</button></div></div>
@@ -808,7 +874,7 @@
           <section class="premium-panel settings-card update-card">
             <span class="coming-label">ПРИЛОЖЕНИЕ</span><h2>Обновления</h2>
             <p>Проверка новых версий через официальный репозиторий Eclipse Studio.</p>
-            <div class="about-row"><span>Текущая версия</span><b id="update-current-version">6.0.0</b></div>
+            <div class="about-row"><span>Текущая версия</span><b id="update-current-version">6.1.0</b></div>
             <div class="update-actions">
               <button class="ghost-button" id="check-update-button">Проверить обновления</button>
               <span id="update-status">Проверка ещё не выполнялась</span>
@@ -819,7 +885,7 @@
             </div>
           </section>
 
-          <section class="premium-panel settings-card"><span class="coming-label">ПРИЛОЖЕНИЕ</span><h2>О программе</h2><div class="about-row"><span>Версия</span><b>6.0.0</b></div><div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div><div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · CrocLua · Гипервизор · Кряки · Утилиты</b></div></section>
+          <section class="premium-panel settings-card about-card"><span class="coming-label">ПРИЛОЖЕНИЕ</span><h2>О программе</h2><div class="about-row"><span>Версия</span><b>6.1.0</b></div><div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div><div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · CrocLua · Гипервизор · Кряки · Утилиты</b></div></section>
         </div>
       </section>
     </main>

@@ -253,8 +253,7 @@ fn build_config(request: &SmakiRequest) -> Result<String, String> {
     })).map_err(|e| e.to_string())
 }
 
-// Only owned files may be changed or removed. Never replace an existing game's
-// version/winhttp/winmm DLL, including an unrelated mod using the same proxy.
+// Проверка принадлежности прокси-файлов перед изменением
 fn verify_owned(dir: &Path, journal: &Journal) -> Result<(), String> {
     safe_file(dir, &journal.proxy)?;
     safe_file(dir, CONFIG)?;

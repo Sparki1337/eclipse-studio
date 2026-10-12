@@ -1,12 +1,4 @@
-/*
- * Crocodile Gena Studio 5.2 — анимации интерфейса.
- *  • плавное появление разделов и их карточек (каскадом);
- *  • появление блоков, которые раньше показывались рывком (снятие .hidden);
- *  • анимация новых элементов в списках (только когда список реально изменился,
- *    фоновые обновления каждые несколько секунд не перезапускают анимацию);
- *  • мягкая смена темы и акцента;
- *  • настройка «Анимации интерфейса» и учёт системного «уменьшить движение».
- */
+// Анимации интерфейса
 (() => {
   "use strict";
 
@@ -37,11 +29,11 @@
     if (save) { try { localStorage.setItem(STORAGE_KEY, on ? "1" : "0"); } catch (_) {} }
   }
 
-  /** Перезапускает CSS-класс анимации на элементе. */
+  // Перезапуск анимации элемента
   function play(element, className, duration = 700) {
     if (!element || !enabled()) return;
     element.classList.remove(className);
-    void element.offsetWidth; // перезапуск анимации
+    void element.offsetWidth; // Перезапуск CSS-анимации
     element.classList.add(className);
     clearTimeout(timers.get(element));
     timers.set(element, setTimeout(() => element.classList.remove(className), duration));
@@ -56,7 +48,7 @@
     });
   }
 
-  /* ---------- Разделы ---------- */
+  // Анимация разделов
   function animateView(view) {
     if (!view || !enabled()) return;
     play(document.getElementById("page-title"), "motion-title", 300);
@@ -68,7 +60,7 @@
     requestAnimationFrame(() => animateView(view));
   });
 
-  /* ---------- Вкладки внутри гипервизора ---------- */
+  // Вкладки гипервизора
   document.addEventListener("click", (event) => {
     const tab = event.target.closest("[data-hv-tab]");
     if (!tab) return;
@@ -78,7 +70,7 @@
     });
   });
 
-  /* ---------- Появление скрытых блоков ---------- */
+  // Появление скрытых блоков
   const visibilityObserver = new MutationObserver((records) => {
     if (!enabled()) return;
     for (const record of records) {
@@ -86,12 +78,12 @@
       const before = record.oldValue || "";
       if (!/(^|\s)hidden(\s|$)/.test(before) || element.classList.contains("hidden")) continue;
       if (element.closest(".toast-stack")) continue;
-      if (element.classList.contains("modal-backdrop")) continue; // у модалок своя анимация
+      if (element.classList.contains("modal-backdrop")) continue; // У модалок отдельная анимация
       play(element, "motion-appear", 450);
     }
   });
 
-  /* ---------- Списки ---------- */
+  // Анимация списков
   const signatures = new WeakMap();
   function signature(container) {
     return [...container.children]
@@ -110,7 +102,7 @@
       let index = 0;
       [...container.children].forEach((child) => {
         const key = (child.querySelector("h3,strong,b")?.textContent || child.textContent || "").replace(/\d+(?:[.,]\d+)?\s*%/g, "").trim().slice(0, 48);
-        if (previousItems.has(key) && previous) return; // уже был на экране
+        if (previousItems.has(key) && previous) return; // Пропуск уже отрисованных элементов
         child.style.setProperty("--motion-delay", `${Math.min(index, 12) * 35}ms`);
         play(child, "motion-rise", 650 + Math.min(index, 12) * 35);
         index += 1;
@@ -118,7 +110,7 @@
     }).observe(container, { childList: true });
   }
 
-  /* ---------- Тема и акцент ---------- */
+  // Плавная смена темы
   function softRecolor() {
     if (!enabled()) return;
     root.classList.add("motion-recolor");
@@ -126,17 +118,70 @@
     timers.set(root, setTimeout(() => root.classList.remove("motion-recolor"), 450));
   }
 
-  /* ---------- Раскрывающиеся блоки <details> ---------- */
-  document.addEventListener("toggle", (event) => {
-    const details = event.target;
-    if (!(details instanceof HTMLDetailsElement) || !details.open) return;
-    [...details.children].filter((child) => child.tagName !== "SUMMARY").forEach((child) => play(child, "motion-appear", 450));
-  }, true);
+  // Плавное раскрытие details (аккордеон)
+  function setupDetailsAccordion(details) {
+    const summary = details.querySelector("summary");
+    if (!summary || details.__accordionBound) return;
+    details.__accordionBound = true;
+
+    let anim = null;
+    let isClosing = false;
+    let isOpening = false;
+
+    summary.addEventListener("click", (event) => {
+      if (!enabled()) return;
+      event.preventDefault();
+      details.style.overflow = "hidden";
+
+      if (isClosing || !details.open) {
+        isClosing = false;
+        isOpening = true;
+        const startH = details.offsetHeight;
+        details.open = true;
+        details.classList.add("is-open");
+        const endH = details.offsetHeight;
+        if (anim) anim.cancel();
+        anim = details.animate(
+          [
+            { height: `${startH}px`, opacity: 0.6 },
+            { height: `${endH}px`, opacity: 1 }
+          ],
+          { duration: 260, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }
+        );
+        anim.onfinish = () => {
+          isOpening = false;
+          details.style.height = "";
+          details.style.overflow = "";
+        };
+      } else {
+        isOpening = false;
+        isClosing = true;
+        const startH = details.offsetHeight;
+        const endH = summary.offsetHeight;
+        if (anim) anim.cancel();
+        anim = details.animate(
+          [
+            { height: `${startH}px`, opacity: 1 },
+            { height: `${endH}px`, opacity: 0.6 }
+          ],
+          { duration: 220, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }
+        );
+        anim.onfinish = () => {
+          isClosing = false;
+          details.open = false;
+          details.classList.remove("is-open");
+          details.style.height = "";
+          details.style.overflow = "";
+        };
+      }
+    });
+  }
 
   function init() {
     applyMotion(readSetting(), false);
     document.getElementById("motion-mode")?.addEventListener("change", (event) => applyMotion(event.currentTarget.checked));
     document.querySelectorAll("[data-theme-option], .accent").forEach((button) => button.addEventListener("click", softRecolor, true));
+    document.querySelectorAll("details").forEach(setupDetailsAccordion);
 
     visibilityObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"], attributeOldValue: true });
     LIST_SELECTORS.forEach((selector) => document.querySelectorAll(selector).forEach(watchList));

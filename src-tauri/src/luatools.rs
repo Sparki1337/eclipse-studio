@@ -15,11 +15,9 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const NO_WINDOW: u32 = 0x08000000;
 
-/// Старый путь SteamTools/LuaTools. OpenSteamTool может использовать другой путь
-/// из секции `[lua]` файла `opensteamtool.toml`.
+// Путь к плагинам SteamTools
 const STPLUGIN_REL: &[&str] = &["config", "stplug-in"];
-// Steam читает depot manifests из корневого `<Steam>\depotcache`.
-// Старые версии CGS ошибочно писали их в `<Steam>\config\depotcache`.
+// Пути к кэшу манифестов
 const DEPOTCACHE_REL: &[&str] = &["depotcache"];
 const LEGACY_DEPOTCACHE_REL: &[&str] = &["config", "depotcache"];
 
@@ -48,16 +46,14 @@ pub struct LuaStatus {
     pub games: Vec<LuaGame>,
 }
 
-/// Реестр appid, добавленных именно через программу, — чтобы счётчик и список не учитывали
-/// сторонние lua, уже лежащие в stplug-in.
+// Путь к локальному реестру добавленных игр
 fn registry_path(app: &AppHandle) -> Option<PathBuf> {
     let dir = app.path().app_local_data_dir().ok()?;
     let _ = fs::create_dir_all(&dir);
     Some(dir.join("luatools-games.json"))
 }
 
-/// Резервные копии manifest-файлов хранятся вне Steam: клиент может удалить
-/// файлы из depotcache при отмене загрузки, но не должен затронуть этот каталог.
+// Каталог резервных копий манифестов
 fn manifest_cache_dir(app: &AppHandle) -> Option<PathBuf> {
     let dir = app
         .path()
@@ -68,7 +64,7 @@ fn manifest_cache_dir(app: &AppHandle) -> Option<PathBuf> {
     Some(dir)
 }
 
-/// Реестр — карта appid → дата добавления (unix). Поддерживается и старый формат (массив appid).
+// Загрузка реестра добавленных игр
 fn load_registry(app: &AppHandle) -> BTreeMap<String, u64> {
     let Some(bytes) = registry_path(app).and_then(|path| fs::read(path).ok()) else {
         return BTreeMap::new();
@@ -113,7 +109,7 @@ fn hidden_command(program: &str) -> Command {
     command
 }
 
-/// Значение из `reg query <key> /v <name>` (строки формата `Name    REG_SZ    Value`).
+// Чтение значения из реестра Windows
 fn query_registry(key: &str, name: &str) -> Option<String> {
     let output = hidden_command("reg")
         .args(["query", key, "/v", name])
@@ -134,7 +130,7 @@ fn query_registry(key: &str, name: &str) -> Option<String> {
     None
 }
 
-/// Определяет папку Steam из реестра — как это делает LuaTools.
+// Определение пути к Steam через реестр
 fn detect_steam_path() -> Option<PathBuf> {
     let candidates = [
         (r"HKLM\SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
@@ -196,8 +192,7 @@ fn ensure_opensteamtool_installed(steam: &Path) {
     }
 }
 
-/// Извлекает `paths = [...]` только из секции `[lua]` OpenSteamTool.
-/// Поддерживает обычные и многострочные массивы с одинарными/двойными кавычками.
+// Парсинг путей к lua из opensteamtool.toml
 fn parse_opensteamtool_lua_paths(content: &str) -> Vec<String> {
     let mut in_lua = false;
     let mut section = String::new();
@@ -280,9 +275,7 @@ fn opensteamtool_lua_dirs(steam: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// Реальная папка Lua для установленного загрузчика.
-/// Для OpenSteamTool берётся первая папка из его конфига, для старого SteamTools —
-/// привычный `config\stplug-in`.
+// Рабочая папка Lua для текущего загрузчика
 fn stplugin_dir(steam: &Path) -> PathBuf {
     opensteamtool_lua_dirs(steam)
         .into_iter()
@@ -319,7 +312,7 @@ fn loader_state(steam: &Path) -> (String, Option<String>, Option<String>) {
     }
 
     if legacy_stplugin_dir(steam).is_dir() {
-        // Закрытые/старые версии SteamTools не оставляют надёжного единого маркера.
+        // Старые версии SteamTools без отдельного маркера
         return ("legacy".into(), Some("SteamTools".into()), None);
     }
 
@@ -330,9 +323,7 @@ fn loader_state(steam: &Path) -> (String, Option<String>, Option<String>) {
     )
 }
 
-/// Переносит Lua, которые старые версии CGS положили в `config\stplug-in`,
-/// в фактическую папку OpenSteamTool. Исходники сохраняются, существующие файлы
-/// в целевой папке не перезаписываются.
+// Миграция Lua-скриптов в рабочую папку OpenSteamTool
 fn migrate_legacy_lua(steam: &Path, target: &Path) -> usize {
     let legacy = legacy_stplugin_dir(steam);
     if legacy == target || !legacy.is_dir() {
@@ -374,10 +365,7 @@ fn legacy_depotcache_dir(steam: &Path) -> PathBuf {
         .fold(steam.to_path_buf(), |acc, part| acc.join(part))
 }
 
-/// Исправляет раскладку старых версий CGS: копирует ранее установленные манифесты
-/// из `config\depotcache` в настоящий корневой `depotcache`.
-///
-/// Исходные файлы не удаляются, а уже существующие правильные файлы не перезаписываются.
+// Перенос кэша манифестов в корневой depotcache
 fn migrate_legacy_manifests(steam: &Path) -> usize {
     let legacy = legacy_depotcache_dir(steam);
     if !legacy.is_dir() {
@@ -414,7 +402,7 @@ fn migrate_legacy_manifests(steam: &Path) -> usize {
     copied
 }
 
-/// AppID — имя lua-файла без расширения; допускаются только цифры.
+// Извлечение AppID из имени lua-файла
 fn appid_from_lua(name: &str) -> Option<String> {
     let base = name
         .strip_suffix(".disabled")
@@ -449,10 +437,7 @@ fn contains_root_addappid(content: &str, appid: &str) -> bool {
     })
 }
 
-/// Нормализует Lua перед установкой:
-/// - удаляет UTF-8 BOM;
-/// - гарантирует корневой `addappid(<AppID>)`, без которого игра не попадёт в библиотеку;
-/// - в режиме автообновления комментирует закреплённые `setManifestid`.
+// Подготовка Lua-скрипта перед установкой
 fn patch_lua(content: &str, auto_update: bool, appid: &str) -> String {
     let content = content.trim_start_matches('\u{feff}');
     let mut patched = content
@@ -472,8 +457,7 @@ fn patch_lua(content: &str, auto_update: bool, appid: &str) -> String {
     patched
 }
 
-/// Ссылки setManifestid учитываются и в закомментированном виде: режим автообновления
-/// специально комментирует их, но соответствующие manifest-файлы остаются частью пакета.
+// Поиск связок depot/manifest в коде скрипта
 fn parse_manifest_refs(content: &str) -> BTreeSet<(String, String)> {
     let mut refs = BTreeSet::new();
     for line in content.lines() {
@@ -554,7 +538,7 @@ fn game_health(lua_path: &Path, depotcache: &Path, enabled: bool) -> (String, u6
     (status.into(), manifest_count, missing)
 }
 
-/// Игры из реестра, для которых lua-файл всё ещё лежит в stplug-in (учитывая `.disabled`).
+// Игры из реестра с существующими lua-файлами
 fn registry_games(
     registry: &BTreeMap<String, u64>,
     stplugin: &Path,
@@ -610,8 +594,7 @@ pub fn luatools_status(app: AppHandle, steam_path: Option<String>) -> LuaStatus 
             games: Vec::new(),
         };
     };
-    // Обновление со старой версии чинит уже добавленные игры автоматически,
-    // даже если пользователь не импортирует пакет повторно.
+    // Автоматическая миграция файлов из старых версий
     let _ = migrate_legacy_manifests(&steam);
     let stplugin = stplugin_dir(&steam);
     let _ = migrate_legacy_lua(&steam, &stplugin);
@@ -831,8 +814,7 @@ fn install_archive(
     }
 }
 
-/// Устанавливает zip-пакет прямо из памяти (например, скачанный из API), раскладывая lua/manifest
-/// по папкам Steam и регистрируя добавленные игры. Используется модулем `ryuu`.
+// Установка zip-пакета игры из байтов
 pub(crate) fn install_zip_bytes(
     app: &AppHandle,
     bytes: &[u8],
@@ -1133,7 +1115,7 @@ fn luatools_restart_steam_blocking(steam_path: Option<String>) -> OperationResul
         return OperationResult::error("steam.exe не найден в папке Steam", vec![]);
     }
 
-    // Сначала просим Steam завершиться штатно, чтобы он сохранил состояние и кэш библиотеки.
+    // Штатное завершение Steam
     let _ = hidden_command(steam_exe.to_string_lossy().as_ref())
         .arg("-shutdown")
         .output();
@@ -1144,7 +1126,7 @@ fn luatools_restart_steam_blocking(steam_path: Option<String>) -> OperationResul
         std::thread::sleep(std::time::Duration::from_millis(250));
     }
 
-    // Если клиент завис или оставил дочерние процессы, завершаем всё дерево.
+    // Принудительное завершение зависших процессов Steam
     if process_is_running("steam.exe") {
         let _ = hidden_command("taskkill.exe")
             .args(["/F", "/T", "/IM", "steam.exe"])
@@ -1176,7 +1158,7 @@ fn process_is_running(image_name: &str) -> bool {
         .contains(&image_name.to_ascii_lowercase())
 }
 
-/// Все appid/депо, на которые ссылается lua (строки `addappid`/`setManifestid`, без комментариев).
+// Извлечение всех AppID и депо из lua
 fn parse_lua_appids(content: &str) -> BTreeSet<u64> {
     let mut ids = BTreeSet::new();
     for line in content.lines() {
@@ -1227,8 +1209,7 @@ fn sort_depots(items: &mut [DepotItem]) {
     items.sort_by_key(|item| item.id.parse::<u64>().unwrap_or(u64::MAX));
 }
 
-/// Параллельно (небольшими пачками) получает названия приложений по appid — с кэшем в steam-слое.
-/// Пачки намеренно маленькие, чтобы не ловить rate-limit Steam Store.
+// Запрос названий приложений пачками для избежания rate-limit
 fn resolve_names_map(ids: &[u64]) -> BTreeMap<String, String> {
     let mut names = BTreeMap::new();
     for chunk in ids.chunks(5) {
@@ -1277,18 +1258,17 @@ fn luatools_game_detail_blocking(
     let refs = parse_lua_appids(&content);
     let appid_num = appid.parse::<u64>().unwrap_or(0);
 
-    // Один запрос за метаданными игры и списком её DLC. Если Steam не ответил — честная ошибка,
-    // чтобы пользователь мог повторить (а не увидеть пустое окно).
+    // Запрос метаданных игры и списка DLC
     let overview = crate::steam::app_overview(appid_num)
         .ok_or("Steam не ответил — попробуйте открыть ещё раз")?;
     let dlc_ids: BTreeSet<u64> = overview.dlc_ids.into_iter().collect();
 
-    // Имена резолвим и для всего, на что ссылается lua, и для всех DLC игры (параллельно, с кэшем).
+    // Получение названий для депо и DLC
     let mut need: BTreeSet<u64> = refs.iter().copied().filter(|id| *id != appid_num).collect();
     need.extend(dlc_ids.iter().copied());
     let names = resolve_names_map(&need.into_iter().collect::<Vec<_>>());
 
-    // Разблокированные: только DLC игры, присутствующие в lua (депо-склады и наборы не показываем).
+    // Формирование списка разблокированных DLC
     let mut in_lua = Vec::new();
     for id in &refs {
         if *id == appid_num || !dlc_ids.contains(id) {
@@ -1306,7 +1286,7 @@ fn luatools_game_detail_blocking(
     }
     sort_depots(&mut in_lua);
 
-    // Отсутствующие: DLC игры, которых нет в lua.
+    // Формирование списка отсутствующих DLC
     let mut missing = Vec::new();
     for id in &dlc_ids {
         if *id == appid_num || refs.contains(id) {
@@ -1471,7 +1451,7 @@ paths = ["ignore"]
         let depotcache = dir.join("depotcache");
         fs::create_dir_all(&stplugin).unwrap();
         fs::create_dir_all(&depotcache).unwrap();
-        // 480 включена, 70 отключена, 999 в реестре но файла нет, 555 есть но НЕ в реестре.
+        // Тестовые наборы состояний файлов и реестра
         fs::write(stplugin.join("480.lua"), b"addappid(480)").unwrap();
         fs::write(stplugin.join("70.lua.disabled"), b"addappid(70)").unwrap();
         fs::write(stplugin.join("555.lua"), b"addappid(555)").unwrap();

@@ -1,8 +1,4 @@
-/*
- * UI-тесты Crocodile Gena Studio 5.2.
- * Запуск:  node tests/ui.test.js        (нужны playwright и Chromium)
- * Переменные: CHROMIUM=/путь/к/chromium, SCREENSHOTS=папка для скриншотов
- */
+// UI-тесты интерфейса
 const path = require("path");
 const fs = require("fs");
 const { chromium } = require("playwright");
@@ -65,10 +61,10 @@ async function run() {
     assert(missing.length === 0, "Не зарегистрированы: " + missing.join(", "));
   });
 
-  await test("Запуск без ошибок JS, версия 6.0.0", async () => {
+  await test("Запуск без ошибок JS, версия 6.1.0", async () => {
     const { page, context, errors } = await open();
     const version = await page.textContent(".titlebar-version");
-    assert(version.trim() === "6.0.0", "версия " + version);
+    assert(version.trim() === "6.1.0", "версия " + version);
     assert(errors.length === 0, errors.join("\n"));
     await context.close();
   });

@@ -13,20 +13,16 @@ use tauri::{AppHandle, Manager};
 
 const HOST: &str = "generator.ryuu.lol";
 const ORIGIN: &str = "https://generator.ryuu.lol";
-/// Реверс-прокси на своей инфраструктуре (обход DPI/SNI-блокировки провайдера). Пусто = выключен.
-/// Формат без слэша в конце, напр. "https://gen.zelees.digital".
+// Базовый адрес реверс-прокси
 const PROXY_BASE: &str = "";
 
-/// Встроенный ключ доступа к API генератора. Компилируется в бинарник и не попадает во фронтенд.
-/// ВНИМАНИЕ: в exe его технически можно извлечь реверс-инжинирингом — полностью скрыть можно
-/// только через промежуточный прокси-сервер.
+// Ключ доступа к API генератора
 const AUTH_KEY: &str = "";
 
 const CATALOG_URL: &str = "https://generator.ryuu.lol/api/games";
 const DOWNLOAD_BASE: &str = "https://generator.ryuu.lol/api/download/";
 const CATALOG_TTL: Duration = Duration::from_secs(24 * 3600);
-/// Реальный Chrome-User-Agent: чтобы Cloudflare не отсекал запрос как бота (без него у части
-/// пользователей генератор доступен только через VPN, хотя сайт открывается напрямую).
+// User-Agent браузера Chrome
 const USER_AGENT: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
@@ -54,7 +50,7 @@ fn catalog_cache() -> &'static Mutex<Option<Vec<RyuuGame>>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
-/// Сериализует загрузку каталога: параллельные запросы поиска не качают его по нескольку раз.
+// Блокировка параллельной загрузки каталога
 fn download_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
@@ -88,8 +84,7 @@ fn base_headers() -> reqwest::header::HeaderMap {
     headers
 }
 
-/// Клиент к генератору. `resolve_to` пинует домен на конкретный IP (получен через DoH в обход
-/// провайдерского DNS); при `None` используется системный DNS.
+// Создание HTTP-клиента с поддержкой DoH
 fn build_client(resolve_to: Option<IpAddr>) -> Result<Client, String> {
     let mut builder = Client::builder()
         .user_agent(USER_AGENT)
@@ -112,7 +107,7 @@ fn doh_cache() -> &'static Mutex<Option<IpAddr>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
-/// Один DoH-запрос к провайдеру (по IP, без системного DNS). Возвращает первый A-адрес домена.
+// DoH-запрос адреса домена
 fn query_doh(url: &str) -> Option<IpAddr> {
     let response = Client::builder()
         .timeout(Duration::from_secs(8))
@@ -134,7 +129,7 @@ fn query_doh(url: &str) -> Option<IpAddr> {
         .and_then(|address| address.parse::<IpAddr>().ok())
 }
 
-/// Резолвит домен генератора через шифрованный DNS (обход блокировки провайдера). Кэшируется.
+// Резолв домена через DoH-серверы
 fn doh_resolve() -> Option<IpAddr> {
     if let Some(ip) = doh_cache().lock().ok().and_then(|cache| *cache) {
         return Some(ip);
@@ -156,9 +151,9 @@ fn doh_resolve() -> Option<IpAddr> {
 }
 
 enum GetError {
-    /// Сетевой сбой (DNS/соединение) — имеет смысл повторить через DoH.
+    // Ошибка сети
     Network(String),
-    /// Ответ сервера с ошибкой (401/404/…) — повтор не поможет.
+    // Ошибка HTTP
     Http(String),
 }
 
@@ -182,7 +177,7 @@ fn http_get_once(
         request = request.header("X-Auth-Key", key);
     }
     if identity {
-        // Готовый zip — без авто-декомпрессии, иначе reqwest падает на декодировании бинарника.
+        // Запрос без авто-распаковки gzip/deflate
         request = request.header(reqwest::header::ACCEPT_ENCODING, "identity");
     }
     let response = request
@@ -197,7 +192,7 @@ fn http_get_once(
         .map_err(|error| GetError::Network(format!("Не удалось получить файл: {error}")))
 }
 
-/// Переписывает адрес генератора на реверс-прокси (если он задан).
+// Подстановка адреса прокси
 fn proxy_url(url: &str) -> Option<String> {
     if PROXY_BASE.is_empty() {
         return None;
@@ -206,17 +201,16 @@ fn proxy_url(url: &str) -> Option<String> {
         .map(|path| format!("{PROXY_BASE}{path}"))
 }
 
-/// GET с обходом блокировки: прямой запрос → DoH (обход DNS-блока) → реверс-прокси (обход DPI/SNI).
-/// Прокси задействуется последним, только когда прямой путь и DoH не прошли.
+// HTTP-запрос с цепочкой обхода блокировок
 fn http_get(url: &str, auth: Option<&str>, identity: bool) -> Result<Vec<u8>, String> {
-    // 1. Прямой запрос (системный DNS).
+    // Прямой запрос
     let network_error = match http_get_once(&client()?, url, auth, identity) {
         Ok(bytes) => return Ok(bytes),
         Err(GetError::Http(message)) => return Err(message),
         Err(GetError::Network(message)) => message,
     };
 
-    // 2. DoH — обход блокировки по DNS.
+    // Запрос через DoH
     if let Some(ip) = doh_resolve() {
         match http_get_once(&build_client(Some(ip))?, url, auth, identity) {
             Ok(bytes) => return Ok(bytes),
@@ -225,7 +219,7 @@ fn http_get(url: &str, auth: Option<&str>, identity: bool) -> Result<Vec<u8>, St
         }
     }
 
-    // 3. Реверс-прокси — обход блокировки по SNI/DPI.
+    // Запрос через реверс-прокси
     if let Some(proxied) = proxy_url(url) {
         match http_get_once(&client()?, &proxied, auth, identity) {
             Ok(bytes) => return Ok(bytes),
@@ -261,19 +255,19 @@ fn parse_catalog(bytes: &[u8]) -> Vec<RyuuGame> {
         .unwrap_or_default()
 }
 
-/// Свежая копия каталога с диска (если моложе TTL).
+// Чтение кэшированного каталога с диска
 fn fresh_disk_catalog(app: &AppHandle) -> Option<Vec<u8>> {
     let path = catalog_path(app)?;
     let age = fs::metadata(&path).ok()?.modified().ok()?.elapsed().ok()?;
     (age < CATALOG_TTL).then(|| fs::read(&path).ok()).flatten()
 }
 
-/// Гарантирует, что каталог загружен в память: диск (если свежий) → иначе скачивание с сохранением.
+// Загрузка каталога в память
 fn ensure_catalog(app: &AppHandle) -> Result<(), String> {
     if catalog_loaded() {
         return Ok(());
     }
-    // Только один поток скачивает каталог; остальные ждут и берут уже загруженный.
+    // Ожидание завершения текущей загрузки
     let _guard = download_lock()
         .lock()
         .map_err(|_| "Загрузка каталога занята".to_string())?;
@@ -301,7 +295,7 @@ fn ensure_catalog(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Async-обёртка: тяжёлая сетевая/парсинг-работа уходит в блокирующий пул, чтобы не морозить UI.
+// Поиск игр в каталоге
 #[tauri::command]
 pub async fn ryuu_search(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, String> {
     tauri::async_runtime::spawn_blocking(move || ryuu_search_blocking(app, query))
@@ -315,8 +309,7 @@ fn ryuu_search_blocking(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, 
         return Ok(Vec::new());
     }
     let numeric = query.chars().all(|c| c.is_ascii_digit());
-    // Если каталог не удалось загрузить (нет сети/Cloudflare/антивирус), числовой AppID всё равно
-    // остаётся рабочим — можно сразу получить игру по нему.
+    // Поиск по числовому AppID при недоступности каталога
     if let Err(error) = ensure_catalog(&app) {
         if numeric {
             return Ok(vec![RyuuGame {
@@ -333,7 +326,7 @@ fn ryuu_search_blocking(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, 
         .map_err(|_| "Каталог занят".to_string())?;
     let games = guard.as_ref().ok_or("Каталог не загружен")?;
 
-    // Ранг: точное совпадение → начинается с → содержит.
+    // Сортировка по релевантности совпадения
     let mut scored: Vec<(u8, &RyuuGame)> = Vec::new();
     for game in games {
         let rank = if numeric {
@@ -375,7 +368,7 @@ fn ryuu_search_blocking(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, 
         .collect())
 }
 
-/// Скачивает zip-пакет игры по её appid и раскладывает по папкам Steam (как ручной drop архива).
+// Загрузка и установка архива игры по AppID
 #[tauri::command]
 pub async fn ryuu_get(
     app: AppHandle,
@@ -414,7 +407,7 @@ fn ryuu_get_blocking(
         };
     }
 
-    // http_get: системный DNS → при сетевом сбое DoH-обход. Загрузка идёт сырым zip (identity).
+    // Загрузка zip-архива манифестов
     let bytes = http_get(&format!("{DOWNLOAD_BASE}{clean}"), Some(AUTH_KEY), true);
 
     match bytes {

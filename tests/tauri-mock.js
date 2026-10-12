@@ -1,5 +1,4 @@
-// Мок Tauri API для UI-тестов. Подключается через page.addInitScript до загрузки страницы.
-// window.__CGS_MOCK_CONFIG__ = { missing: ["files_pick_download_dir", ...] } — эмуляция старого бэкенда.
+// Мок Tauri API для UI-тестов
 (() => {
   const config = window.__CGS_MOCK_CONFIG__ || {};
   const registered = new Set(config.commands || []);
@@ -32,7 +31,7 @@
     },
     files_cancel_download: () => true,
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "6.0.0", latest_version: "6.0.0", currentVersion: "6.0.0", latestVersion: "6.0.0" }),
+    check_for_update: () => ({ available: false, current_version: "6.1.0", latest_version: "6.1.0", currentVersion: "6.1.0", latestVersion: "6.1.0" }),
     luatools_restore_manifests: () => null,
     luatools_detect_steam: () => "C:\\Program Files (x86)\\Steam",
     luatools_status: () => ({ games: [], steamPath: "C:\\Program Files (x86)\\Steam" }),

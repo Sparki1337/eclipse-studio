@@ -7,7 +7,7 @@
 > **Форк проекта [Crocodile Gena Studio](https://github.com/LeoBanned/crocodile-gena-studio-releases) (автор LeoBanned)**  
 > Репозиторий форка: [https://github.com/Sparki1337/eclipse-studio](https://github.com/Sparki1337/eclipse-studio)
 
-[![Версия](https://img.shields.io/badge/Версия-6.0.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases)
+[![Версия](https://img.shields.io/badge/Версия-6.1.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases)
 [![Платформа](https://img.shields.io/badge/Платформа-Windows_10_|_11_(x64)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
 [![Архитектура](https://img.shields.io/badge/Стек-Rust_Tauri_v2_+_Modern_JS-black?style=for-the-badge&logo=rust&logoColor=orange)](https://tauri.app/)
 [![Безопасность](https://img.shields.io/badge/Защита-Побайтовый_Бэкап-2ea44f?style=for-the-badge&logo=shield)](#-система-безопасности-и-отката)
@@ -301,8 +301,11 @@
 npm install
 npm run dev
 
-# Сборка релизного инсталлятора:
-npm run build -- --bundles nsis
+# 1. Задайте новую версию перед сборкой:
+python bump_version.py
+
+# 2. Интерактивная сборка (с выбором типа и папки выгрузки):
+python build.py
 ```
 
 ---
@@ -350,7 +353,7 @@ npm run build -- --bundles nsis
 
 <div align="center">
 
-**Eclipse Studio v6.0.0** • 2026
+**Eclipse Studio v6.1.0** • 2026
 <div align="center">
 
 [![Telegram Channel](https://img.shields.io/badge/Telegram-%D0%9F%D0%B8%D1%80%D0%B0%D1%82%D1%81%D0%BA%D0%B0%D1%8F_%D0%A1%D1%82%D0%B0%D0%BD%D1%86%D0%B8%D1%8F-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/piratestationn)

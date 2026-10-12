@@ -305,8 +305,7 @@
     const profile = state.launchers.find((item) => item.id === launcherId);
     if (!game || game.launcher_id === launcherId) return;
 
-    // The selector responds instantly. File swaps are serialized in the
-    // background so a second click is never blocked and the last choice wins.
+    // Селектор обновляется сразу, подмена файлов выполняется в очереди
     game.launcher_id = launcherId;
     game.launcher_name = profile?.name || (launcherId === "plug_n_play" ? "HV-PlugNPlay" : "HV-Launcher");
     game.ready = false;

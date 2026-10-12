@@ -11,7 +11,7 @@ const CONFIG_NAME: &str = "cream_api.ini";
 const NAMED_LIMIT: usize = 200;
 const PARALLEL_REQUESTS: usize = 8;
 
-/// Пары «библиотека Steam → её резервная копия CreamAPI».
+// Пары библиотек Steam и резервных копий CreamAPI
 const API_NAMES: &[(&str, &str, &str)] = &[
     ("steam_api64.dll", "steam_api64_o.dll", "x64"),
     ("steam_api.dll", "steam_api_o.dll", "x86"),
@@ -80,8 +80,7 @@ fn bitness_for(api: &str) -> &'static str {
         .unwrap_or("x64")
 }
 
-/// Директории с оригинальной библиотекой Steam, пригодные для установки анлокера.
-/// Пропускаются служебные каталоги дистрибутивов и уже сохранённые резервные копии `_o.dll`.
+// Поиск директорий с оригинальной библиотекой Steam
 fn collect_targets(game_dir: &Path) -> Vec<(PathBuf, String)> {
     let mut seen = BTreeMap::new();
     for entry in engine::walk(game_dir) {
@@ -123,7 +122,7 @@ fn key_value(line: &str) -> Option<(&str, &str)> {
         .map(|(key, value)| (key.trim(), value.trim()))
 }
 
-/// Читает appid, флаг unlockall и список DLC из уже установленного `cream_api.ini`.
+// Чтение параметров из cream_api.ini
 fn read_config(dir: &Path) -> Option<(Option<u64>, bool, BTreeMap<String, String>)> {
     let path = engine::find_case_insensitive(dir, CONFIG_NAME)?;
     let content = fs::read_to_string(path).ok()?;
@@ -157,10 +156,7 @@ fn read_config(dir: &Path) -> Option<(Option<u64>, bool, BTreeMap<String, String
     Some((appid, unlock_all, dlcs))
 }
 
-/// Формирует `cream_api.ini`. По логике CreamAPI, если секция `[dlc]` не пуста, флаг `unlockall`
-/// игнорируется и разблокируются только перечисленные DLC. Поэтому при наличии списка мы пишем его
-/// целиком и выключаем `unlockall`; blanket-режим (`unlockall = true`, пустая секция) остаётся
-/// запасным вариантом только когда список DLC неизвестен.
+// Генерация конфигурации cream_api.ini
 fn build_config(request: &DlcInstallRequest) -> String {
     let has_list = !request.dlcs.is_empty();
     let mut config = String::new();
@@ -201,8 +197,7 @@ fn named_dlcs(dlcs: BTreeMap<String, String>) -> Vec<DlcEntry> {
     entries
 }
 
-/// Steam возвращает название только по одному AppID за запрос — имена DLC запрашиваются
-/// небольшими параллельными группами.
+// Параллельный запрос названий DLC
 fn resolve_names(ids: &[u64]) -> BTreeMap<String, String> {
     let mut names = BTreeMap::new();
     for chunk in ids.chunks(PARALLEL_REQUESTS) {
@@ -261,8 +256,7 @@ fn scan_dlc_target_blocking(game_dir: String) -> Result<DlcScan, String> {
     }
 
     let exes = crate::smaki::executables(&directory);
-    // Installed Steam games have an authoritative AppID in appmanifest_*.acf.
-    // Do not guess a similarly named store result or perform slow name searches.
+    // Проверка AppID через локальный appmanifest
     if let Some(game) = crate::steam_library::installed_game_for_path(&directory) {
         return Ok(DlcScan {
             game_dir: game.game_dir,
@@ -316,8 +310,7 @@ fn fetch_dlc_catalog_blocking(appid: u64) -> Result<Vec<DlcEntry>, String> {
     Ok(named_dlcs(catalog))
 }
 
-/// Устанавливает CreamAPI в один каталог: сохраняет оригинал как `_o.dll`, подменяет библиотеку
-/// и записывает `cream_api.ini`. Оригинал сохраняется только если резервной копии ещё нет.
+// Установка CreamAPI с бэкапом оригинальной DLL
 fn install_one(
     dir: &Path,
     api: &str,
@@ -469,7 +462,7 @@ fn install_dlc_unlocker_blocking(app: AppHandle, request: DlcInstallRequest) -> 
     }
 }
 
-/// Восстанавливает оригинальную библиотеку из `_o.dll` и удаляет `cream_api.ini`.
+// Восстановление оригинальной библиотеки и удаление конфига
 fn uninstall_one(
     dir: &Path,
     api: &str,
@@ -593,7 +586,7 @@ mod tests {
         };
         let config = build_config(&request);
         assert!(config.contains("appid = 42"));
-        // Список известен → он вписывается, а unlockall выключается (иначе CreamAPI его игнорирует).
+        // При наличии списка DLC флаг unlockall отключается
         assert!(config.contains("unlockall = false"));
         assert!(config.contains("7 = Pack"));
     }
@@ -703,7 +696,7 @@ mod tests {
             &mut logs,
         )
         .unwrap();
-        // Резервная копия по-прежнему содержит настоящий оригинал, а не CreamAPI.
+        // Проверка сохранения оригинального файла в бэкапе
         assert_eq!(
             fs::read(game.join("steam_api64_o.dll")).unwrap(),
             b"ORIGINAL-VALVE-LIBRARY"

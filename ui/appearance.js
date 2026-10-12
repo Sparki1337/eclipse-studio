@@ -1,4 +1,4 @@
-/* Crocodile Gena Studio 5.2 — темы, компактный режим, размер шрифта, ссылки сервисов. */
+// Темы, компактный режим и масштаб шрифта
 (() => {
   "use strict";
 
@@ -6,7 +6,7 @@
   const root = document.documentElement;
   const THEMES = new Set(["graphite", "midnight", "oled", "forest", "cosmos", "wine", "coffee", "steel"]);
   const THEME_COLORS = {
-    graphite: "#07090e", midnight: "#060a16", oled: "#000000", forest: "#050c09",
+    graphite: "#090a0d", midnight: "#060a16", oled: "#000000", forest: "#050c09",
     cosmos: "#09061a", wine: "#0d0609", coffee: "#0c0907", steel: "#11141a",
   };
   const FONT_MIN = 85;
@@ -88,7 +88,7 @@
     });
   }
 
-  /* ---------- Ширина левой панели ---------- */
+  // Настройка ширины левой панели
   const SIDEBAR_MIN = 180;
   const SIDEBAR_MAX = 380;
 
@@ -152,8 +152,8 @@
   const savedSidebar = parseInt(read("cgs-sidebar-width", ""), 10);
   if (savedSidebar >= SIDEBAR_MIN && savedSidebar <= SIDEBAR_MAX) applySidebarWidth(savedSidebar, false);
   applyTheme(read("cgs-theme", "graphite"));
-  applyCompact(read("cgs-compact", "0") === "1");
-  applyFontScale(read("cgs-font-scale", "100"));
+  applyCompact(read("cgs-compact", "1") === "1");
+  applyFontScale(read("cgs-font-scale", "120"));
 
   window.cgsAppearance = { applyTheme, applyCompact, applyFontScale, applySidebarWidth };
 })();

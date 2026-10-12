@@ -201,8 +201,7 @@ local function recorded_manifest_files(steam_path, appid, installed_game, latest
         end
     end
 
-    -- Older plugin versions did not always persist manifestFiles. Merge both
-    -- state sources instead of letting an empty installedGames entry hide history.
+    -- Слияние источников manifestFiles
     local function merge(source)
         if type(source) == "table" then
             for _, value in pairs(source) do
@@ -213,7 +212,7 @@ local function recorded_manifest_files(steam_path, appid, installed_game, latest
     merge(type(installed_game) == "table" and installed_game.manifestFiles or nil)
     merge(type(latest) == "table" and latest.manifestFiles or nil)
 
-    -- The installed Lua remains the source of truth even when state.json is old.
+    -- Проверка манифестов в установленном Lua-скрипте
     local lua_path = installed_lua_path(steam_path, appid)
     if lua_path then
         local content = read_binary(lua_path)
@@ -224,8 +223,7 @@ local function recorded_manifest_files(steam_path, appid, installed_game, latest
         end
     end
 
-    -- Finally discover backups themselves. This repairs installs created by
-    -- versions which cached files successfully but failed to record their list.
+    -- Поиск файлов в кэше манифестов
     local cache_dir = manifest_cache_directory(appid)
     if cache_dir and fs.is_directory(cache_dir) then
         local entries = fs.list_recursive(cache_dir)
@@ -242,8 +240,7 @@ local function recorded_manifest_files(steam_path, appid, installed_game, latest
     return result
 end
 
--- Steam can remove depot manifests when a download is cancelled. Keep a copy
--- outside depotcache and put it back before reporting the game as installed.
+-- Синхронизация манифестов с depotcache
 local function sync_manifest_cache(steam_path, appid, manifest_files)
     local result = {
         expectedCount = #manifest_files,
@@ -596,9 +593,7 @@ local function install_package(appid, service, key)
         return false, "Не удалось подготовить временную папку: " .. tostring(create_err)
     end
 
-    -- Ryuu does not always expose response headers through http.download.
-    -- Capture the server version before downloading so the installed package
-    -- is never silently associated with a newer version on the first status check.
+    -- Получение версии пакета перед загрузкой
     local package_version = ""
     if service == "ryuu" then
         package_version = tostring(fetch_remote_version(appid, true, service, key) or "")
@@ -812,8 +807,7 @@ function get_game_status(appid)
         elseif latest and latest.status == "success" and latest.pendingRestart == true then
             game_state = "pending_restart"
         else
-            -- A store page is opened explicitly by the user, so always make a
-            -- fresh lightweight HEAD request instead of trusting the old cache.
+            -- Запрос актуальной версии пакета
             local remote_version = fetch_remote_version(clean, true, service, key)
             local installed_version = tostring(state.installedVersions[clean] or "")
             local trusted_version = type(installed_game) == "table"

@@ -85,7 +85,7 @@
         path = await invoke("files_pick_download_dir");
       } catch (error) {
         if (!isMissingCommand(error)) throw error;
-        // Старый бэкенд: используем общий диалог выбора папки.
+        // Фоллбэк выбора папки для старых версий бэкенда
         path = await invoke("pick_game_directory");
       }
       if (path) {
@@ -112,7 +112,7 @@
       await invoke("files_open_download_dir", { path: readDownloadDir() || null });
     } catch (error) {
       if (!isMissingCommand(error)) { notify(String(error), true); return; }
-      // Старый бэкенд: открываем папку через последний скачанный файл, если он есть.
+      // Фоллбэк открытия папки через последний файл
       const last = [...state.downloads.values()].pop();
       if (last?.path) {
         try { await invoke("files_reveal", { path: last.path }); return; } catch (_) {}

@@ -141,8 +141,7 @@ pub(crate) fn files_reveal(path: String) -> Result<(), String> {
     }
 }
 
-/// Папка для загрузки кряков: выбранная пользователем в настройках
-/// или стандартная папка «Загрузки» Windows.
+// Определение папки загрузки (пользовательская или системная)
 fn resolve_download_dir(app: &tauri::AppHandle, target_dir: Option<&str>) -> Result<PathBuf, String> {
     if let Some(custom) = target_dir.map(str::trim).filter(|value| !value.is_empty()) {
         let path = PathBuf::from(custom);
@@ -240,7 +239,7 @@ fn download_file(
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(900))
             .pool_max_idle_per_host(PARALLEL_DOWNLOAD_PARTS as usize)
-            .user_agent("EclipseStudio/6.0.0")
+            .user_agent("EclipseStudio/6.1.0")
             .build()
             .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
         let head = client
@@ -697,7 +696,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/6.0.0")
+        .user_agent("EclipseStudio/6.1.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -761,8 +760,7 @@ fn parse_catalog(content: &str, cached: bool) -> Result<FilesCatalog, String> {
         })
         .collect::<Vec<_>>();
 
-    // The Gist is maintained from oldest to newest, so reverse insertion
-    // order for the interface: the last added file is shown first.
+    // Сортировка: новые файлы отображаются первыми
     files.reverse();
     let total = files.len();
     Ok(FilesCatalog {

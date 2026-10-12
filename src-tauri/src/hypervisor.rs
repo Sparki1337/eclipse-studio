@@ -26,7 +26,7 @@ const UPDATE_TIMEOUT_SECONDS: u32 = 20;
 const MIN_REMOTE_MANIFEST_VERSION: u32 = 2;
 const DEFAULT_LAUNCHER_ID: &str = "hv_launcher";
 const PLUG_N_PLAY_LAUNCHER_ID: &str = "plug_n_play";
-// Встроенные бинарники гипервизора исключены из публичной сборки для безопасности на GitHub
+// Бинарники исключены из публичной сборки
 const EMBEDDED_HV_BATCH: &str = "";
 const EMBEDDED_PLUG_N_PLAY_BATCH: &str = "";
 const EMBEDDED_KVC: &[u8] = &[];
@@ -330,9 +330,7 @@ pub(crate) fn set_game_launcher(
     let dir = PathBuf::from(&game.dir_path);
     let loader_name = game.loader_name.clone();
 
-    // Profile switching is a local, immediate file swap. Both helpers and both
-    // BAT templates are embedded in the application, so this path never waits
-    // for the network and does not require a separate verification step.
+    // Локальная замена файлов профиля без обращения к сети
     prepare_game_files(&app, &game_id, &dir, &loader_name, profile, false)?;
 
     game.launcher_id = profile.id.to_string();

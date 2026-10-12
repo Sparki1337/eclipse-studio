@@ -147,8 +147,7 @@ fn drm_info_inner(appid: u64) -> Result<SteamDrmInfo, String> {
     })
 }
 
-/// Кэш успешно полученных названий приложений (повторные открытия и общие DLC не перезапрашиваются).
-/// Неудачи НЕ кэшируются, чтобы временные ошибки/rate-limit можно было повторить.
+// Кэш названий приложений
 fn name_cache() -> &'static Mutex<HashMap<u64, String>> {
     static CACHE: OnceLock<Mutex<HashMap<u64, String>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
@@ -231,8 +230,7 @@ fn search_game_inner(query: &str) -> Result<Option<GameSummary>, String> {
 }
 
 fn details_payload(appid: u64) -> Result<Option<Value>, String> {
-    // cc=US обязателен: без региона Steam отдаёт success:false для многих регионально
-    // ограниченных DLC (например, паков Street Fighter 6).
+    // Запрос с регионом US для обхода региональных ограничений
     let url =
         format!("https://store.steampowered.com/api/appdetails?appids={appid}&l=english&cc=US");
     let json = fetch_json(&url)?;
@@ -296,7 +294,7 @@ pub(crate) fn app_name(appid: u64) -> Option<String> {
     name
 }
 
-/// Основные данные игры одним запросом, без последовательного резолва имён DLC.
+// Сводные данные игры из Steam Store API
 pub(crate) struct AppOverview {
     pub name: String,
     pub header_image: Option<String>,

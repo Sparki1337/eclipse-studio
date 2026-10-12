@@ -47,7 +47,7 @@ async function keepManifestsAvailable(): Promise<void> {
   try {
     await restoreManifestCache();
   } catch {
-    // The next background pass retries silently.
+    // Повтор при следующем фоновом проходе
   } finally {
     cacheRestoreRunning = false;
   }
@@ -681,7 +681,7 @@ async function refreshGameStatus(panel: HTMLElement, appid: string, force = fals
       applyGameStatus(panel, button, subtitle, status);
     }
   } catch {
-    // Фоновая проверка не должна перекрывать карточку сетевой или IPC-ошибкой.
+    // Игнорирование сетевых ошибок фоновой проверки
   } finally {
     panel.dataset.statusLoading = 'false';
   }

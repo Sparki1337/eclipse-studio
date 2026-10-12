@@ -85,15 +85,15 @@
   };
 
   const viewMeta = {
-    home: ["ОБЗОР", "Главная"],
-    fix: ["РАБОЧАЯ ОБЛАСТЬ", "Online Fix"],
-    dlc: ["МОДУЛЬ 03", "DLC Unlocker"],
-    lua: ["МОДУЛЬ 04", "CrocLua"],
-    hypervisor: ["МОДУЛЬ 05", "Гипервизор"],
-    files: ["МОДУЛЬ 06", "Кряки"],
-    utilities: ["МОДУЛЬ 07", "Утилиты"],
-    saves: ["МОДУЛЬ 02", "Менеджер сохранений"],
-    settings: ["ПРИЛОЖЕНИЕ", "Настройки"],
+    home: ["", "Главная"],
+    fix: ["", "Online Fix"],
+    dlc: ["", "DLC Unlocker"],
+    lua: ["", "CrocLua"],
+    hypervisor: ["", "Гипервизор"],
+    files: ["", "Кряки"],
+    utilities: ["", "Утилиты"],
+    saves: ["", "Менеджер сохранений"],
+    settings: ["", "Настройки"],
   };
 
   function now() {
@@ -1175,7 +1175,7 @@
       state.lua.millennium = millennium || state.lua.millennium;
       renderMillenniumStatus();
     } catch (_) {
-      // Полный luaRefresh покажет ошибку при следующем ручном обновлении.
+      // Ошибку покажет последующий полный luaRefresh
     } finally {
       millenniumStatusRefreshing = false;
     }
@@ -1775,6 +1775,7 @@
     const accent = values[name];
     document.documentElement.style.setProperty("--accent", accent[0]);
     document.documentElement.style.setProperty("--accent-rgb", accent[1]);
+    document.documentElement.style.setProperty("--accent-2", accent[0]);
     $$(".accent").forEach((button) => button.classList.toggle("active", button.dataset.accent === name));
     localStorage.setItem("accent", name);
   }
@@ -1859,8 +1860,48 @@
     await call("open_external", { url: url || update.releaseUrl });
   }
 
+  const POSTPONE_LAUNCH_COUNT = 10;
+
+  function shouldPromptStartupUpdate(version) {
+    try {
+      const postponedVersion = localStorage.getItem("cgs-postpone-update-version");
+      const launchesLeftStr = localStorage.getItem("cgs-postpone-update-launches");
+      if (postponedVersion !== version) {
+        return true;
+      }
+      const launchesLeft = Number(launchesLeftStr) || 0;
+      if (launchesLeft > 0) {
+        localStorage.setItem("cgs-postpone-update-launches", String(launchesLeft - 1));
+        return false;
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  function postponeStartupUpdate(version) {
+    try {
+      localStorage.setItem("cgs-postpone-update-version", version);
+      localStorage.setItem("cgs-postpone-update-launches", String(POSTPONE_LAUNCH_COUNT));
+    } catch (_) {}
+  }
+
+  function clearPostponeUpdate() {
+    try {
+      localStorage.removeItem("cgs-postpone-update-version");
+      localStorage.removeItem("cgs-postpone-update-launches");
+    } catch (_) {}
+  }
+
   async function checkForUpdates(interactive = false) {
-    if (state.updates.checking || !invoke) return;
+    if (state.updates.checking) return;
+    if (!invoke) {
+      if (interactive) {
+        toast("Режим разработки (без Tauri backend). Для проверки окна используйте кнопку «Тест окна обновления».");
+      }
+      return;
+    }
     state.updates.checking = true;
     const button = $("#check-update-button");
     const status = $("#update-status");
@@ -1881,23 +1922,32 @@
       renderUpdateDownloads(update);
       status.textContent = `Доступна версия ${update.latestVersion}`;
       status.classList.add("available");
-      if (!interactive && state.updates.promptedVersion === update.latestVersion) return;
+      if (!interactive) {
+        if (!shouldPromptStartupUpdate(update.latestVersion)) {
+          return;
+        }
+        if (state.updates.promptedVersion === update.latestVersion) return;
+      }
       state.updates.promptedVersion = update.latestVersion;
 
       const notes = String(update.notes || "").trim();
       const shortNotes = notes.length > 700 ? `${notes.slice(0, 700).trim()}…` : notes;
       const preferredUrl = update.portableUrl || update.installerUrl || update.releaseUrl;
-      const downloadLabel = update.portableUrl ? "Скачать EXE" : update.installerUrl ? "Скачать Setup" : "Открыть релиз";
+      const downloadLabel = "Обновиться";
       const formatsHint = update.portableUrl && update.installerUrl
         ? "\n\nВ настройках доступны два варианта: прямой EXE и установщик Setup."
         : "";
       const accepted = await showModal(
         `Доступна версия ${update.latestVersion}`,
-        `${shortNotes || "Опубликована новая версия Eclipse Studio."}${formatsHint}`,
-        { confirm: true, confirmText: downloadLabel, cancelText: "Позже", symbol: "↑" },
+        `${shortNotes || "Опубликована новая версия Eclipse Studio."}${formatsHint}\n\nВы можете обновиться сейчас или отложить напоминание на 10 запусков программы.`,
+        { confirm: true, confirmText: downloadLabel, cancelText: "Отложить (на 10 запусков)", symbol: "↑" },
       );
       if (accepted) {
+        clearPostponeUpdate();
         await call("open_external", { url: preferredUrl });
+      } else {
+        postponeStartupUpdate(update.latestVersion);
+        toast("Напоминание об обновлении отложено на 10 запусков");
       }
     } catch (error) {
       const message = errorText(error);
@@ -1960,8 +2010,7 @@
         const path = await call("pick_game_directory");
         if (!path) return;
         state.dlc.extraLibrary = path;
-        // Validate and scan before persisting, so an incorrect folder does not
-        // permanently break the next scan.
+        // Проверка папки перед сохранением пути
         const result = await call("scan_installed_steam_games", { steamPath: state.lua.steamPath || null, libraryPath: path });
         state.dlc.games = result.games || []; state.dlc.libraryScanned = true;
         localStorage.setItem("dlcExtraLibrary", path);
@@ -2161,7 +2210,7 @@
       if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
       call("luatools_restore_manifests", { steamPath: state.lua.steamPath || null }).catch(() => {});
     }, 3_000);
-    log("Eclipse Studio 6.0.0 инициализирован", "system");
+    log("Eclipse Studio 6.1.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
     if (invoke) setTimeout(() => checkForUpdates(false), 1800);
   }
