@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Eclipse Studio",
-  "version": "6.1.0",
-  "identifier": "studio.crocodilegena.desktop",
+  "version": "6.2.0",
+  "identifier": "studio.sparki.desktop",
   "build": {
     "frontendDist": "../ui"
   },
@@ -20,7 +20,7 @@
         "decorations": false,
         "transparent": false,
         "shadow": false,
-        "backgroundColor": "#07090e",
+        "backgroundColor": "#090a0d",
         "resizable": true
       }
     ],
@@ -32,6 +32,8 @@
     "active": true,
     "targets": "all",
     "category": "Utility",
+    "publisher": "Sparki",
+    "copyright": "Copyright © 2026 Sparki",
     "shortDescription": "Premium Steam and EOS utility workspace",
     "icon": [
       "icon.ico"

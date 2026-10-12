@@ -202,7 +202,7 @@
     return `
       <article class="file-card ${featured ? "featured" : ""}">
         <div class="file-card-top">
-          <span class="file-icon">📦</span>
+          <span class="file-icon"><svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
           <div class="file-title">
             <div><span>${marker}</span>${newest ? "<b>НОВОЕ</b>" : ""}</div>
             <h3 title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</h3>
@@ -213,12 +213,12 @@
           <div><small>ПАРОЛЬ</small><strong class="file-password ${item.password ? "" : "empty"}">${escapeHtml(password)}</strong></div>
         </div>
         <div class="file-actions">
-          ${item.password ? `<button class="file-copy" data-files-action="copy" data-files-url="${url}"><span>⧉</span> Копировать пароль</button>` : '<span class="file-no-password">Без пароля</span>'}
+          ${item.password ? `<button class="file-copy" data-files-action="copy" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><rect width="9" height="9" x="5.5" y="5.5" rx="1.5"/><path d="M10.5 5.5V3a1.5 1.5 0 0 0-1.5-1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h2.5"/></svg> <span>Копировать пароль</span></button>` : '<span class="file-no-password">Без пароля</span>'}
           ${downloaded
-            ? `<button class="file-download downloaded" data-files-action="reveal" data-files-url="${url}"><span>↗</span> Открыть папку</button>`
+            ? `<button class="file-download downloaded" data-files-action="reveal" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M3 13 13 3M6 3h7v7"/></svg> <span>Открыть папку</span></button>`
             : progress
-              ? `<button class="file-cancel" data-files-action="cancel" data-files-url="${url}" ${progress.cancelling ? "disabled" : ""}><span>×</span> ${progress.cancelling ? "Отменяем…" : `Отменить ${progress.percent == null ? "" : `${progress.percent}%`}`}</button>`
-              : `<button class="file-download" data-files-action="download" data-files-url="${url}"><span>↓</span> Скачать</button>`}
+              ? `<button class="file-cancel" data-files-action="cancel" data-files-url="${url}" ${progress.cancelling ? "disabled" : ""}><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2;vertical-align:-1px"><path d="m4 4 8 8M12 4 4 12"/></svg> <span>${progress.cancelling ? "Отменяем…" : `Отменить ${progress.percent == null ? "" : `${progress.percent}%`}`}</span></button>`
+              : `<button class="file-download" data-files-action="download" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>Скачать</span></button>`}
         </div>
       </article>`;
   }
@@ -351,7 +351,7 @@
     try {
       await navigator.clipboard.writeText(item.password);
       const original = button.innerHTML;
-      button.innerHTML = "<span>✓</span> Скопировано";
+      button.innerHTML = '<svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2;vertical-align:-1px"><polyline points="13 4 6 11 3 8"/></svg> <span>Скопировано</span>';
       window.setTimeout(() => { button.innerHTML = original; }, 1400);
     } catch (error) {
       $("#files-status").textContent = `Не удалось скопировать пароль: ${String(error)}`;

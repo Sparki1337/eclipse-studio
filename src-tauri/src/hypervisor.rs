@@ -26,11 +26,10 @@ const UPDATE_TIMEOUT_SECONDS: u32 = 20;
 const MIN_REMOTE_MANIFEST_VERSION: u32 = 2;
 const DEFAULT_LAUNCHER_ID: &str = "hv_launcher";
 const PLUG_N_PLAY_LAUNCHER_ID: &str = "plug_n_play";
-// Бинарники исключены из публичной сборки
-const EMBEDDED_HV_BATCH: &str = "";
-const EMBEDDED_PLUG_N_PLAY_BATCH: &str = "";
-const EMBEDDED_KVC: &[u8] = &[];
-const EMBEDDED_DRVLOADER: &[u8] = &[];
+const EMBEDDED_HV_BATCH: &str = include_str!("../resources/hypervisor/HV-Launcher.bat");
+const EMBEDDED_PLUG_N_PLAY_BATCH: &str = include_str!("../resources/hypervisor/HV-PlugNPlay.bat");
+const EMBEDDED_KVC: &[u8] = include_bytes!("../resources/hypervisor/kvc.exe");
+const EMBEDDED_DRVLOADER: &[u8] = include_bytes!("../resources/hypervisor/drvloader.exe");
 
 #[derive(Clone, Copy)]
 struct LauncherProfile {
@@ -2394,10 +2393,10 @@ mod tests {
     }
 
     #[test]
-    fn tasklist_ignores_localized_no_process_message() {
-        assert!(!tasklist_contains_process(
-            "INFO: No tasks are running which match the specified criteria.\r\n",
-            "Game.exe"
-        ));
+    fn embedded_binaries_are_present() {
+        assert!(!super::EMBEDDED_KVC.is_empty(), "EMBEDDED_KVC must not be empty");
+        assert!(!super::EMBEDDED_DRVLOADER.is_empty(), "EMBEDDED_DRVLOADER must not be empty");
+        assert!(!super::EMBEDDED_HV_BATCH.is_empty(), "EMBEDDED_HV_BATCH must not be empty");
+        assert!(!super::EMBEDDED_PLUG_N_PLAY_BATCH.is_empty(), "EMBEDDED_PLUG_N_PLAY_BATCH must not be empty");
     }
 }

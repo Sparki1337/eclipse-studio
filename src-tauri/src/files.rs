@@ -117,26 +117,37 @@ pub(crate) fn files_cancel_download(url: String) -> Result<bool, String> {
 
 #[tauri::command]
 pub(crate) fn files_reveal(path: String) -> Result<(), String> {
-    let file = PathBuf::from(path);
-    if !file.is_file() {
-        return Err("Загруженный файл больше не найден".into());
-    }
+    let target = PathBuf::from(path.trim());
 
     #[cfg(target_os = "windows")]
     {
-        let folder = file
-            .parent()
-            .ok_or_else(|| "Не удалось определить папку загрузки".to_string())?;
-        std::process::Command::new("explorer.exe")
-            .arg(folder)
-            .spawn()
-            .map(|_| ())
-            .map_err(|error| format!("Не удалось открыть папку: {error}"))
+        if target.is_file() {
+            std::process::Command::new("explorer.exe")
+                .arg(format!("/select,{}", target.to_string_lossy()))
+                .spawn()
+                .map(|_| ())
+                .map_err(|error| format!("Не удалось открыть в проводнике: {error}"))
+        } else if target.is_dir() {
+            std::process::Command::new("explorer.exe")
+                .arg(&target)
+                .spawn()
+                .map(|_| ())
+                .map_err(|error| format!("Не удалось открыть в проводнике: {error}"))
+        } else {
+            if let Some(folder) = target.parent().filter(|p| p.is_dir()) {
+                return std::process::Command::new("explorer.exe")
+                    .arg(folder)
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|error| format!("Не удалось открыть в проводнике: {error}"));
+            }
+            Err("Загруженный файл больше не найден".into())
+        }
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = file;
+        let _ = target;
         Err("Открытие папки поддерживается только в Windows".into())
     }
 }
@@ -168,7 +179,19 @@ pub(crate) async fn files_pick_download_dir() -> Result<Option<String>, String> 
 }
 
 fn pick_download_dir_blocking() -> Result<Option<String>, String> {
-    let script = r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'Выберите папку для загрузки кряков'; $d.ShowNewFolderButton = $true; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; Write-Output $d.SelectedPath }"#;
+    let script = r#"
+Add-Type -AssemblyName System.Windows.Forms
+$d = New-Object System.Windows.Forms.OpenFileDialog
+$d.Title = 'Выберите папку для загрузки'
+$d.ValidateNames = $false
+$d.CheckFileExists = $false
+$d.CheckPathExists = $true
+$d.FileName = 'Выбор папки'
+if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    Write-Output ([System.IO.Path]::GetDirectoryName($d.FileName))
+}
+"#;
     let mut command = std::process::Command::new("powershell.exe");
     command.args(["-NoProfile", "-STA", "-Command", script]);
     #[cfg(target_os = "windows")]
@@ -178,7 +201,7 @@ fn pick_download_dir_blocking() -> Result<Option<String>, String> {
     }
     let output = command
         .output()
-        .map_err(|error| format!("Не удалось открыть выбор папки: {error}"))?;
+        .map_err(|error| format!("Не удалось открыть проводник: {error}"))?;
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
     }
@@ -239,7 +262,7 @@ fn download_file(
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(900))
             .pool_max_idle_per_host(PARALLEL_DOWNLOAD_PARTS as usize)
-            .user_agent("EclipseStudio/6.1.0")
+            .user_agent("EclipseStudio/6.2.0")
             .build()
             .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
         let head = client
@@ -696,7 +719,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/6.1.0")
+        .user_agent("EclipseStudio/6.2.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =

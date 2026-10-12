@@ -15,9 +15,14 @@
     ["Очистка", "Завершение сценария"],
   ];
 
+  const defaultLaunchers = [
+    { id: "hv_launcher", badge: "KVC", name: "HV-Launcher", batch_name: "HV-Launcher.bat", helper_label: "kvc.exe" },
+    { id: "plug_n_play", badge: "DRV", name: "HV-PlugNPlay", batch_name: "HV-PlugNPlay.bat", helper_label: "drvloader.exe" },
+  ];
+
   const state = {
     selectedId: null,
-    launchers: [],
+    launchers: [...defaultLaunchers],
     games: [],
     running: false,
     launching: false,
@@ -67,6 +72,9 @@
       const button = $(selector);
       if (!button) return;
       button.disabled = busy || (selector === "#hv-selected-verify" && !state.selectedId);
+    });
+    document.querySelectorAll("#hv-selected-profiles button").forEach((button) => {
+      button.disabled = busy;
     });
     updateLaunchButton();
     if (label) $("#hv-run-state").textContent = label;
@@ -173,7 +181,7 @@
 
   function applyLibrary(library) {
     state.selectedId = library?.selected_id || null;
-    state.launchers = Array.isArray(library?.launchers) ? library.launchers : [];
+    state.launchers = Array.isArray(library?.launchers) && library.launchers.length ? library.launchers : defaultLaunchers;
     state.games = Array.isArray(library?.games) ? library.games : [];
     renderGames();
   }
@@ -191,7 +199,7 @@
       const confirm = state.confirmingRemove === game.id;
       return `
         <article class="hv-game-card ${selected ? "selected" : ""}" data-game-id="${escapeHtml(game.id)}">
-          <button class="hv-game-symbol" data-hv-action="select" data-game-id="${escapeHtml(game.id)}" title="Выбрать игру" ${state.running ? "disabled" : ""}>${selected ? "✓" : "🎮"}</button>
+          <button class="hv-game-symbol" data-hv-action="select" data-game-id="${escapeHtml(game.id)}" title="Выбрать игру" ${state.running ? "disabled" : ""}>${selected ? '<svg viewBox="0 0 16 16" style="width:14px;height:14px;stroke-width:2.2"><polyline points="13 4 6 11 3 8"/></svg>' : '<svg viewBox="0 0 24 24" style="width:16px;height:16px"><line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="6"/></svg>'}</button>
           <div class="hv-game-main">
             <div class="hv-game-heading"><strong>${escapeHtml(game.name)}</strong><b class="${game.ready ? "ready" : ""}"><i></i>${game.ready ? "Готова к запуску" : "Нужна проверка"}</b></div>
             <div class="hv-game-path" title="${escapeHtml(game.exe_path)}">${escapeHtml(game.exe_path)}</div>
@@ -199,7 +207,7 @@
               <div class="hv-game-profile"><span>ПРОФИЛЬ</span><strong>${escapeHtml(game.launcher_name || "HV-Launcher")}</strong></div>
               <div class="hv-game-actions">
                 ${selected ? '<span class="hv-active-game"><i></i>Активна</span>' : `<button class="hv-game-action select" data-hv-action="select" data-game-id="${escapeHtml(game.id)}" ${state.running ? "disabled" : ""}>Выбрать</button>`}
-                <button class="hv-game-action" data-hv-action="verify" data-game-id="${escapeHtml(game.id)}" ${state.running ? "disabled" : ""}><span>↻</span> Проверить</button>
+                <button class="hv-game-action" data-hv-action="verify" data-game-id="${escapeHtml(game.id)}" ${state.running ? "disabled" : ""}><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M13.5 2.5v3.5h-3.5"/><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9L13.5 6"/></svg> <span>Проверить</span></button>
                 <button class="hv-game-action danger ${confirm ? "confirm" : ""}" data-hv-action="remove" data-game-id="${escapeHtml(game.id)}" ${state.running ? "disabled" : ""}>${confirm ? "Точно удалить?" : "Удалить"}</button>
               </div>
             </div>
@@ -294,10 +302,13 @@
       setBusy(true, "Проверка");
       const library = await call("verify_game", { id });
       applyLibrary(library);
-      await refreshAll(true);
       appendLog("success", "Файлы игры проверены и восстановлены при необходимости.");
-    } catch (error) { appendLog("error", String(error)); }
-    finally { setBusy(false, "Ожидание"); }
+    } catch (error) {
+      appendLog("error", String(error));
+    } finally {
+      setBusy(false, "Ожидание");
+      await refreshAll(true);
+    }
   }
 
   async function setProfile(id, launcherId) {
@@ -308,32 +319,33 @@
     // Селектор обновляется сразу, подмена файлов выполняется в очереди
     game.launcher_id = launcherId;
     game.launcher_name = profile?.name || (launcherId === "plug_n_play" ? "HV-PlugNPlay" : "HV-Launcher");
-    game.ready = false;
     state.pendingProfile = { id, launcherId };
     renderGames();
     renderStatus({ selected_game: selectedGame(), games_count: state.games.length });
 
     if (state.profileSwitching) return;
     state.profileSwitching = true;
+    setBusy(true, "Смена профиля");
 
-    while (state.pendingProfile) {
-      const request = state.pendingProfile;
-      state.pendingProfile = null;
-      try {
-        const library = await call("set_game_launcher", request);
-        if (!state.pendingProfile) {
-          applyLibrary(library);
-          renderStatus({ selected_game: selectedGame(), games_count: state.games.length });
-          appendLog("success", `Профиль ${request.launcherId === "plug_n_play" ? "DRV" : "KVC"} установлен, файлы заменены.`);
+    try {
+      while (state.pendingProfile) {
+        const request = state.pendingProfile;
+        state.pendingProfile = null;
+        try {
+          const library = await call("set_game_launcher", request);
+          if (!state.pendingProfile) {
+            applyLibrary(library);
+            appendLog("success", `Профиль ${request.launcherId === "plug_n_play" ? "DRV" : "KVC"} установлен, файлы заменены.`);
+          }
+        } catch (error) {
+          appendLog("error", String(error));
         }
-      } catch (error) {
-        appendLog("error", String(error));
-        if (!state.pendingProfile) await refreshAll(true);
       }
+    } finally {
+      state.profileSwitching = false;
+      setBusy(false, "Ожидание");
+      await refreshAll(true);
     }
-
-    state.profileSwitching = false;
-    $("#hv-run-state").textContent = "Ожидание";
   }
 
   async function removeGame(id) {

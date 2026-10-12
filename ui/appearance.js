@@ -4,9 +4,9 @@
 
   const invoke = window.__TAURI__?.core?.invoke;
   const root = document.documentElement;
-  const THEMES = new Set(["graphite", "midnight", "oled", "forest", "cosmos", "wine", "coffee", "steel"]);
+  const THEMES = new Set(["graphite", "midnight", "oled", "light", "forest", "cosmos", "wine", "coffee", "steel"]);
   const THEME_COLORS = {
-    graphite: "#090a0d", midnight: "#060a16", oled: "#000000", forest: "#050c09",
+    graphite: "#090a0d", midnight: "#060a16", oled: "#000000", light: "#f8fafc", forest: "#050c09",
     cosmos: "#09061a", wine: "#0d0609", coffee: "#0c0907", steel: "#11141a",
   };
   const FONT_MIN = 85;

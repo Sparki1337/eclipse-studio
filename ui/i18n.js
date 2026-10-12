@@ -92,7 +92,7 @@
     "Ваша игровая": "Your gaming",
     "лаборатория.": "laboratory.",
     "Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.": "One place for game configuration, network components, and future tools.",
-    "Фирменная иллюстрация Crocodile Gena": "Crocodile Gena signature artwork",
+    "Иллюстрация Crocodile Gena": "Crocodile Gena artwork",
     "Активный модуль": "Active module",
     "Готов к установке и восстановлению": "Ready to install and restore",
     "Менеджер сохранений": "Save Manager",
@@ -691,6 +691,16 @@
     "КРЯКИ": "CRACKS",
     "Анимации интерфейса": "Interface animations",
     "Плавное появление разделов, карточек и списков": "Smooth appearance of sections, cards and lists",
+    "Заставка при запуске": "Startup splash screen",
+    "Анимация при открытии программы": "Animation upon application startup",
+    "Посмотреть": "Preview",
+    "Посмотреть заставку": "Preview splash screen",
+    "Нажмите в любом месте для пропуска": "Click anywhere to skip",
+    "Инициализация подсистем Eclipse Studio...": "Initializing Eclipse Studio subsystems...",
+    "Проверка игровых библиотек и фиксов...": "Verifying game libraries and fixes...",
+    "Синхронизация профилей и компонентов...": "Syncing profiles and components...",
+    "Подготовка рабочей области...": "Preparing workspace environment...",
+    "Добро пожаловать в Eclipse Studio": "Welcome to Eclipse Studio",
     "Выберите папку с игрой": "Choose the game folder"
   };
 
@@ -789,7 +799,7 @@
     ["Резервная копия:", "Backup:"],
     ["Удалено компонентов:", "Components removed:"],
     ["Системный модуль недоступен", "System module is unavailable"],
-    ["Eclipse Studio 6.1.0 инициализирован", "Eclipse Studio 6.1.0 initialized"],
+    ["Eclipse Studio 6.2.0 инициализирован", "Eclipse Studio 6.2.0 initialized"],
     ["Доступна версия", "Version available:"],
     ["Осталось", "Remaining"],
     ["локальная копия", "local copy"]

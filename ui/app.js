@@ -102,13 +102,32 @@
 
   function log(message, type = "info") {
     const container = $("#activity-log");
+    if (!container) return;
     const entry = document.createElement("div");
     entry.className = `log-entry ${type}`;
+
     const time = document.createElement("time");
     time.textContent = now();
+
+    const msg = document.createElement("div");
+    msg.className = "log-msg";
+
+    const icon = document.createElement("span");
+    icon.className = "log-icon";
+    const glyphs = {
+      success: "✓",
+      error: "✕",
+      system: "›",
+      info: "•",
+    };
+    icon.textContent = glyphs[type] || "•";
+
     const text = document.createElement("span");
+    text.className = "log-text";
     text.textContent = String(message);
-    entry.append(time, text);
+
+    msg.append(icon, text);
+    entry.append(time, msg);
     container.appendChild(entry);
     container.scrollTop = container.scrollHeight;
   }
@@ -172,10 +191,17 @@
     $("#modal-cancel").textContent = cancelText;
     $("#modal-confirm").querySelector("span")?.remove();
     $("#modal-confirm").textContent = confirm ? confirmText : "Понятно";
-    backdrop.classList.remove("hidden");
+    backdrop.classList.remove("hidden", "closing");
     return new Promise((resolve) => {
+      let done = false;
       const finish = (value) => {
-        backdrop.classList.add("hidden");
+        if (done) return;
+        done = true;
+        backdrop.classList.add("closing");
+        setTimeout(() => {
+          backdrop.classList.add("hidden");
+          backdrop.classList.remove("closing");
+        }, 190);
         $("#modal-confirm").onclick = null;
         $("#modal-cancel").onclick = null;
         resolve(value);
@@ -408,7 +434,8 @@
       button.className = "dlc-library-game";
       button.disabled = state.dlc.scanning || state.dlc.libraryScanning;
       const cover = document.createElement("div"); cover.className = "dlc-library-cover";
-      const placeholder = document.createElement("span"); placeholder.textContent = "🎮";
+      const placeholder = document.createElement("span");
+      placeholder.innerHTML = '<svg viewBox="0 0 24 24" style="width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.6"><line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="6"/></svg>';
       const image = document.createElement("img"); image.src = game.headerImage; image.alt = ""; image.loading = "lazy";
       image.onerror = async () => {
         image.onerror = null;
@@ -426,7 +453,8 @@
       const id = document.createElement("small"); id.textContent = `AppID ${game.appid}`;
       const path = document.createElement("code"); path.textContent = game.gameDir; path.title = game.gameDir;
       copy.append(name, id, path);
-      const arrow = document.createElement("span"); arrow.className = "dlc-library-arrow"; arrow.textContent = "→";
+      const arrow = document.createElement("span"); arrow.className = "dlc-library-arrow";
+      arrow.innerHTML = '<svg viewBox="0 0 16 16" style="width:16px;height:16px;stroke-width:2"><path d="M3 8h10m-4-4 4 4-4 4"/></svg>';
       button.append(cover, copy, arrow);
       button.addEventListener("click", () => scanDlcDirectory(game.gameDir, game));
       list.append(button);
@@ -2086,8 +2114,16 @@
       if (files.length) luaInstall(files);
     });
     const luaDetail = $("#lua-detail-backdrop");
-    $("#lua-detail-close").addEventListener("click", () => luaDetail.classList.add("hidden"));
-    luaDetail.addEventListener("click", (event) => { if (event.target === luaDetail) luaDetail.classList.add("hidden"); });
+    const closeLuaDetail = () => {
+      if (!luaDetail || luaDetail.classList.contains("hidden")) return;
+      luaDetail.classList.add("closing");
+      setTimeout(() => {
+        luaDetail.classList.add("hidden");
+        luaDetail.classList.remove("closing");
+      }, 190);
+    };
+    $("#lua-detail-close")?.addEventListener("click", closeLuaDetail);
+    luaDetail?.addEventListener("click", (event) => { if (event.target === luaDetail) closeLuaDetail(); });
 
     const luaSearchInput = $("#lua-search-input");
     luaSearchInput.addEventListener("input", (event) => {
@@ -2111,8 +2147,22 @@
 
     $("#clear-log").addEventListener("click", () => { $("#activity-log").replaceChildren(); log("Журнал очищен", "system"); });
     const telegramModal = $("#telegram-hub-backdrop");
-    const openTelegramHub = () => telegramModal?.classList.remove("hidden");
-    const closeTelegramHub = () => telegramModal?.classList.add("hidden");
+    let telegramClosing = false;
+    const openTelegramHub = () => {
+      if (!telegramModal) return;
+      telegramModal.classList.remove("hidden", "closing");
+      telegramClosing = false;
+    };
+    const closeTelegramHub = () => {
+      if (!telegramModal || telegramClosing || telegramModal.classList.contains("hidden")) return;
+      telegramClosing = true;
+      telegramModal.classList.add("closing");
+      setTimeout(() => {
+        telegramModal.classList.add("hidden");
+        telegramModal.classList.remove("closing");
+        telegramClosing = false;
+      }, 190);
+    };
 
     $("#open-telegram-hub")?.addEventListener("click", openTelegramHub);
     $("#telegram-hub-close")?.addEventListener("click", closeTelegramHub);
@@ -2120,8 +2170,12 @@
       if (event.target === telegramModal) closeTelegramHub();
     });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && telegramModal && !telegramModal.classList.contains("hidden")) {
-        closeTelegramHub();
+      if (event.key === "Escape") {
+        if (telegramModal && !telegramModal.classList.contains("hidden")) {
+          closeTelegramHub();
+        } else if (luaDetail && !luaDetail.classList.contains("hidden")) {
+          closeLuaDetail();
+        }
       }
     });
 
@@ -2210,7 +2264,7 @@
       if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
       call("luatools_restore_manifests", { steamPath: state.lua.steamPath || null }).catch(() => {});
     }, 3_000);
-    log("Eclipse Studio 6.1.0 инициализирован", "system");
+    log("Eclipse Studio 6.2.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
     if (invoke) setTimeout(() => checkForUpdates(false), 1800);
   }

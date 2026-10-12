@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Eclipse Studio — центр управления Steam и гипервизором</title>
+  <meta name="description" content="Eclipse Studio — форк Crocodile Gena Studio на Rust и Tauri v2. Актуальные релизы, сравнение интерфейса, скриншоты и сообщества." />
+  <meta name="theme-color" content="#050505" />
+  <link rel="icon" type="image/png" href="./assets/app-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./style.css" />
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body class="is-loading">
+
+  <!-- Заставка: мозаика -->
+  <div class="loader" id="loader" aria-hidden="true">
+    <div class="loader-grid" id="loaderGrid"></div>
+    <div class="loader-stage">
+      <div class="loader-mark" id="loaderMark"></div>
+      <div class="loader-word">
+        <span class="loader-title" id="loaderTitle">Eclipse Studio</span>
+        <span class="loader-sub">Инициализация компонентов</span>
+      </div>
+      <div class="loader-progress"><span id="loaderBar"></span></div>
+      <div class="loader-meta"><span id="loaderStep">core_engine</span><span id="loaderPct">000</span></div>
+    </div>
+  </div>
+
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="header" id="header">
+    <div class="wrap header-in">
+      <a href="#top" class="brand" aria-label="Eclipse Studio">
+        <img src="./assets/app-icon.png" alt="" class="brand-icon" />
+        <span class="brand-name">Eclipse Studio</span>
+        <span class="brand-ver" data-version>v6.2.0</span>
+      </a>
+      <nav class="nav" id="nav">
+        <a href="#modules" data-i18n="nav.modules">Модули</a>
+        <a href="#compare" data-i18n="nav.compare">Сравнение</a>
+        <a href="#download" data-i18n="nav.download">Загрузка</a>
+        <a href="#games" data-i18n="nav.games">Игры</a>
+        <a href="#community" data-i18n="nav.community">Сообщество</a>
+      </nav>
+      <div class="header-cta">
+        <div class="lang-switch" id="langSwitch" role="group" aria-label="Выбор языка">
+          <button type="button" class="lang-btn is-active" data-lang="ru" title="Русский">RU</button>
+          <span class="lang-divider">/</span>
+          <button type="button" class="lang-btn" data-lang="en" title="English">EN</button>
+        </div>
+        <a href="https://github.com/Sparki1337/eclipse-studio" target="_blank" rel="noopener noreferrer" class="icon-link" aria-label="GitHub">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        </a>
+        <a href="#download" class="btn btn-light btn-sm"><span data-i18n="header.download">Скачать</span></a>
+        <button class="burger" id="burger" aria-label="Меню"><span></span><span></span></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-bg" aria-hidden="true">
+        <div class="hero-grid"></div>
+        <img src="./assets/hero-crocodile.png" alt="" class="hero-croc" id="heroCroc" />
+        <div class="hero-orb"></div>
+      </div>
+
+      <div class="wrap hero-in">
+        <div class="hero-tag reveal" style="--d:0">
+          <span class="dot"></span>
+          <span data-i18n="hero.tag">Eclipse Studio</span>
+          <span class="sep"></span>
+          <span class="mono" data-version>v6.2.0</span>
+        </div>
+
+        <h1 class="hero-title" data-split>
+          <span class="line" data-i18n="hero.title1">Игровая лаборатория</span>
+          <span class="line muted" data-i18n="hero.title2">для Steam.</span>
+        </h1>
+
+        <p class="hero-lead reveal" style="--d:4" data-i18n="hero.lead">
+          Приложение на Rust и Tauri v2: фиксы онлайна, DLC, сохранения, манифесты CrocLua и гипервизор взломы — в одном окне.
+        </p>
+
+        <div class="hero-actions reveal" style="--d:5">
+          <a href="#download" class="btn btn-light btn-lg">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+            <span><span data-i18n="hero.download">Скачать</span> <span data-version>v6.2.0</span></span>
+          </a>
+          <a href="#modules" class="btn btn-line btn-lg">
+            <span data-i18n="hero.modules">Смотреть модули</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+
+        <div class="hero-window reveal" style="--d:6" id="heroWindow">
+          <div class="window" data-tilt>
+            <img src="./screenshots/Главная.png" alt="Главный экран Eclipse Studio" />
+            <div class="window-shine"></div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- MARQUEE -->
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <span>Online Fix</span><i></i><span>DLC Unlocker</span><i></i><span>CrocLua</span><i></i><span>Гипервизор</span><i></i><span>Античиты</span><i></i><span>VBS &amp; HVCI</span><i></i><span>Менеджер сохранений</span><i></i><span>Crack Vault</span><i></i><span>Утилиты</span><i></i>
+        <span>Online Fix</span><i></i><span>DLC Unlocker</span><i></i><span>CrocLua</span><i></i><span>Гипервизор</span><i></i><span>Античиты</span><i></i><span>VBS &amp; HVCI</span><i></i><span>Менеджер сохранений</span><i></i><span>Crack Vault</span><i></i><span>Утилиты</span><i></i>
+      </div>
+    </div>
+
+    <!-- FACTS -->
+    <section class="section facts" id="facts">
+      <div class="wrap">
+        <div class="facts-grid">
+          <div class="fact reveal">
+            <span class="fact-k mono" data-i18n="facts.f1.k">01 / Стек</span>
+            <strong class="fact-v">Tauri v2</strong>
+            <p data-i18n="facts.f1.p">Ядро на Rust: мгновенный запуск.</p>
+          </div>
+          <div class="fact reveal" style="--d:1">
+            <span class="fact-k mono" data-i18n="facts.f2.k">02 / Приватность</span>
+            <strong class="fact-v"><span data-count="0">0</span>%</strong>
+            <p data-i18n="facts.f2.p">Телеметрии. Приложение работает офлайн и ничего не отправляет.</p>
+          </div>
+          <div class="fact reveal" style="--d:2">
+            <span class="fact-k mono" data-i18n="facts.f3.k">03 / Оформление</span>
+            <strong class="fact-v"><span data-count="9">9</span> <span data-i18n="facts.f3.unit">тем</span></strong>
+            <p data-i18n="facts.f3.p">Тёмные и светлые палитры, 12 акцентов и масштаб текста до 140%.</p>
+          </div>
+          <div class="fact reveal" style="--d:3">
+            <span class="fact-k mono" data-i18n="facts.f4.k">04 / Модули</span>
+            <strong class="fact-v"><span data-count="12">12</span></strong>
+            <p data-i18n="facts.f4.p">Разделов: от фиксов и сохранений до поиска античитов и настройки VBS.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MODULES / SHOWCASE -->
+    <section class="section modules" id="modules">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker mono reveal" data-i18n="modules.kicker">Модули</span>
+          <h2 class="section-title" data-split><span class="line" data-i18n="modules.title1">Всё, что нужно игре,</span><span class="line muted" data-i18n="modules.title2">в одном окне.</span></h2>
+        </div>
+
+        <div class="showcase">
+          <ol class="showcase-list" id="showcaseList">
+            <li class="sc-item is-active" data-img="./screenshots/Главная.png" data-title="Главная страница" data-desc="Стартовый экран со сводкой состояния компонентов и быстрым переходом к активным модулям.">
+              <span class="sc-num mono">01</span><div><h3>Главная</h3><p>Сводка состояния и быстрый доступ к модулям.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/Online_Fix.png" data-title="Universal Online Fix" data-desc="Анализ исполняемых файлов, эмуляторы Steam, лобби Spacewar и фиксы Epic Online Services.">
+              <span class="sc-num mono">02</span><div><h3>Online Fix</h3><p>Сетевой кооператив и лобби Spacewar.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/Менеджер_сохранений.png" data-title="Менеджер сохранений" data-desc="Поиск прогресса по 15+ путям Windows, архивация в ZIP/RAR и побайтовое восстановление.">
+              <span class="sc-num mono">03</span><div><h3>Сохранения</h3><p>Поиск, бэкап и восстановление прогресса.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/DLC_Unlocker.png" data-title="DLC Unlocker" data-desc="Выборочная разблокировка дополнений Steam через SmokeAPI и CreamAPI.">
+              <span class="sc-num mono">04</span><div><h3>DLC Unlocker</h3><p>Выборочно — через SmokeAPI и CreamAPI.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/CrocLua.png" data-title="CrocLua и манифесты" data-desc="Добавление игр в библиотеку Steam через Ryuu и HubCap с поддержкой Millennium.">
+              <span class="sc-num mono">05</span><div><h3>CrocLua</h3><p>Игры в библиотеке Steam через манифесты.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/Гипервизор.png" data-title="Гипервизор: запуск игр" data-desc="Изолированный запуск игр с драйверными профилями KVC и DRV.">
+              <span class="sc-num mono">06</span><div><h3>Гипервизор</h3><p>Библиотека и запуск игр от DenuvOwO\ARTIFACT через профили KVC / DRV.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/Античиты.png" data-title="Гипервизор: античиты" data-desc="Аудит служб, драйверов и остаточных файлов 12 популярных античитов.">
+              <span class="sc-num mono">07</span><div><h3>Античиты</h3><p>Поиск и удаление античитов.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/VBS.png" data-title="Гипервизор: VBS и HVCI" data-desc="Управление Virtualization-based Security, изоляцией ядра, DSE и тестовым режимом.">
+              <span class="sc-num mono">08</span><div><h3>VBS &amp; HVCI</h3><p>Настройка гипервизора.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/Кряки.png" data-title="Crack" data-desc="Каталог актуальных релизов с паролями и 6-поточным загрузчиком.">
+              <span class="sc-num mono">09</span><div><h3>Crack Vault</h3><p>Каталог с кряками игр от DenuvOwO\ARTIFACT.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/Утилиты.png" data-title="Утилиты" data-desc="Хаб внешних инструментов: CirnoDownloader, Sigma, Zapret2 и инструкции по настройке.">
+              <span class="sc-num mono">10</span><div><h3>Утилиты</h3><p>CirnoDownloader, Sigma, Zapret2.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/Настройки.png" data-title="Настройки" data-desc="9 тем, 12 акцентов, масштабирование шрифта и мультиязычность.">
+              <span class="sc-num mono">11</span><div><h3>Настройки</h3><p>Темы, акценты, масштаб и язык.</p></div>
+            </li>
+            <li class="sc-item" data-img="./screenshots/Telegram_Каналы.png" data-title="Telegram Hub" data-desc="Все официальные сообщества, канал обновлений и поддержка в одном окне.">
+              <span class="sc-num mono">12</span><div><h3>Telegram Hub</h3><p>Каналы проекта и поддержка.</p></div>
+            </li>
+          </ol>
+
+          <div class="showcase-view">
+            <div class="showcase-sticky">
+              <button class="window showcase-window" id="showcaseWindow" aria-label="Открыть скриншот">
+                <div class="window-bar"><span></span><span></span><span></span><em id="showcaseLabel">Главная страница</em></div>
+                <div class="showcase-frames" id="showcaseFrames"></div>
+                <span class="zoom-hint mono" data-i18n="modules.zoomHint">Нажмите, чтобы увеличить</span>
+              </button>
+              <div class="showcase-caption">
+                <span class="mono" id="showcaseCount">01 / 12</span>
+                <p id="showcaseDesc">Стартовый экран со сводкой состояния компонентов и быстрым переходом к активным модулям.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPARE -->
+    <section class="section compare" id="compare">
+      <div class="wrap">
+        <div class="section-head center">
+          <span class="kicker mono reveal" data-i18n="compare.kicker">Сравнение</span>
+          <h2 class="section-title" data-split><span class="line" data-i18n="compare.title">Было. Стало.</span></h2>
+          <p class="section-lead reveal" data-i18n="compare.lead">Потяните разделитель, чтобы сравнить оригинальный Crocodile Gena Studio и Eclipse Studio.</p>
+        </div>
+
+        <div class="compare-box reveal" id="compareBox">
+          <img src="./assets/compare-gena.png" alt="Crocodile Gena Studio" class="compare-img" />
+          <div class="compare-after" id="compareAfter">
+            <img src="./assets/compare-eclipse.png" alt="Eclipse Studio" class="compare-img" id="compareAfterImg" />
+          </div>
+          <span class="compare-label left mono" data-i18n="compare.new">Eclipse Studio</span>
+          <span class="compare-label right mono" data-i18n="compare.orig">Оригинал</span>
+          <div class="compare-handle" id="compareHandle">
+            <span class="compare-knob">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18-6-6 6-6M15 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="diff">
+          <div class="diff-col reveal">
+            <span class="mono diff-k" data-i18n="compare.orig">Оригинал</span>
+            <ul>
+              <li data-i18n="compare.diffOrig1">Фиксированные градиенты</li>
+              <li data-i18n="compare.diffOrig2">Статичные системные иконки Windows</li>
+              <li data-i18n="compare.diffOrig3">Смешанные внешние вызовы путей</li>
+              <li data-i18n="compare.diffOrig4">Отсутвие загрузки и части кастомизации</li>
+            </ul>
+          </div>
+          <div class="diff-col is-new reveal" style="--d:1">
+            <span class="mono diff-k" data-i18n="compare.new">Eclipse Studio</span>
+            <ul>
+              <li data-i18n="compare.diffNew1">9 тем, включая белую</li>
+              <li data-i18n="compare.diffNew2">Векторные иконки Lucide</li>
+              <li data-i18n="compare.diffNew3">Заставка-мозаика</li>
+              <li data-i18n="compare.diffNew4">Нативный проводник Tauri</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOWNLOAD -->
+    <section class="section download" id="download">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker mono reveal" data-i18n="dl.kicker">Загрузка</span>
+          <h2 class="section-title" data-split><span class="line" data-i18n="dl.title1">Один файл.</span><span class="line muted" data-i18n="dl.title2">Portable.</span></h2>
+        </div>
+
+        <div class="dl-grid">
+          <article class="dl-card is-main reveal" data-tilt-soft>
+            <div class="dl-top">
+              <img src="./assets/app-icon.png" alt="" class="dl-icon" />
+              <span class="badge mono" id="eclipseVersion" data-version>v6.2.0</span>
+            </div>
+            <h3>Eclipse Studio</h3>
+            <p class="dl-desc" data-i18n="dl.eclipseDesc">Актуальная ветка: форк с самыми быстрыми обновлениями и улучшениями.</p>
+            <dl class="dl-meta">
+              <div><dt data-i18n="dl.metaRelease">Релиз</dt><dd id="eclipseDate">—</dd></div>
+              <div><dt data-i18n="dl.metaSize">Размер</dt><dd id="eclipseSize">—</dd></div>
+              <div><dt data-i18n="dl.metaAuthor">Автор</dt><dd>Sparki</dd></div>
+              <div><dt data-i18n="dl.metaPlatform">Платформа</dt><dd>Windows 10 / 11 (64-bit)</dd></div>
+            </dl>
+            <div class="dl-actions">
+              <a href="https://github.com/Sparki1337/eclipse-studio/releases/latest" id="eclipseBtn" class="btn btn-light btn-block">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+                <span data-i18n="dl.btnDownload">Скачать</span>
+              </a>
+              <button type="button" class="link-arrow btn-toggle-archive" id="eclipseToggleVersions" aria-expanded="false">
+                <span><span data-i18n="dl.archive">Архив версий</span> (<span id="eclipseCount">…</span>)</span> <i>↓</i>
+              </button>
+              <div class="versions-accordion" id="eclipseVersionsAccordion">
+                <div class="versions-list" id="eclipseVersionsList"></div>
+              </div>
+              <a href="https://github.com/Sparki1337/eclipse-studio/releases" target="_blank" rel="noopener noreferrer" class="link-arrow"><span data-i18n="dl.allReleases">Все релизы на GitHub</span> <i>↗</i></a>
+            </div>
+          </article>
+
+          <article class="dl-card reveal" style="--d:1">
+            <div class="dl-top">
+              <img src="./assets/icon-crocodil-gena-studio.png" alt="Crocodile Gena Studio" class="dl-icon" />
+              <span class="badge mono" id="genaVersion">—</span>
+            </div>
+            <h3>Crocodile Gena Studio</h3>
+            <p class="dl-desc" data-i18n="dl.genaDesc">Оригинальный проект и релизы от основного автора.</p>
+            <dl class="dl-meta">
+              <div><dt data-i18n="dl.metaRelease">Релиз</dt><dd id="genaDate">—</dd></div>
+              <div><dt data-i18n="dl.metaSize">Размер</dt><dd id="genaSize">—</dd></div>
+              <div><dt data-i18n="dl.metaAuthor">Автор</dt><dd>@LeoBanned\Крокодил Гена</dd></div>
+              <div><dt data-i18n="dl.metaRepo">Репозиторий</dt><dd>crocodile-gena-studio-releases</dd></div>
+            </dl>
+            <div class="dl-actions">
+              <a href="https://github.com/LeoBanned/crocodile-gena-studio-releases/releases/latest" id="genaBtn" target="_blank" rel="noopener noreferrer" class="btn btn-line btn-block"><span data-i18n="dl.btnDownloadOrig">Скачать оригинал</span></a>
+              <button type="button" class="link-arrow btn-toggle-archive" id="genaToggleVersions" aria-expanded="false">
+                <span><span data-i18n="dl.archive">Архив версий</span> (<span id="genaCount">…</span>)</span> <i>↓</i>
+              </button>
+              <div class="versions-accordion" id="genaVersionsAccordion">
+                <div class="versions-list" id="genaVersionsList"></div>
+              </div>
+              <a href="https://github.com/LeoBanned/crocodile-gena-studio-releases" target="_blank" rel="noopener noreferrer" class="link-arrow"><span data-i18n="dl.authorRepo">Репозиторий автора</span> <i>↗</i></a>
+            </div>
+          </article>
+        </div>
+
+        <p class="sync mono reveal" id="syncStatus"><span class="dot"></span><span data-i18n="sync.load">Синхронизация с GitHub API…</span></p>
+      </div>
+    </section>
+
+    <!-- GAMES (CRACK VAULT) -->
+    <section class="section games" id="games">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker mono reveal" data-i18n="games.tag">Crack Vault</span>
+          <h2 class="section-title" data-split>
+            <span class="line" data-i18n="games.title1">Каталог кряков</span>
+            <span class="line muted" data-i18n="games.title2">для игр Steam.</span>
+          </h2>
+          <p class="section-lead reveal" data-i18n="games.lead">
+            База релизов от DenuvOwO и ARTIFACT. Прямые ссылки на скачивание архивов и пароли в один клик.
+          </p>
+        </div>
+
+        <div class="games-toolbar reveal">
+          <div class="games-search-box">
+            <svg class="games-search-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="gamesSearch" class="games-search-input" placeholder="Поиск по названию (например, Persona, Sonic, FC 27)..." autocomplete="off" spellcheck="false" data-i18n-attr="placeholder:games.searchPlaceholder" />
+            <button type="button" class="games-search-clear" id="gamesSearchClear" aria-label="Очистить поиск" title="Очистить" hidden>&times;</button>
+          </div>
+          <div class="games-stats mono">
+            <span id="gamesCountBadge">152 релиза</span>
+          </div>
+        </div>
+
+        <div class="games-grid" id="gamesGrid" aria-live="polite">
+          <!-- Рендерится через app.js -->
+        </div>
+
+        <div class="games-empty" id="gamesEmpty" hidden>
+          <p data-i18n="games.empty">Игры по вашему запросу не найдены.</p>
+        </div>
+
+        <div class="games-footer reveal" id="gamesFooter">
+          <button type="button" class="btn btn-line btn-md" id="gamesLoadMore">
+            <span data-i18n="games.more">Показать ещё</span>
+            <span class="games-more-count mono" id="gamesMoreCount">(+16)</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMMUNITY -->
+    <section class="section community" id="community">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="kicker mono reveal" data-i18n="comm.kicker">Сообщество</span>
+          <h2 class="section-title" data-split><span class="line" data-i18n="comm.title1">Будьте сообществом</span><span class="line muted" data-i18n="comm.title2">Пиратская станция.</span></h2>
+        </div>
+
+        <div class="comm-list">
+          <div class="comm-row reveal">
+            <span class="comm-num mono">01</span>
+            <div class="comm-main">
+              <h3 data-i18n="comm.r1Title">Eclipse Studio</h3>
+              <p data-i18n="comm.r1Desc">Разработчик Eclipse Studio.</p>
+            </div>
+            <span class="comm-handle mono">@gde_sparki</span>
+            <div class="comm-actions">
+              <button class="copy-btn mono" data-copy="https://t.me/gde_sparki" data-i18n="comm.copy">Копировать</button>
+              <a href="https://t.me/gde_sparki" target="_blank" rel="noopener noreferrer" class="comm-go" aria-label="Открыть @gde_sparki"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+            </div>
+          </div>
+          <div class="comm-row reveal" style="--d:1">
+            <span class="comm-num mono">02</span>
+            <div class="comm-main">
+              <h3 data-i18n="comm.r2Title">Пиратская Станция</h3>
+              <p data-i18n="comm.r2Desc">Главное сообщество.</p>
+            </div>
+            <span class="comm-handle mono">@piratestationn</span>
+            <div class="comm-actions">
+              <button class="copy-btn mono" data-copy="https://t.me/piratestationn" data-i18n="comm.copy">Копировать</button>
+              <a href="https://t.me/piratestationn" target="_blank" rel="noopener noreferrer" class="comm-go" aria-label="Открыть @piratestationn"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+            </div>
+          </div>
+          <div class="comm-row reveal" style="--d:2">
+            <span class="comm-num mono">03</span>
+            <div class="comm-main">
+              <h3 data-i18n="comm.r3Title">Crocodile HUB</h3>
+              <p data-i18n="comm.r3Desc">Чат помощи, обсуждение оригинала и техподдержка.</p>
+            </div>
+            <span class="comm-handle mono">@crocodilehub2</span>
+            <div class="comm-actions">
+              <button class="copy-btn mono" data-copy="https://t.me/crocodilehub2" data-i18n="comm.copy">Копировать</button>
+              <a href="https://t.me/crocodilehub2" target="_blank" rel="noopener noreferrer" class="comm-go" aria-label="Открыть @crocodilehub2"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M8 7h9v9"/></svg></a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TRIBUTE -->
+    <section class="section tribute" id="tribute">
+      <div class="wrap">
+        <div class="tribute-card reveal">
+          <div class="tribute-badge mono">
+            <span class="dot"></span>
+            <span data-i18n="tribute.badge">Благодарность</span>
+          </div>
+          <div class="tribute-body">
+            <div class="tribute-icon-wrap">
+              <img src="./assets/icon-crocodil-gena-studio.png" alt="Crocodile Gena Studio" class="tribute-icon" />
+            </div>
+            <div class="tribute-content">
+              <h2 class="tribute-title" data-i18n="tribute.title">Спасибо Гене за оригинальную программу</h2>
+              <p class="tribute-text" data-i18n="tribute.text">
+                Eclipse Studio создан на основе оригинального проекта <strong>Crocodile Gena Studio</strong> от <strong>@LeoBanned / Крокодил Гена</strong>. +Rep за открытый исходный код и за вклад в пиратскую культуру.
+              </p>
+              <div class="tribute-links">
+                <a href="https://github.com/LeoBanned/crocodile-gena-studio-releases" target="_blank" rel="noopener noreferrer" class="btn btn-line btn-sm">
+                  <span data-i18n="tribute.repoBtn">GitHub автора</span>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                </a>
+                <a href="https://t.me/crocodilehub2" target="_blank" rel="noopener noreferrer" class="link-arrow">
+                  <span data-i18n="tribute.hubLink">Сообщество Crocodile HUB</span> <i>↗</i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <img src="./assets/app-icon.png" alt="" />
+          <div>
+            <strong>Eclipse Studio <span data-version>v6.2.0</span></strong>
+            <span data-i18n="footer.sub">Форк Crocodile Gena Studio · автор оригинала LeoBanned\Крокодил Гена.</span>
+          </div>
+        </div>
+        <nav class="footer-links">
+          <a href="https://github.com/Sparki1337/eclipse-studio" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/Sparki1337/eclipse-studio/blob/main/README.md" target="_blank" rel="noopener noreferrer" data-i18n="footer.docs">Документация</a>
+          <a href="https://t.me/gde_sparki" target="_blank" rel="noopener noreferrer" data-i18n="footer.dev">Разработчик</a>
+          <a href="#top" class="to-top" data-i18n="footer.toTop">Наверх ↑</a>
+        </nav>
+      </div>
+      <div class="footer-word" aria-hidden="true">ECLIPSE</div>
+      <p class="footer-copy mono" data-i18n="footer.copy">© 2026 Eclipse Studio. Распространяется свободно в образовательных и исследовательских целях.</p>
+    </div>
+  </footer>
+
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <div class="lightbox-bg" data-close></div>
+    <figure class="lightbox-fig">
+      <img src="" alt="" id="lightboxImg" />
+      <figcaption>
+        <div><h3 id="lightboxTitle"></h3><p id="lightboxDesc"></p></div>
+        <div class="lightbox-nav">
+          <button id="lbPrev" aria-label="Предыдущий"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
+          <button id="lbNext" aria-label="Следующий"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          <button data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </div>
+      </figcaption>
+    </figure>
+  </div>
+
+  <div class="toast mono" id="toast">Ссылка скопирована</div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

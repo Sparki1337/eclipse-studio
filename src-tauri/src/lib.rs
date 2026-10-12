@@ -85,14 +85,26 @@ async fn pick_game_directory() -> Result<Option<String>, String> {
 }
 
 fn pick_game_directory_blocking() -> Result<Option<String>, String> {
-    let script = r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'Выберите папку с игрой'; $d.ShowNewFolderButton = $false; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; Write-Output $d.SelectedPath }"#;
+    let script = r#"
+Add-Type -AssemblyName System.Windows.Forms
+$d = New-Object System.Windows.Forms.OpenFileDialog
+$d.Title = 'Выберите папку с игрой'
+$d.ValidateNames = $false
+$d.CheckFileExists = $false
+$d.CheckPathExists = $true
+$d.FileName = 'Выбор папки'
+if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    [Console]::OutputEncoding = [Text.Encoding]::UTF8
+    Write-Output ([System.IO.Path]::GetDirectoryName($d.FileName))
+}
+"#;
     let mut command = Command::new("powershell.exe");
     command.args(["-NoProfile", "-STA", "-Command", script]);
     #[cfg(target_os = "windows")]
     command.creation_flags(0x08000000);
     let output = command
         .output()
-        .map_err(|error| format!("Не удалось открыть выбор папки: {error}"))?;
+        .map_err(|error| format!("Не удалось открыть проводник: {error}"))?;
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
     }
@@ -101,15 +113,59 @@ fn pick_game_directory_blocking() -> Result<Option<String>, String> {
 }
 
 #[tauri::command]
-fn open_external(url: String) -> Result<(), String> {
-    if !(url.starts_with("https://") || url.starts_with("http://")) {
-        return Err("Разрешены только HTTP(S)-ссылки".into());
+fn open_path(path: String) -> Result<(), String> {
+    let target = std::path::PathBuf::from(path.trim());
+    #[cfg(target_os = "windows")]
+    {
+        if target.is_file() {
+            Command::new("explorer.exe")
+                .arg(format!("/select,{}", target.to_string_lossy()))
+                .spawn()
+                .map(|_| ())
+                .map_err(|error| format!("Не удалось открыть в проводнике: {error}"))
+        } else if target.is_dir() {
+            Command::new("explorer.exe")
+                .arg(&target)
+                .spawn()
+                .map(|_| ())
+                .map_err(|error| format!("Не удалось открыть в проводнике: {error}"))
+        } else {
+            if let Some(parent) = target.parent().filter(|p| p.is_dir()) {
+                return Command::new("explorer.exe")
+                    .arg(parent)
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|error| format!("Не удалось открыть в проводнике: {error}"));
+            }
+            Err("Указанный путь не найден".into())
+        }
     }
-    Command::new("rundll32.exe")
-        .args(["url.dll,FileProtocolHandler", &url])
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| format!("Не удалось открыть ссылку: {error}"))
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = target;
+        Err("Поддерживается только в Windows".into())
+    }
+}
+
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
+        #[cfg(target_os = "windows")]
+        {
+            Command::new("explorer.exe")
+                .arg(trimmed)
+                .spawn()
+                .map(|_| ())
+                .map_err(|error| format!("Не удалось открыть ссылку: {error}"))
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            Err("Открытие ссылок поддерживается только в Windows".into())
+        }
+    } else {
+        open_path(trimmed.to_string())
+    }
 }
 
 #[tauri::command]
@@ -140,6 +196,7 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             pick_game_directory,
+            open_path,
             open_external,
             minimize_window,
             toggle_maximize_window,
@@ -218,6 +275,7 @@ pub fn run() {
         ])
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
                 let _ = window.set_focus();
             }
             Ok(())
