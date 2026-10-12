@@ -1,12 +1,12 @@
 [package]
-name = "crocodile-gena-studio"
-version = "5.1.0"
-description = "CrocodileGena Studio desktop application"
-authors = ["CrocodileGena Studio"]
+name = "eclipse-studio"
+version = "5.2.0"
+description = "Eclipse Studio desktop application"
+authors = ["Eclipse Studio"]
 edition = "2021"
 
 [lib]
-name = "crocodile_gena_studio_lib"
+name = "eclipse_studio_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

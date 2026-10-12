@@ -1,4 +1,4 @@
-# Build outputs
+# Build outputs & dependencies
 target/
 src-tauri/target/
 node_modules/
@@ -6,6 +6,20 @@ dist/
 build/
 *.log
 *.tmp
+
+# OS & IDE temporary files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.bak
+
+# Environment & local credentials
+.env
+.env.local
+*.local
 
 # Preserve essential hidden asset directories for Tauri compilation
 !src-tauri/src/assets/crocodile-manifest/.millennium/

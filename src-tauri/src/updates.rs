@@ -3,9 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 const LATEST_RELEASE_API: &str =
-    "https://api.github.com/repos/LeoBanned/crocodile-gena-studio-releases/releases/latest";
-const RELEASES_PAGE: &str = "https://github.com/LeoBanned/crocodile-gena-studio-releases/releases";
-const USER_AGENT: &str = "Crocodile-Gena-Studio-Update-Checker";
+    "https://api.github.com/repos/Sparki1337/eclipse-studio/releases/latest";
+const RELEASES_PAGE: &str = "https://github.com/Sparki1337/eclipse-studio/releases";
+const USER_AGENT: &str = "Eclipse-Studio-Update-Checker";
 
 #[derive(Debug, Deserialize)]
 struct GithubAsset {
@@ -80,7 +80,10 @@ fn portable_url(release: &GithubRelease) -> Option<String> {
     release
         .assets
         .iter()
-        .find(|asset| asset.name.eq_ignore_ascii_case("crocodile-gena-studio.exe"))
+        .find(|asset| {
+            let name = asset.name.to_ascii_lowercase();
+            name == "eclipse-studio.exe" || name == "crocodile-gena-studio.exe"
+        })
         .or_else(|| {
             release.assets.iter().find(|asset| {
                 let name = asset.name.to_ascii_lowercase();
@@ -141,7 +144,7 @@ fn check_for_update_blocking() -> Result<UpdateInfo, String> {
             .name
             .clone()
             .filter(|name| !name.trim().is_empty())
-            .unwrap_or_else(|| format!("Crocodile Gena Studio {latest}")),
+            .unwrap_or_else(|| format!("Eclipse Studio {latest}")),
         notes: release.body.clone().unwrap_or_default(),
         release_url: release.html_url.clone(),
         installer_url: installer_url(&release),
@@ -188,7 +191,7 @@ mod tests {
                     browser_download_url: "https://example.test/portable.exe".into(),
                 },
                 GithubAsset {
-                    name: "Crocodile Gena Studio_4.0.1_x64-setup.exe".into(),
+                    name: "Eclipse Studio_4.0.1_x64-setup.exe".into(),
                     browser_download_url: "https://example.test/setup.exe".into(),
                 },
             ],
@@ -216,14 +219,14 @@ mod tests {
                     browser_download_url: "https://example.test/alternate.exe".into(),
                 },
                 GithubAsset {
-                    name: "crocodile-gena-studio.exe".into(),
-                    browser_download_url: "https://example.test/crocodile-gena-studio.exe".into(),
+                    name: "eclipse-studio.exe".into(),
+                    browser_download_url: "https://example.test/eclipse-studio.exe".into(),
                 },
             ],
         };
         assert_eq!(
             portable_url(&release).as_deref(),
-            Some("https://example.test/crocodile-gena-studio.exe")
+            Some("https://example.test/eclipse-studio.exe")
         );
     }
 }

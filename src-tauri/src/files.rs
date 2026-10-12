@@ -83,6 +83,7 @@ pub(crate) async fn files_download(
     app: tauri::AppHandle,
     url: String,
     suggested_name: String,
+    target_dir: Option<String>,
 ) -> Result<DownloadResult, String> {
     let cancellation = Arc::new(AtomicBool::new(false));
     cancellation_registry()
@@ -91,7 +92,7 @@ pub(crate) async fn files_download(
         .insert(url.clone(), Arc::clone(&cancellation));
     let registry_url = url.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        download_file(&app, &url, &suggested_name, &cancellation)
+        download_file(&app, &url, &suggested_name, target_dir.as_deref(), &cancellation)
     })
     .await
     .map_err(|error| format!("Загрузка файла прервана: {error}"))?;
@@ -140,22 +141,88 @@ pub(crate) fn files_reveal(path: String) -> Result<(), String> {
     }
 }
 
+/// Папка для загрузки кряков: выбранная пользователем в настройках
+/// или стандартная папка «Загрузки» Windows.
+fn resolve_download_dir(app: &tauri::AppHandle, target_dir: Option<&str>) -> Result<PathBuf, String> {
+    if let Some(custom) = target_dir.map(str::trim).filter(|value| !value.is_empty()) {
+        let path = PathBuf::from(custom);
+        if !path.is_absolute() {
+            return Err("Папка для загрузки указана неверно. Выберите её заново в настройках".into());
+        }
+        return Ok(path);
+    }
+    app.path()
+        .download_dir()
+        .map_err(|error| format!("Не удалось определить папку «Загрузки»: {error}"))
+}
+
+#[tauri::command]
+pub(crate) fn files_default_download_dir(app: tauri::AppHandle) -> Result<String, String> {
+    resolve_download_dir(&app, None).map(|path| path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub(crate) async fn files_pick_download_dir() -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(pick_download_dir_blocking)
+        .await
+        .map_err(|error| format!("Диалог выбора прерван: {error}"))?
+}
+
+fn pick_download_dir_blocking() -> Result<Option<String>, String> {
+    let script = r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'Выберите папку для загрузки кряков'; $d.ShowNewFolderButton = $true; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; Write-Output $d.SelectedPath }"#;
+    let mut command = std::process::Command::new("powershell.exe");
+    command.args(["-NoProfile", "-STA", "-Command", script]);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    let output = command
+        .output()
+        .map_err(|error| format!("Не удалось открыть выбор папки: {error}"))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok((!path.is_empty()).then_some(path))
+}
+
+#[tauri::command]
+pub(crate) fn files_open_download_dir(app: tauri::AppHandle, path: Option<String>) -> Result<(), String> {
+    let folder = resolve_download_dir(&app, path.as_deref())?;
+    fs::create_dir_all(&folder)
+        .map_err(|error| format!("Не удалось подготовить папку для загрузки: {error}"))?;
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg(&folder)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("Не удалось открыть папку: {error}"))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = folder;
+        Err("Открытие папки поддерживается только в Windows".into())
+    }
+}
+
 fn download_file(
     app: &tauri::AppHandle,
     url: &str,
     suggested_name: &str,
+    target_dir: Option<&str>,
     cancellation: &Arc<AtomicBool>,
 ) -> Result<DownloadResult, String> {
     if !url.starts_with("https://") {
         return Err("Разрешены только безопасные HTTPS-ссылки".into());
     }
 
-    let downloads = app
-        .path()
-        .download_dir()
-        .map_err(|error| format!("Не удалось определить папку «Загрузки»: {error}"))?;
+    let downloads = resolve_download_dir(app, target_dir)?;
     fs::create_dir_all(&downloads)
-        .map_err(|error| format!("Не удалось подготовить папку «Загрузки»: {error}"))?;
+        .map_err(|error| format!("Не удалось подготовить папку для загрузки: {error}"))?;
 
     let safe_name = safe_file_name(suggested_name);
     let destination = available_path(&downloads, &safe_name);
@@ -173,7 +240,7 @@ fn download_file(
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(900))
             .pool_max_idle_per_host(PARALLEL_DOWNLOAD_PARTS as usize)
-            .user_agent("CrocodileGenaStudio/5.1.0")
+            .user_agent("CrocodileGenaStudio/5.2.0")
             .build()
             .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
         let head = client
@@ -487,7 +554,7 @@ fn load_catalog(app: &tauri::AppHandle) -> Result<FilesCatalog, String> {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("CrocodileGenaStudio/5.1.0")
+        .user_agent("CrocodileGenaStudio/5.2.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =

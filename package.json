@@ -1,8 +1,8 @@
 {
-  "name": "crocodile-gena-studio",
+  "name": "eclipse-studio",
   "private": true,
-  "version": "5.1.0",
-  "description": "CrocodileGena Studio — premium Tauri desktop client",
+  "version": "5.2.0",
+  "description": "Eclipse Studio — premium Tauri desktop client",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",

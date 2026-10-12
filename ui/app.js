@@ -1761,8 +1761,17 @@
       violet: ["#a987ff", "169, 135, 255"],
       blue: ["#5ca8ff", "92, 168, 255"],
       rose: ["#ff739d", "255, 115, 157"],
+      cyan: ["#4fdfff", "79, 223, 255"],
+      pink: ["#f67ee6", "246, 126, 230"],
+      red: ["#ff6161", "255, 97, 97"],
+      orange: ["#ff9a4d", "255, 154, 77"],
+      amber: ["#ffc94d", "255, 201, 77"],
+      lime: ["#b8f25c", "184, 242, 92"],
+      gold: ["#e3c88a", "227, 200, 138"],
+      ice: ["#dfe7f2", "223, 231, 242"],
     };
-    const accent = values[name] || values.mint;
+    if (!values[name]) name = "mint";
+    const accent = values[name];
     document.documentElement.style.setProperty("--accent", accent[0]);
     document.documentElement.style.setProperty("--accent-rgb", accent[1]);
     $$(".accent").forEach((button) => button.classList.toggle("active", button.dataset.accent === name));
@@ -1883,7 +1892,7 @@
         : "";
       const accepted = await showModal(
         `Доступна версия ${update.latestVersion}`,
-        `${shortNotes || "Опубликована новая версия Crocodile Gena Studio."}${formatsHint}`,
+        `${shortNotes || "Опубликована новая версия Eclipse Studio."}${formatsHint}`,
         { confirm: true, confirmText: downloadLabel, cancelText: "Позже", symbol: "↑" },
       );
       if (accepted) {
@@ -2055,6 +2064,10 @@
       try { await call("open_external", { url: "https://t.me/crocodilehub2" }); }
       catch (error) { toast(errorText(error), "error"); }
     });
+    $("#open-fork-channel").addEventListener("click", async () => {
+      try { await call("open_external", { url: "https://t.me/gde_sparki" }); }
+      catch (error) { toast(errorText(error), "error"); }
+    });
     $("#open-community-channel").addEventListener("click", async () => {
       try { await call("open_external", { url: "https://t.me/piratestationn" }); }
       catch (error) { toast(errorText(error), "error"); }
@@ -2132,7 +2145,7 @@
       if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
       call("luatools_restore_manifests", { steamPath: state.lua.steamPath || null }).catch(() => {});
     }, 3_000);
-    log("Crocodile Gena Studio 5.1.0 инициализирован", "system");
+    log("Eclipse Studio 5.2.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
     if (invoke) setTimeout(() => checkForUpdates(false), 1800);
   }

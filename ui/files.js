@@ -17,7 +17,139 @@
     error: "",
     progress: new Map(),
     downloads: new Map(),
+    pinnedCollapsed: readPinnedCollapsed(),
   };
+
+  const DOWNLOAD_DIR_KEY = "filesDownloadDir";
+  let defaultDownloadDir = "";
+
+  function readDownloadDir() {
+    try { return (localStorage.getItem(DOWNLOAD_DIR_KEY) || "").trim(); } catch (_) { return ""; }
+  }
+
+  function folderName(path) {
+    const parts = String(path).split(/[\\/]+/).filter(Boolean);
+    return parts[parts.length - 1] || path;
+  }
+
+  function notify(message, error = false) {
+    const stack = document.getElementById("toast-stack");
+    if (!stack) return;
+    const toast = document.createElement("div");
+    toast.className = `toast ${error ? "error" : "success"}`;
+    toast.textContent = message;
+    stack.append(toast);
+    setTimeout(() => toast.remove(), 3200);
+  }
+
+  const isMissingCommand = (error) => /command\s+\S+\s+not\s+found/i.test(String(error));
+  let backendWarningShown = false;
+
+  function warnOutdatedBackend() {
+    if (backendWarningShown) return;
+    backendWarningShown = true;
+    notify("Бэкенд программы устарел: пересоберите её вместе с папкой src-tauri из архива", true);
+  }
+
+  function sameFolder(filePath, folder) {
+    const normalize = (value) => String(value || "").replace(/[\\/]+/g, "\\").replace(/\\$/, "").toLowerCase();
+    const file = normalize(filePath);
+    const dir = normalize(folder);
+    return Boolean(dir) && file.startsWith(`${dir}\\`);
+  }
+
+  function parentFolder(path) {
+    const value = String(path || "");
+    const index = Math.max(value.lastIndexOf("\\"), value.lastIndexOf("/"));
+    return index > 0 ? value.slice(0, index) : "";
+  }
+
+  function renderDownloadDir() {
+    const custom = readDownloadDir();
+    const path = custom || defaultDownloadDir;
+    const pathNode = $("#download-dir-path");
+    if (!pathNode) return;
+    $("#download-dir-kind").textContent = custom ? "Своя папка" : "По умолчанию";
+    pathNode.textContent = path || "Папка «Загрузки»";
+    pathNode.title = path;
+    $("#download-dir-reset").classList.toggle("hidden", !custom);
+  }
+
+  async function pickDownloadDir() {
+    if (!invoke) return;
+    const button = $("#download-dir-pick");
+    button.disabled = true;
+    try {
+      let path;
+      try {
+        path = await invoke("files_pick_download_dir");
+      } catch (error) {
+        if (!isMissingCommand(error)) throw error;
+        // Старый бэкенд: используем общий диалог выбора папки.
+        path = await invoke("pick_game_directory");
+      }
+      if (path) {
+        try { localStorage.setItem(DOWNLOAD_DIR_KEY, path); } catch (_) {}
+        renderDownloadDir();
+        notify("Папка загрузки сохранена");
+      }
+    } catch (error) {
+      notify(String(error), true);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  function resetDownloadDir() {
+    try { localStorage.removeItem(DOWNLOAD_DIR_KEY); } catch (_) {}
+    renderDownloadDir();
+    notify("Папка загрузки сброшена");
+  }
+
+  async function openDownloadDir() {
+    if (!invoke) return;
+    try {
+      await invoke("files_open_download_dir", { path: readDownloadDir() || null });
+    } catch (error) {
+      if (!isMissingCommand(error)) { notify(String(error), true); return; }
+      // Старый бэкенд: открываем папку через последний скачанный файл, если он есть.
+      const last = [...state.downloads.values()].pop();
+      if (last?.path) {
+        try { await invoke("files_reveal", { path: last.path }); return; } catch (_) {}
+      }
+      warnOutdatedBackend();
+    }
+  }
+
+  async function initDownloadDir() {
+    $("#download-dir-pick")?.addEventListener("click", pickDownloadDir);
+    $("#download-dir-reset")?.addEventListener("click", resetDownloadDir);
+    $("#download-dir-open")?.addEventListener("click", openDownloadDir);
+    renderDownloadDir();
+    if (invoke) {
+      try { defaultDownloadDir = await invoke("files_default_download_dir"); }
+      catch (error) { if (isMissingCommand(error)) defaultDownloadDir = ""; }
+      renderDownloadDir();
+    }
+  }
+
+  function readPinnedCollapsed() {
+    try { return localStorage.getItem("filesPinnedCollapsed") === "1"; } catch (_) { return false; }
+  }
+
+  function applyPinnedCollapsed() {
+    const collapsed = state.pinnedCollapsed;
+    $("#files-featured")?.classList.toggle("collapsed", collapsed);
+    $("#files-featured-toggle")?.setAttribute("aria-expanded", String(!collapsed));
+    const label = $("#files-featured-label");
+    if (label) label.textContent = collapsed ? "Показать" : "Скрыть";
+  }
+
+  function togglePinned() {
+    state.pinnedCollapsed = !state.pinnedCollapsed;
+    try { localStorage.setItem("filesPinnedCollapsed", state.pinnedCollapsed ? "1" : "0"); } catch (_) {}
+    applyPinnedCollapsed();
+  }
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -107,6 +239,8 @@
     $("#files-grid").classList.toggle("hidden", state.loading || pageItems.length === 0);
     $("#files-pagination").classList.toggle("hidden", state.loading || all.length <= PAGE_SIZE);
 
+    $("#files-featured-count").textContent = String(pinned.length);
+    applyPinnedCollapsed();
     $("#files-featured-grid").innerHTML = pinned
       .map((item, index) => renderCard(item, index, true))
       .join("");
@@ -178,14 +312,20 @@
     state.progress.set(item.url, { percent: 0 });
     render();
     try {
+      const targetDir = readDownloadDir();
       const result = await invoke("files_download", {
         url: item.url,
         suggestedName: fileNameFromUrl(item.url),
+        targetDir: targetDir || null,
       });
       state.downloads.set(item.url, result);
       state.progress.delete(item.url);
       render();
-      $("#files-status").textContent = `Файл «${result.fileName}» сохранён в папку «Загрузки»`;
+      const savedTo = parentFolder(result.path);
+      if (targetDir && !sameFolder(result.path, targetDir)) warnOutdatedBackend();
+      $("#files-status").textContent = savedTo
+        ? `Файл «${result.fileName}» сохранён в папку «${folderName(savedTo)}»`
+        : `Файл «${result.fileName}» сохранён в папку «Загрузки»`;
     } catch (error) {
       state.progress.delete(item.url);
       render();
@@ -233,6 +373,7 @@
   }
 
   function bindEvents() {
+    $("#files-featured-toggle")?.addEventListener("click", togglePinned);
     $("#files-refresh")?.addEventListener("click", () => loadCatalog(true));
     $("#files-search")?.addEventListener("input", (event) => {
       state.query = event.currentTarget.value;
@@ -269,4 +410,5 @@
   }
 
   bindEvents();
+  initDownloadDir();
 })();

@@ -1,10 +1,13 @@
 <div align="center">
 
-# 🐊 CrocodileGena Studio
+# 🌒 Eclipse Studio
 
 ### **Ультимативный центр управления библиотекой Steam, дополнениями, сетевыми фиксами и системной средой**
 
-[![Версия](https://img.shields.io/badge/Версия-5.1.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/)
+> **Форк проекта [Crocodile Gena Studio](https://github.com/LeoBanned/crocodile-gena-studio-releases) (автор LeoBanned)**  
+> Репозиторий форка: [https://github.com/Sparki1337/eclipse-studio](https://github.com/Sparki1337/eclipse-studio)
+
+[![Версия](https://img.shields.io/badge/Версия-5.2.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases)
 [![Платформа](https://img.shields.io/badge/Платформа-Windows_10_|_11_(x64)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
 [![Архитектура](https://img.shields.io/badge/Стек-Rust_Tauri_v2_+_Modern_JS-black?style=for-the-badge&logo=rust&logoColor=orange)](https://tauri.app/)
 [![Безопасность](https://img.shields.io/badge/Защита-Побайтовый_Бэкап-2ea44f?style=for-the-badge&logo=shield)](#-система-безопасности-и-отката)
@@ -22,7 +25,7 @@
 
 ## 📖 О программе
 
-**CrocodileGena Studio** — это мощное настольное приложение нового поколения, созданное для полной автоматизации работы с играми Steam и сетевыми компонентами. 
+**Eclipse Studio** — это мощное настольное приложение нового поколения, созданное для полной автоматизации работы с играми Steam и сетевыми компонентами (форк проекта CrocodileGena Studio). 
 
 Программа объединяет в себе инструменты сканирования файлов, инжекции сетевых эмуляторов, менеджера сохранений, автоматического добавления игр через Lua-манифесты, управления низкоуровневой защитой Windows (VBS/HVCI) и аудита античит-драйверов.
 
