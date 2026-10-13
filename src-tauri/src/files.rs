@@ -262,7 +262,7 @@ fn download_file(
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(900))
             .pool_max_idle_per_host(PARALLEL_DOWNLOAD_PARTS as usize)
-            .user_agent("EclipseStudio/6.2.0")
+            .user_agent("EclipseStudio/6.3.0")
             .build()
             .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
         let head = client
@@ -719,7 +719,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/6.2.0")
+        .user_agent("EclipseStudio/6.3.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -800,6 +800,477 @@ fn cache_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .map_err(|error| format!("Не удалось определить папку кэша: {error}"))
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CrackInstallResult {
+    pub success: bool,
+    pub message: String,
+    pub installed_files: Vec<String>,
+    pub backup_dir: Option<String>,
+    pub archive_deleted: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ExtractorKind {
+    NanaZipOr7z,
+    UnRar,
+    WinRar,
+    Tar,
+}
+
+fn find_extractor() -> Option<(PathBuf, ExtractorKind)> {
+    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+        let app_path = PathBuf::from(local).join("Microsoft\\WindowsApps\\7z.exe");
+        if app_path.is_file() {
+            return Some((app_path, ExtractorKind::NanaZipOr7z));
+        }
+    }
+    let pf_roots = [
+        std::env::var_os("ProgramFiles").map(PathBuf::from),
+        std::env::var_os("ProgramFiles(x86)").map(PathBuf::from),
+    ];
+    for root in pf_roots.into_iter().flatten() {
+        let p7z = root.join("7-Zip\\7z.exe");
+        if p7z.is_file() {
+            return Some((p7z, ExtractorKind::NanaZipOr7z));
+        }
+        let unrar = root.join("WinRAR\\UnRAR.exe");
+        if unrar.is_file() {
+            return Some((unrar, ExtractorKind::UnRar));
+        }
+        let winrar = root.join("WinRAR\\WinRAR.exe");
+        if winrar.is_file() {
+            return Some((winrar, ExtractorKind::WinRar));
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        for exe_name in &["7z.exe", "UnRAR.exe"] {
+            let mut cmd = std::process::Command::new("where.exe");
+            cmd.arg(exe_name);
+            cmd.creation_flags(0x08000000);
+            if let Ok(output) = cmd.output() {
+                if output.status.success() {
+                    if let Some(line) = String::from_utf8_lossy(&output.stdout).lines().next() {
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() {
+                            let kind = if exe_name.starts_with("7z") {
+                                ExtractorKind::NanaZipOr7z
+                            } else {
+                                ExtractorKind::UnRar
+                            };
+                            return Some((PathBuf::from(trimmed), kind));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let tar = PathBuf::from("C:\\Windows\\System32\\tar.exe");
+    if tar.is_file() {
+        return Some((tar, ExtractorKind::Tar));
+    }
+    None
+}
+
+fn extract_archive_file(
+    archive: &Path,
+    dest: &Path,
+    password: Option<&str>,
+) -> Result<(), String> {
+    fs::create_dir_all(dest)
+        .map_err(|e| format!("Не удалось создать временную папку распаковки: {e}"))?;
+
+    let ext = archive
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    let pass = password.map(str::trim).filter(|p| !p.is_empty());
+
+    if let Some((exe, kind)) = find_extractor() {
+        let mut cmd = std::process::Command::new(&exe);
+        match kind {
+            ExtractorKind::NanaZipOr7z => {
+                cmd.arg("x");
+                if let Some(p) = pass {
+                    cmd.arg(format!("-p{p}"));
+                } else {
+                    cmd.arg("-p-");
+                }
+                cmd.arg("-y");
+                cmd.arg(archive);
+                cmd.arg(format!("-o{}", dest.display()));
+            }
+            ExtractorKind::UnRar => {
+                cmd.arg("x");
+                if let Some(p) = pass {
+                    cmd.arg(format!("-p{p}"));
+                } else {
+                    cmd.arg("-p-");
+                }
+                cmd.arg("-y");
+                cmd.arg(archive);
+                cmd.arg(format!("{}\\", dest.display()));
+            }
+            ExtractorKind::WinRar => {
+                cmd.args(["x", "-ibck", "-inul"]);
+                if let Some(p) = pass {
+                    cmd.arg(format!("-p{p}"));
+                }
+                cmd.arg("-y");
+                cmd.arg(archive);
+                cmd.arg(format!("{}\\", dest.display()));
+            }
+            ExtractorKind::Tar => {
+                if pass.is_some() {
+                    return Err("Архив защищён паролем, а системный tar.exe не поддерживает пароли. Установите WinRAR или 7-Zip.".into());
+                }
+                cmd.args(["-xf"]);
+                cmd.arg(archive);
+                cmd.args(["-C"]);
+                cmd.arg(dest);
+            }
+        }
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
+        }
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Ошибка запуска архиватора {}: {e}", exe.display()))?;
+        if output.status.success() {
+            return Ok(());
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let details = if !stderr.is_empty() {
+                stderr
+            } else if !stdout.is_empty() {
+                stdout
+            } else {
+                format!("код выхода {:?}", output.status.code())
+            };
+            return Err(format!("Ошибка при распаковке архива: {details}"));
+        }
+    }
+
+    if ext == "zip" {
+        return extract_zip_fallback(archive, dest);
+    }
+
+    Err("Для распаковки архивов необходим WinRAR или 7-Zip. Пожалуйста, установите один из них.".into())
+}
+
+fn extract_zip_fallback(archive: &Path, dest: &Path) -> Result<(), String> {
+    let file = fs::File::open(archive)
+        .map_err(|e| format!("Не удалось открыть zip-архив: {e}"))?;
+    let mut zip = zip::ZipArchive::new(file)
+        .map_err(|e| format!("Не удалось прочитать zip-архив: {e}"))?;
+    for i in 0..zip.len() {
+        let mut entry = zip
+            .by_index(i)
+            .map_err(|e| format!("Ошибка чтения записи zip: {e}"))?;
+        let outpath = match entry.enclosed_name() {
+            Some(path) => dest.join(path),
+            None => continue,
+        };
+        if entry.is_dir() {
+            fs::create_dir_all(&outpath)
+                .map_err(|e| format!("Не удалось создать папку: {e}"))?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(p)
+                        .map_err(|e| format!("Не удалось создать папку: {e}"))?;
+                }
+            }
+            let mut outfile = fs::File::create(&outpath)
+                .map_err(|e| format!("Не удалось создать файл: {e}"))?;
+            std::io::copy(&mut entry, &mut outfile)
+                .map_err(|e| format!("Ошибка записи файла: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
+fn is_metadata_or_junk_file(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    name.ends_with(".nfo")
+        || name.ends_with(".url")
+        || name.ends_with(".desktop")
+        || name == "readme.txt"
+        || name == "vbs.cmd"
+        || (name.contains("source") && (name.ends_with(".7z") || name.ends_with(".zip") || name.ends_with(".rar")))
+        || (name.contains("src") && (name.ends_with(".7z") || name.ends_with(".zip") || name.ends_with(".rar")))
+}
+
+fn detect_crack_source_dir(extracted_root: &Path) -> PathBuf {
+    let entries: Vec<PathBuf> = fs::read_dir(extracted_root)
+        .ok()
+        .map(|iter| iter.flatten().map(|e| e.path()).collect())
+        .unwrap_or_default();
+
+    // 1. Папка ARTIFACT (EA SPORTS FC 27, Borderlands 4, Jurassic World Evolution 3 и т.д.)
+    for entry in &entries {
+        if entry.is_dir() {
+            if let Some(name) = entry.file_name().and_then(|s| s.to_str()) {
+                if name.eq_ignore_ascii_case("ARTIFACT") {
+                    return entry.clone();
+                }
+            }
+        }
+    }
+
+    // 2. Папка DenuvOwO (Sonic Origins, Yakuza Kiwami 3, Persona, SMT V и т.д.)
+    for entry in &entries {
+        if entry.is_dir() {
+            if let Some(name) = entry.file_name().and_then(|s| s.to_str()) {
+                if name.eq_ignore_ascii_case("DenuvOwO") {
+                    return entry.clone();
+                }
+            }
+        }
+    }
+
+    // 3. Папки релиз-групп (Razor1911 в RDR2, CODEX, RUNE, FLT, SKIDROW, PLAZA, Crack, Goldberg)
+    let group_names = [
+        "Razor1911", "CODEX", "RUNE", "FLT", "SKIDROW", "PLAZA",
+        "Crack", "Crack.Only", "Goldberg", "SteamEmu", "Mr_Goldberg",
+    ];
+    for entry in &entries {
+        if entry.is_dir() {
+            if let Some(name) = entry.file_name().and_then(|s| s.to_str()) {
+                for group in &group_names {
+                    if name.eq_ignore_ascii_case(group) {
+                        return entry.clone();
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Если в корне ровно одна папка и остальное только readme/nfo
+    let dirs: Vec<&PathBuf> = entries.iter().filter(|e| e.is_dir()).collect();
+    if dirs.len() == 1 {
+        let other_files_are_junk = entries
+            .iter()
+            .filter(|e| e.is_file())
+            .all(|f| is_metadata_or_junk_file(f));
+        if other_files_are_junk {
+            return dirs[0].clone();
+        }
+    }
+
+    // 5. Плоская структура
+    extracted_root.to_path_buf()
+}
+
+fn resolve_install_target_path(game_dir: &Path, rel_path: &Path) -> PathBuf {
+    let game_dir_str = game_dir
+        .to_string_lossy()
+        .replace('/', "\\")
+        .to_lowercase();
+    let rel_str = rel_path.to_string_lossy().replace('/', "\\");
+
+    let components: Vec<&str> = rel_str.split('\\').collect();
+    if components.len() > 1 {
+        for i in (1..components.len()).rev() {
+            let prefix = components[0..i].join("\\").to_lowercase();
+            if game_dir_str.ends_with(&prefix) {
+                let remaining = components[i..].join("\\");
+                return game_dir.join(remaining);
+            }
+        }
+    }
+
+    game_dir.join(rel_path)
+}
+
+#[tauri::command]
+pub(crate) async fn files_install_crack(
+    app: tauri::AppHandle,
+    archive_path: String,
+    game_dir: String,
+    password: Option<String>,
+    delete_archive: bool,
+) -> Result<CrackInstallResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        perform_install_crack(&app, &archive_path, &game_dir, password.as_deref(), delete_archive)
+    })
+    .await
+    .map_err(|e| format!("Операция установки прервана: {e}"))?
+}
+
+fn perform_install_crack(
+    app: &tauri::AppHandle,
+    archive_path_str: &str,
+    game_dir_str: &str,
+    password: Option<&str>,
+    delete_archive: bool,
+) -> Result<CrackInstallResult, String> {
+    let archive_path = PathBuf::from(archive_path_str.trim());
+    if !archive_path.is_file() {
+        return Err("Файл архива не найден на диске".into());
+    }
+
+    let game_dir = PathBuf::from(game_dir_str.trim());
+    if !game_dir.is_dir() {
+        return Err("Выбранная папка с игрой не существует".into());
+    }
+
+    let temp_root = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("Не удалось определить папку данных: {e}"))?
+        .join("temp_crack_extract");
+    let extract_dir = temp_root.join(format!(
+        "cgs_inst_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    ));
+
+    // 1. Распаковка архива
+    extract_archive_file(&archive_path, &extract_dir, password)?;
+
+    // 2. Определение корневой папки кряка
+    let source_dir = detect_crack_source_dir(&extract_dir);
+
+    // 3. Обход файлов и установка
+    let mut installed_files = Vec::new();
+    let mut backed_up_files = Vec::new();
+    let mut created_files = Vec::new();
+
+    let backup_dir = game_dir.join(".backup_orig");
+
+    for entry in walkdir::WalkDir::new(&source_dir)
+        .follow_links(false)
+        .into_iter()
+        .flatten()
+    {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+
+        let source_file = entry.path();
+        let rel_path = match source_file.strip_prefix(&source_dir) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        // Пропуск мусорных файлов верхнего уровня
+        if rel_path.parent().map(|p| p.as_os_str().is_empty()).unwrap_or(true)
+            && is_metadata_or_junk_file(source_file)
+        {
+            continue;
+        }
+
+        let target_file = resolve_install_target_path(&game_dir, rel_path);
+
+        // Создаем родительскую папку в игре
+        if let Some(parent) = target_file.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Не удалось создать папку {}: {e}", parent.display()))?;
+        }
+
+        // Бэкап существующего файла
+        if target_file.is_file() {
+            let backup_target = backup_dir.join(rel_path);
+            if let Some(b_parent) = backup_target.parent() {
+                let _ = fs::create_dir_all(b_parent);
+            }
+            if !backup_target.is_file() {
+                let _ = fs::copy(&target_file, &backup_target);
+            }
+            backed_up_files.push(rel_path.to_string_lossy().to_string());
+        } else {
+            created_files.push(rel_path.to_string_lossy().to_string());
+        }
+
+        // Копирование файла кряка в целевую папку
+        fs::copy(source_file, &target_file)
+            .map_err(|e| format!("Не удалось скопировать файл {}: {e}", target_file.display()))?;
+
+        installed_files.push(target_file.to_string_lossy().to_string());
+    }
+
+    if installed_files.is_empty() {
+        let _ = fs::remove_dir_all(&extract_dir);
+        return Err("В распакованном архиве не обнаружены файлы кряка для установки".into());
+    }
+
+    // Сохранение манифеста бэкапа (совместимо с cgs-backup.json)
+    if !backed_up_files.is_empty() || !created_files.is_empty() {
+        let _ = fs::create_dir_all(&backup_dir);
+        let manifest_path = backup_dir.join("cgs-backup.json");
+        let originals_map: std::collections::BTreeMap<String, String> = backed_up_files
+            .iter()
+            .map(|f| (f.to_lowercase(), f.clone()))
+            .collect();
+        let created_map: std::collections::BTreeMap<String, String> = created_files
+            .iter()
+            .map(|f| (f.to_lowercase(), f.clone()))
+            .collect();
+        let manifest_json = serde_json::json!({
+            "version": 2,
+            "originals": originals_map,
+            "created": created_map,
+            "legacy_import": false
+        });
+        if let Ok(bytes) = serde_json::to_vec_pretty(&manifest_json) {
+            let _ = fs::write(manifest_path, bytes);
+        }
+    }
+
+    // 4. Удаление скачанного архива при необходимости
+    let mut archive_was_deleted = false;
+    if delete_archive {
+        if let Err(e) = fs::remove_file(&archive_path) {
+            eprintln!("Не удалось удалить архив {}: {e}", archive_path.display());
+        } else {
+            archive_was_deleted = true;
+        }
+    }
+
+    // 5. Удаление временной папки распаковки
+    let _ = fs::remove_dir_all(&extract_dir);
+
+    let message = format!(
+        "Успешно установлено файлов: {}.{}{}",
+        installed_files.len(),
+        if !backed_up_files.is_empty() {
+            format!(" Создан бэкап оригиналов ({} файлов).", backed_up_files.len())
+        } else {
+            "".to_string()
+        },
+        if archive_was_deleted {
+            " Скачанный архив удалён."
+        } else {
+            ""
+        }
+    );
+
+    Ok(CrackInstallResult {
+        success: true,
+        message,
+        installed_files,
+        backup_dir: if backed_up_files.is_empty() {
+            None
+        } else {
+            Some(backup_dir.to_string_lossy().to_string())
+        },
+        archive_deleted: archive_was_deleted,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{parse_catalog, parse_head_revision};
@@ -863,5 +1334,49 @@ mod tests {
         ]);
         let chosen = super::find_eclipse_release_asset(assets.as_array().unwrap()).unwrap();
         assert_eq!(chosen["name"], "eclipse-archive.zip");
+    }
+
+    #[test]
+    fn resolves_install_target_path_with_nested_prefix() {
+        let game_dir = std::path::Path::new(r"D:\Games\Borderlands 4\OakGame\Binaries\Win64");
+        let rel_path = std::path::Path::new(r"OakGame\Binaries\Win64\artifact.dll");
+        let target = super::resolve_install_target_path(game_dir, rel_path);
+        assert_eq!(
+            target,
+            std::path::PathBuf::from(r"D:\Games\Borderlands 4\OakGame\Binaries\Win64\artifact.dll")
+        );
+    }
+
+    #[test]
+    fn resolves_install_target_path_from_root() {
+        let game_dir = std::path::Path::new(r"D:\Games\Borderlands 4");
+        let rel_path = std::path::Path::new(r"OakGame\Binaries\Win64\artifact.dll");
+        let target = super::resolve_install_target_path(game_dir, rel_path);
+        assert_eq!(
+            target,
+            std::path::PathBuf::from(r"D:\Games\Borderlands 4\OakGame\Binaries\Win64\artifact.dll")
+        );
+    }
+
+    #[test]
+    fn detects_artifact_folder() {
+        let temp = std::env::temp_dir().join(format!("test_cgs_{}", std::time::SystemTime::now().elapsed().unwrap().as_nanos()));
+        let artifact = temp.join("ARTIFACT");
+        let _ = std::fs::create_dir_all(&artifact);
+        let _ = std::fs::write(temp.join("readme.txt"), "hello");
+        let _ = std::fs::write(temp.join("VBS.cmd"), "echo");
+        let detected = super::detect_crack_source_dir(&temp);
+        assert_eq!(detected, artifact);
+        let _ = std::fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn detects_razor1911_folder() {
+        let temp = std::env::temp_dir().join(format!("test_cgs_{}", std::time::SystemTime::now().elapsed().unwrap().as_nanos()));
+        let razor = temp.join("Razor1911");
+        let _ = std::fs::create_dir_all(&razor);
+        let detected = super::detect_crack_source_dir(&temp);
+        assert_eq!(detected, razor);
+        let _ = std::fs::remove_dir_all(&temp);
     }
 }

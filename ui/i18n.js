@@ -701,7 +701,13 @@
     "Синхронизация профилей и компонентов...": "Syncing profiles and components...",
     "Подготовка рабочей области...": "Preparing workspace environment...",
     "Добро пожаловать в Eclipse Studio": "Welcome to Eclipse Studio",
-    "Выберите папку с игрой": "Choose the game folder"
+    "Выберите папку с игрой": "Choose the game folder",
+    "Авто-установка в игру": "Auto-install into game",
+    "Установить в игру": "Install into game",
+    "Установлено": "Installed",
+    "Переустановить": "Reinstall",
+    "Кряк установлен успешно!": "Crack installed successfully!",
+    "Автоматически распаковывать и устанавливать кряк в выбранную папку игры, после чего удалять скачанный архив": "Automatically extract and install the crack into the chosen game folder, then delete the downloaded archive"
   };
 
   const PATTERNS = [
@@ -799,7 +805,7 @@
     ["Резервная копия:", "Backup:"],
     ["Удалено компонентов:", "Components removed:"],
     ["Системный модуль недоступен", "System module is unavailable"],
-    ["Eclipse Studio 6.2.0 инициализирован", "Eclipse Studio 6.2.0 initialized"],
+    ["Eclipse Studio 6.3.0 инициализирован", "Eclipse Studio 6.3.0 initialized"],
     ["Доступна версия", "Version available:"],
     ["Осталось", "Remaining"],
     ["локальная копия", "local copy"]

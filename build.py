@@ -179,7 +179,17 @@ def select_output_dir(args_out: str | None, saved_dir: str | None) -> Path:
 
 
 def compute_sha256(file_path: Path) -> str:
-    # Расчет контрольной суммы SHA-256
+    # Расчет контрольной суммы SHA-256 с повторными попытками (на случай сканирования файла антивирусом)
+    import time
+    for attempt in range(10):
+        try:
+            hasher = hashlib.sha256()
+            with open(file_path, "rb") as f:
+                while chunk := f.read(65536):
+                    hasher.update(chunk)
+            return hasher.hexdigest()
+        except PermissionError:
+            time.sleep(0.5)
     hasher = hashlib.sha256()
     with open(file_path, "rb") as f:
         while chunk := f.read(65536):
@@ -243,13 +253,14 @@ def collect_artifacts(build_type: str, version: str, out_dir: Path) -> list[dict
         if exe_src.exists():
             dst_name = f"Eclipse-Studio-v{version}-Portable.exe"
             dst_path = out_dir / dst_name
+            sha = compute_sha256(exe_src)
             shutil.copy2(exe_src, dst_path)
             collected.append({
                 "type": "Portable EXE",
                 "filename": dst_name,
                 "path": dst_path,
-                "size": format_size(dst_path.stat().st_size),
-                "sha256": compute_sha256(dst_path),
+                "size": format_size(exe_src.stat().st_size),
+                "sha256": sha,
             })
 
     # NSIS инсталлятор
@@ -260,13 +271,14 @@ def collect_artifacts(build_type: str, version: str, out_dir: Path) -> list[dict
             for inst in installers:
                 dst_name = f"Eclipse-Studio-v{version}-Setup.exe"
                 dst_path = out_dir / dst_name
+                sha = compute_sha256(inst)
                 shutil.copy2(inst, dst_path)
                 collected.append({
                     "type": "NSIS Setup",
                     "filename": dst_name,
                     "path": dst_path,
-                    "size": format_size(dst_path.stat().st_size),
-                    "sha256": compute_sha256(dst_path),
+                    "size": format_size(inst.stat().st_size),
+                    "sha256": sha,
                 })
 
     # Debug EXE

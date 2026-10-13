@@ -129,7 +129,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>6.2.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>6.3.0</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -220,7 +220,7 @@
         <div class="home-hero premium-panel">
           <div class="home-glow"></div>
           <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 6.2.0</span>
+            <span class="hero-kicker">ECLIPSE STUDIO 6.3.0</span>
             <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
             <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
           </div>
@@ -817,6 +817,13 @@
                 <p id="files-status">Загрузка списка из Gist…</p>
               </div>
               <div class="files-toolbar-actions">
+                <label class="files-auto-install" for="files-auto-install" title="Автоматически распаковывать и устанавливать кряк в выбранную папку игры, после чего удалять скачанный архив">
+                  <span id="files-auto-install-label">Авто-установка в игру</span>
+                  <span class="switch">
+                    <input type="checkbox" id="files-auto-install" checked />
+                    <i></i>
+                  </span>
+                </label>
                 <label class="files-search"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg><input id="files-search" type="text" placeholder="Найти файл…" autocomplete="off" spellcheck="false"/></label>
                 <button class="files-refresh" id="files-refresh"><svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg><span>Обновить список</span></button>
               </div>
@@ -982,7 +989,7 @@
           <section class="premium-panel settings-card update-card">
             <span class="coming-label">ПРИЛОЖЕНИЕ</span><h2>Обновления</h2>
             <p>Проверка новых версий через официальный репозиторий Eclipse Studio.</p>
-            <div class="about-row"><span>Текущая версия</span><b id="update-current-version">6.2.0</b></div>
+            <div class="about-row"><span>Текущая версия</span><b id="update-current-version">6.3.0</b></div>
             <div class="update-actions">
               <button class="ghost-button" id="check-update-button">Проверить обновления</button>
               <span id="update-status">Проверка ещё не выполнялась</span>
@@ -993,7 +1000,7 @@
             </div>
           </section>
 
-          <section class="premium-panel settings-card about-card"><span class="coming-label">ПРИЛОЖЕНИЕ</span><h2>О программе</h2><div class="about-row"><span>Версия</span><b>6.2.0</b></div><div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div><div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · CrocLua · Гипервизор · Кряки · Утилиты</b></div></section>
+          <section class="premium-panel settings-card about-card"><span class="coming-label">ПРИЛОЖЕНИЕ</span><h2>О программе</h2><div class="about-row"><span>Версия</span><b>6.3.0</b></div><div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div><div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · CrocLua · Гипервизор · Кряки · Утилиты</b></div></section>
         </div>
       </section>
     </main>

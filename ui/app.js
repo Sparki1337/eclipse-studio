@@ -2264,7 +2264,7 @@
       if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
       call("luatools_restore_manifests", { steamPath: state.lua.steamPath || null }).catch(() => {});
     }, 3_000);
-    log("Eclipse Studio 6.2.0 инициализирован", "system");
+    log("Eclipse Studio 6.3.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
     if (invoke) setTimeout(() => checkForUpdates(false), 1800);
   }

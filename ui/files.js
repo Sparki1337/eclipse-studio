@@ -17,11 +17,48 @@
     error: "",
     progress: new Map(),
     downloads: new Map(),
+    installed: readInstalledMap(),
+    autoInstall: readAutoInstall(),
     pinnedCollapsed: readPinnedCollapsed(),
   };
 
   const DOWNLOAD_DIR_KEY = "filesDownloadDir";
+  const AUTO_INSTALL_KEY = "filesAutoInstall";
+  const INSTALLED_KEY = "filesInstalledMap";
   let defaultDownloadDir = "";
+
+  function readInstalledMap() {
+    try {
+      const raw = localStorage.getItem(INSTALLED_KEY);
+      if (!raw) return new Map();
+      const parsed = JSON.parse(raw);
+      const map = new Map();
+      for (const [k, v] of Object.entries(parsed)) {
+        if (!k.toLowerCase().includes("studio")) {
+          map.set(k, v);
+        }
+      }
+      return map;
+    } catch (_) {
+      return new Map();
+    }
+  }
+
+  function saveInstalledMap() {
+    try {
+      const obj = Object.fromEntries(state.installed.entries());
+      localStorage.setItem(INSTALLED_KEY, JSON.stringify(obj));
+    } catch (_) {}
+  }
+
+  function readAutoInstall() {
+    try {
+      const val = localStorage.getItem(AUTO_INSTALL_KEY);
+      return val === null ? true : val !== "false";
+    } catch (_) {
+      return true;
+    }
+  }
 
   function readDownloadDir() {
     try { return (localStorage.getItem(DOWNLOAD_DIR_KEY) || "").trim(); } catch (_) { return ""; }
@@ -39,7 +76,41 @@
     toast.className = `toast ${error ? "error" : "success"}`;
     toast.textContent = message;
     stack.append(toast);
-    setTimeout(() => toast.remove(), 3200);
+    setTimeout(() => {
+      toast.classList.add("closing");
+      setTimeout(() => toast.remove(), 290);
+    }, 3200);
+  }
+
+  function notifyCrackSuccess(message = "Кряк установлен успешно!") {
+    const stack = document.getElementById("toast-stack");
+    if (!stack) return;
+    const toast = document.createElement("div");
+    toast.className = "toast toast-crack-success";
+    toast.innerHTML = `
+      <div class="toast-success-icon-wrap">
+        <svg viewBox="0 0 28 28" class="toast-checkmark-svg">
+          <circle class="toast-checkmark-circle" cx="14" cy="14" r="12" fill="none" />
+          <path class="toast-checkmark-check" d="M8.5 14.5 L12.2 18.2 L19.8 10.2" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div class="toast-success-content">
+        <strong class="toast-success-title">${escapeHtml(message)}</strong>
+      </div>
+      <div class="toast-progress-bar"></div>
+    `;
+    stack.append(toast);
+
+    let closed = false;
+    const dismiss = () => {
+      if (closed) return;
+      closed = true;
+      toast.classList.add("closing");
+      setTimeout(() => toast.remove(), 360);
+    };
+
+    toast.addEventListener("click", dismiss);
+    setTimeout(dismiss, 3200);
   }
 
   const isMissingCommand = (error) => /command\s+\S+\s+not\s+found/i.test(String(error));
@@ -125,6 +196,15 @@
     $("#download-dir-pick")?.addEventListener("click", pickDownloadDir);
     $("#download-dir-reset")?.addEventListener("click", resetDownloadDir);
     $("#download-dir-open")?.addEventListener("click", openDownloadDir);
+    const autoInstallBox = $("#files-auto-install");
+    if (autoInstallBox) {
+      autoInstallBox.checked = state.autoInstall;
+      autoInstallBox.addEventListener("change", () => {
+        state.autoInstall = autoInstallBox.checked;
+        try { localStorage.setItem(AUTO_INSTALL_KEY, state.autoInstall ? "true" : "false"); } catch (_) {}
+        render();
+      });
+    }
     renderDownloadDir();
     if (invoke) {
       try { defaultDownloadDir = await invoke("files_default_download_dir"); }
@@ -172,6 +252,11 @@
     return item?.pinned === true;
   }
 
+  function isStudio(item) {
+    const name = String(item?.name || "").toLowerCase().trim();
+    return name.includes("studio") || name.includes("студи");
+  }
+
   function featuredFiles() {
     return state.files.filter(isFeatured);
   }
@@ -192,19 +277,58 @@
     return Array.from({ length: end - start + 1 }, (_, index) => start + index);
   }
 
+  function showSuccessState(url) {
+    notifyCrackSuccess("Кряк установлен успешно!");
+    const status = $("#files-status");
+    if (status) {
+      status.innerHTML = '<span class="files-status-dot"></span> Кряк установлен успешно!';
+    }
+    const card = document.querySelector(`[data-card-url="${CSS.escape(url)}"]`);
+    if (card) {
+      card.classList.remove("crack-install-success");
+      void card.offsetWidth;
+      card.classList.add("crack-install-success");
+
+      const reinstallBtn = card.querySelector('[data-files-action="reinstall"]');
+      if (reinstallBtn) {
+        reinstallBtn.classList.add("file-success-burst");
+        reinstallBtn.innerHTML = '<svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2.2;fill:none;stroke:#2ed573;vertical-align:-1px"><polyline points="13 4 6 11 3 8"/></svg> <span>Кряк установлен успешно!</span>';
+        setTimeout(() => {
+          if (!reinstallBtn.isConnected) return;
+          reinstallBtn.classList.add("btn-text-fading");
+          setTimeout(() => {
+            if (!reinstallBtn.isConnected) return;
+            reinstallBtn.classList.remove("file-success-burst", "btn-text-fading");
+            reinstallBtn.innerHTML = '<svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2;fill:none;stroke:currentColor;vertical-align:-1px"><path d="M2 8a6 6 0 1 1 1.76 4.24l-2 2M2 14.24V10h4.24"/></svg> <span>Переустановить</span>';
+          }, 180);
+        }, 2200);
+      }
+
+      setTimeout(() => {
+        if (card.isConnected) card.classList.remove("crack-install-success");
+      }, 1100);
+    }
+  }
+
   function renderCard(item, position, featured = false) {
     const password = item.password || "Не требуется";
     const progress = state.progress.get(item.url);
     const downloaded = state.downloads.get(item.url);
+    const installed = state.installed.get(item.url);
     const url = escapeHtml(item.url);
     const newest = !featured && !state.query && position < 3;
     const marker = featured ? "ЗАКРЕПЛЕНО" : `ФАЙЛ ${String(position + 1).padStart(3, "0")}`;
+    const studio = isStudio(item);
+    const autoInstall = state.autoInstall && !studio;
     return `
-      <article class="file-card ${featured ? "featured" : ""}">
+      <article class="file-card ${featured ? "featured" : ""} ${installed && !studio ? "is-installed" : ""}" data-card-url="${url}">
         <div class="file-card-top">
           <span class="file-icon"><svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
           <div class="file-title">
-            <div><span>${marker}</span>${newest ? "<b>НОВОЕ</b>" : ""}</div>
+            <div>
+              <span>${marker}</span>
+              ${installed && !studio ? `<b class="file-badge-installed"><svg viewBox="0 0 16 16"><polyline points="13 4 6 11 3 8"/></svg> УСТАНОВЛЕНО</b>` : (newest ? "<b>НОВОЕ</b>" : "")}
+            </div>
             <h3 title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</h3>
           </div>
         </div>
@@ -214,11 +338,17 @@
         </div>
         <div class="file-actions">
           ${item.password ? `<button class="file-copy" data-files-action="copy" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><rect width="9" height="9" x="5.5" y="5.5" rx="1.5"/><path d="M10.5 5.5V3a1.5 1.5 0 0 0-1.5-1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h2.5"/></svg> <span>Копировать пароль</span></button>` : '<span class="file-no-password">Без пароля</span>'}
-          ${downloaded
-            ? `<button class="file-download downloaded" data-files-action="reveal" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M3 13 13 3M6 3h7v7"/></svg> <span>Открыть папку</span></button>`
-            : progress
-              ? `<button class="file-cancel" data-files-action="cancel" data-files-url="${url}" ${progress.cancelling ? "disabled" : ""}><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2;vertical-align:-1px"><path d="m4 4 8 8M12 4 4 12"/></svg> <span>${progress.cancelling ? "Отменяем…" : `Отменить ${progress.percent == null ? "" : `${progress.percent}%`}`}</span></button>`
-              : `<button class="file-download" data-files-action="download" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>Скачать</span></button>`}
+          ${installed && !studio
+            ? `<button class="file-download downloaded file-reinstall-btn" data-files-action="reinstall" data-files-url="${url}" title="Переустановить кряк"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2;fill:none;stroke:currentColor;vertical-align:-1px"><path d="M2 8a6 6 0 1 1 1.76 4.24l-2 2M2 14.24V10h4.24"/></svg> <span>Переустановить</span></button>`
+            : downloaded
+              ? studio
+                ? `<button class="file-download downloaded" data-files-action="reveal" data-files-url="${url}" title="Открыть папку с файлом"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h3.5l1.8 2H16A1.5 1.5 0 0 1 17.5 7.5v8a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5z"/></svg> <span>Папка</span></button>`
+                : `<button class="file-download downloaded" data-files-action="install-existing" data-files-url="${url}" title="Установить скачанный кряк в игру"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>Установить в игру</span></button>`
+              : progress
+                ? `<button class="file-cancel" data-files-action="cancel" data-files-url="${url}" ${progress.cancelling || progress.installing ? "disabled" : ""}><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2;vertical-align:-1px"><path d="m4 4 8 8M12 4 4 12"/></svg> <span>${progress.status || (progress.cancelling ? "Отменяем…" : `Отменить ${progress.percent == null ? "" : `${progress.percent}%`}`)}</span></button>`
+                : autoInstall
+                  ? `<button class="file-download" data-files-action="install-flow" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>Установить в игру</span></button>`
+                  : `<button class="file-download" data-files-action="download" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>Скачать</span></button>`}
         </div>
       </article>`;
   }
@@ -401,6 +531,93 @@
     }
   }
 
+  async function installFlow(item) {
+    if (!item?.url || !invoke) return;
+    if (isStudio(item)) {
+      download(item);
+      return;
+    }
+    let gameDir;
+    try {
+      gameDir = await invoke("pick_game_directory");
+    } catch (err) {
+      notify("Не удалось открыть выбор папки: " + err, true);
+      return;
+    }
+    if (!gameDir) return;
+
+    state.progress.set(item.url, { percent: 0, status: "Скачивание…" });
+    render();
+
+    try {
+      const targetDir = readDownloadDir();
+      const downloadResult = await invoke("files_download", {
+        url: item.url,
+        suggestedName: fileNameFromUrl(item.url),
+        targetDir: targetDir || null,
+      });
+
+      state.progress.set(item.url, { percent: 100, installing: true, status: "Установка в игру…" });
+      render();
+
+      const installResult = await invoke("files_install_crack", {
+        archivePath: downloadResult.path,
+        gameDir: gameDir,
+        password: item.password || null,
+        deleteArchive: true,
+      });
+
+      state.progress.delete(item.url);
+      state.installed.set(item.url, { gameDir, result: installResult });
+      saveInstalledMap();
+      render();
+      showSuccessState(item.url);
+    } catch (error) {
+      state.progress.delete(item.url);
+      render();
+      const message = String(error);
+      notify(message.includes("Загрузка отменена") ? "Операция отменена" : `Ошибка: ${message}`, true);
+      $("#files-status").textContent = `Ошибка установки: ${message}`;
+    }
+  }
+
+  async function installExisting(item) {
+    const downloaded = state.downloads.get(item?.url);
+    if (!downloaded?.path || !invoke) return;
+    let gameDir;
+    try {
+      gameDir = await invoke("pick_game_directory");
+    } catch (err) {
+      notify("Не удалось открыть выбор папки: " + err, true);
+      return;
+    }
+    if (!gameDir) return;
+
+    state.progress.set(item.url, { percent: 100, installing: true, status: "Установка в игру…" });
+    render();
+
+    try {
+      const installResult = await invoke("files_install_crack", {
+        archivePath: downloaded.path,
+        gameDir: gameDir,
+        password: item.password || null,
+        deleteArchive: true,
+      });
+
+      state.progress.delete(item.url);
+      state.downloads.delete(item.url);
+      state.installed.set(item.url, { gameDir, result: installResult });
+      saveInstalledMap();
+      render();
+      showSuccessState(item.url);
+    } catch (error) {
+      state.progress.delete(item.url);
+      render();
+      notify(`Ошибка установки: ${error}`, true);
+      $("#files-status").textContent = `Ошибка установки: ${String(error)}`;
+    }
+  }
+
   async function reveal(item) {
     const downloaded = state.downloads.get(item?.url);
     if (!downloaded?.path || !invoke) return;
@@ -413,11 +630,12 @@
 
   function updateProgress(payload) {
     if (!payload?.url || !state.progress.has(payload.url)) return;
-    state.progress.set(payload.url, { percent: Number.isFinite(payload.percent) ? payload.percent : null });
+    const prev = state.progress.get(payload.url) || {};
+    state.progress.set(payload.url, { ...prev, percent: Number.isFinite(payload.percent) ? payload.percent : null });
     document.querySelectorAll('[data-files-action="cancel"]').forEach((button) => {
       if (button.dataset.filesUrl !== payload.url) return;
       const progress = state.progress.get(payload.url);
-      if (progress?.cancelling) return;
+      if (progress?.cancelling || progress?.installing) return;
       const label = payload.percent == null ? "Отменить" : `Отменить ${payload.percent}%`;
       button.innerHTML = `<span>×</span> ${label}`;
     });
@@ -446,6 +664,12 @@
       const item = state.files.find((entry) => entry.url === button.dataset.filesUrl);
       if (button.dataset.filesAction === "copy") copyPassword(item, button);
       if (button.dataset.filesAction === "download") download(item);
+      if (button.dataset.filesAction === "install-flow") installFlow(item);
+      if (button.dataset.filesAction === "install-existing") installExisting(item);
+      if (button.dataset.filesAction === "reinstall") installFlow(item);
+      if (button.dataset.filesAction === "installed-info") {
+        notifyCrackSuccess("Кряк установлен успешно!");
+      }
       if (button.dataset.filesAction === "cancel") cancelDownload(item);
       if (button.dataset.filesAction === "reveal") reveal(item);
     });

@@ -262,6 +262,7 @@ pub fn run() {
             vbs::vbs_restart,
             files::files_catalog,
             files::files_download,
+            files::files_install_crack,
             files::files_cancel_download,
             files::files_reveal,
             files::files_default_download_dir,
