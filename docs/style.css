@@ -386,14 +386,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .compare-box:hover .compare-knob, .compare-box.drag .compare-knob { transform: scale(1.1); }
 .diff { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 24px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
 .diff-col { padding: 32px; background: var(--bg-1); }
-.diff-k { color: var(--mut-2); font-size: 11px; }
-.diff ul { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 12px; }
-.diff li { position: relative; padding-left: 22px; color: var(--mut); font-size: 15px; }
-.diff li::before { content: ""; position: absolute; left: 0; top: 11px; width: 10px; height: 1px; background: var(--mut-2); }
+.diff-k { color: var(--mut-2); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.diff ul { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 14px; }
+.diff li { position: relative; padding-left: 20px; color: var(--mut); font-size: 14px; line-height: 1.55; }
+.diff li strong { color: rgba(255, 255, 255, 0.75); font-weight: 600; }
+.diff li::before { content: ""; position: absolute; left: 0; top: 10px; width: 8px; height: 1px; background: var(--mut-2); }
 .diff-col.is-new { background: #0f0f0f; }
 .diff-col.is-new .diff-k { color: var(--fg); }
-.diff-col.is-new li { color: var(--fg); }
-.diff-col.is-new li::before { background: var(--fg); width: 6px; height: 6px; top: 8px; left: 2px; border-radius: 50%; }
+.diff-col.is-new li { color: rgba(255, 255, 255, 0.85); }
+.diff-col.is-new li strong { color: var(--fg); font-weight: 600; }
+.diff-col.is-new li::before { background: var(--fg); width: 6px; height: 6px; top: 7px; left: 2px; border-radius: 50%; }
 
 /* ---------- Загрузка ---------- */
 .dl-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }

@@ -396,14 +396,22 @@
       'compare.lead': 'Потяните разделитель, чтобы сравнить оригинальный Crocodile Gena Studio и Eclipse Studio.',
       'compare.orig': 'Оригинал',
       'compare.new': 'Eclipse Studio',
-      'compare.diffOrig1': 'Фиксированные градиенты',
-      'compare.diffOrig2': 'Статичные системные иконки Windows',
-      'compare.diffOrig3': 'Смешанные внешние вызовы путей',
-      'compare.diffOrig4': 'Отсутвие загрузки и части кастомизации',
-      'compare.diffNew1': '9 тем, включая белую',
-      'compare.diffNew2': 'Векторные иконки Lucide',
-      'compare.diffNew3': 'Заставка-мозаика',
-      'compare.diffNew4': 'Нативный проводник Tauri',
+      'compare.diffOrig1': '<strong>Ручная распаковка:</strong> скачивание архива, копирование паролей и ручной перенос файлов в игру',
+      'compare.diffOrig2': '<strong>Внешние зависимости:</strong> батники и бинарники (.bat, .exe) лежали отдельно рядом с программой',
+      'compare.diffOrig3': '<strong>Устаревший WinForms диалог:</strong> мелкое дерево папок в стиле Windows XP без быстрого доступа',
+      'compare.diffOrig4': '<strong>Синие ореолы во всех темах:</strong> фиксированные градиенты, искажающие выбранную цветовую гамму',
+      'compare.diffOrig5': '<strong>Эмодзи и растровые иконки:</strong> статичные системные пиктограммы Windows, размывающиеся на 4K',
+      'compare.diffOrig6': '<strong>Зависание при старте:</strong> пустое белое окно без индикации во время проверки системы',
+      'compare.diffOrig7': '<strong>Навязчивые обновления:</strong> модальные окна без возможности отложить проверку или апдейт',
+      'compare.diffOrig8': '<strong>Фиксированные пути:</strong> жестко заданная папка сохранения без возможности выбора и быстрого сброса',
+      'compare.diffNew1': '<strong>Автоустановка в 1 клик:</strong> умный разбор структуры архивов, бэкап в .backup_orig и автоудаление',
+      'compare.diffNew2': '<strong>Полный Standalone Portable:</strong> всё в одном бинарнике, сканер служб античитов и аудит VBS',
+      'compare.diffNew3': '<strong>Нативный проводник:</strong> современный диалог выбора папок, быстрый доступ и подсветка файлов',
+      'compare.diffNew4': '<strong>9 тем + Светлая палитра:</strong> нейтрализованные ореолы, чистый режим Light и зум текста до 140%',
+      'compare.diffNew5': '<strong>Векторный SVG-сет Lucide:</strong> безупречная чёткость на любых экранах и плавные микроанимации 60 FPS',
+      'compare.diffNew6': '<strong>Аппаратная заставка:</strong> Canvas-анимация с логотипом, пошаговый статус загрузки и пропуск по клику',
+      'compare.diffNew7': '<strong>Гибкий апдейтер:</strong> обновление в 1 клик или откладывание на 10 запусков, комфортный масштаб 120%',
+      'compare.diffNew8': '<strong>Гибкая настройка путей:</strong> выбор любой папки загрузок со сбросом по умолчанию в 1 клик',
       'dl.kicker': 'Загрузка',
       'dl.title1': 'Один файл.',
       'dl.title2': 'Portable.',
@@ -492,14 +500,22 @@
       'compare.lead': 'Drag the slider to compare original Crocodile Gena Studio and Eclipse Studio.',
       'compare.orig': 'Original',
       'compare.new': 'Eclipse Studio',
-      'compare.diffOrig1': 'Fixed static gradients',
-      'compare.diffOrig2': 'Legacy Windows system icons',
-      'compare.diffOrig3': 'Mixed external path dependencies',
-      'compare.diffOrig4': 'No download vault & limited styling',
-      'compare.diffNew1': '9 themes, including clean light mode',
-      'compare.diffNew2': 'Crisp Lucide vector icons',
-      'compare.diffNew3': 'Mosaic intro animation',
-      'compare.diffNew4': 'Native Tauri file dialogs',
+      'compare.diffOrig1': '<strong>Manual extraction:</strong> manual archive download, copying passwords, and manual file copy to game folders',
+      'compare.diffOrig2': '<strong>External dependencies:</strong> loose batch scripts and binaries (.bat, .exe) alongside the app',
+      'compare.diffOrig3': '<strong>Legacy WinForms dialog:</strong> tiny Windows XP-style folder tree without quick access or path input',
+      'compare.diffOrig4': '<strong>Blue halos across themes:</strong> unremovable blue gradients distorting custom color palettes',
+      'compare.diffOrig5': '<strong>Text emojis & legacy icons:</strong> low-res Windows system icons blurring on HiDPI/4K displays',
+      'compare.diffOrig6': '<strong>Freeze on startup:</strong> blank unresponsive window without progress feedback during system checks',
+      'compare.diffOrig7': '<strong>Intrusive updates:</strong> modal prompts with no snooze option, resetting zoom scaling',
+      'compare.diffOrig8': '<strong>Fixed file paths:</strong> hardcoded download folder without custom folder selection or quick reset',
+      'compare.diffNew1': '<strong>1-Click Auto-Install:</strong> smart archive hierarchy parsing, safety backup in .backup_orig, and auto-cleanup',
+      'compare.diffNew2': '<strong>True Standalone Portable:</strong> 100% self-contained binary, built-in anticheat scanner, and VBS audit',
+      'compare.diffNew3': '<strong>Native Explorer dialogs:</strong> modern folder browser with quick access, history, and explorer reveal',
+      'compare.diffNew4': '<strong>9 themes + clean Light mode:</strong> neutralized color bleeding, true white theme, and font scaling up to 140%',
+      'compare.diffNew5': '<strong>Vector Lucide SVG icons:</strong> razor-sharp rendering on any screen with hardware 60 FPS micro-animations',
+      'compare.diffNew6': '<strong>Hardware Canvas splash:</strong> animated logo intro, subsystem initialization log, and instant click-to-skip',
+      'compare.diffNew7': '<strong>Flexible updater:</strong> 1-click update or 10-launch snooze, comfortable persistent 120% scale',
+      'compare.diffNew8': '<strong>Flexible path management:</strong> select any download directory with 1-click reset to defaults',
       'dl.kicker': 'Download',
       'dl.title1': 'Single file.',
       'dl.title2': 'Portable.',
@@ -820,9 +836,10 @@
       .catch(() => {
         syncState.fail++;
         const fallback = [
-          { tag: 'v6.2.0', rawDate: '2026-10-12T12:00:00Z', rawBytes: 44774195, url: 'https://github.com/Sparki1337/eclipse-studio/releases/latest', fallbackSize: '42.7 МБ' },
-          { tag: 'v6.1.0', rawDate: '2026-10-12T10:00:00Z', rawBytes: 44774195, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/6.1.0', fallbackSize: '42.7 МБ' },
-          { tag: 'v6.0.0', rawDate: '2026-10-12T08:00:00Z', rawBytes: 44564480, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/6.0.0', fallbackSize: '42.5 МБ' },
+          { tag: 'v6.3.0', rawDate: '2026-10-13T18:00:00Z', rawBytes: 44983910, url: 'https://github.com/Sparki1337/eclipse-studio/releases/latest', fallbackSize: '42.9 МБ' },
+          { tag: 'v6.2.0', rawDate: '2026-10-12T12:00:00Z', rawBytes: 44774195, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.2.0', fallbackSize: '42.7 МБ' },
+          { tag: 'v6.1.0', rawDate: '2026-10-12T10:00:00Z', rawBytes: 44774195, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.1.0', fallbackSize: '42.7 МБ' },
+          { tag: 'v6.0.0', rawDate: '2026-10-12T08:00:00Z', rawBytes: 44564480, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.0.0', fallbackSize: '42.5 МБ' },
         ];
         cachedEclipseReleases = fallback;
         renderReleasesUI('eclipse', fallback);
@@ -1051,7 +1068,7 @@
 
     fetch(GIST_URL, { cache: 'no-store' })
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .catch(() => fetch(`${FALLBACK_URL}?v=6.2.0`, { cache: 'no-store' }).then((r) => r.json()))
+      .catch(() => fetch(`${FALLBACK_URL}?v=6.3.0`, { cache: 'no-store' }).then((r) => r.json()))
       .then((data) => {
         const cracks = Array.isArray(data) ? data : (data?.cracks || []);
         allGames = cracks.filter((c) => c && c.name && c.url);
