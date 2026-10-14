@@ -164,7 +164,7 @@ src-tauri/target/release/eclipse-studio.exe
 ---
 
 <div align="center">
-  <sub>Eclipse Studio v6.3.0 • Инструкция по сборке</sub>
+  <sub>Eclipse Studio v6.6.6 • Инструкция по сборке</sub>
 </div>
 
 ## Тесты интерфейса

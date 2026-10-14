@@ -61,10 +61,10 @@ async function run() {
     assert(missing.length === 0, "Не зарегистрированы: " + missing.join(", "));
   });
 
-  await test("Запуск без ошибок JS, версия 6.3.0", async () => {
+  await test("Запуск без ошибок JS, версия 6.6.6", async () => {
     const { page, context, errors } = await open();
     const version = await page.textContent(".titlebar-version");
-    assert(version.trim() === "6.3.0", "версия " + version);
+    assert(version.trim() === "6.6.6", "версия " + version);
     assert(errors.length === 0, errors.join("\n"));
     await context.close();
   });
@@ -117,7 +117,7 @@ async function run() {
     const { page, context } = await open({ view: "settings" });
     const themeNames = await page.$$eval(".theme-name", (n) => n.map((x) => x.textContent.trim()));
     const accentNames = await page.$$eval(".accent", (n) => n.map((x) => x.title));
-    const expectedThemes = ["Стандартная", "Тёмно-синяя", "Чёрная", "Зелёная", "Фиолетовая", "Бордовая", "Коричневая", "Серая"];
+    const expectedThemes = ["Чёрная", "Графит", "Серая", "Белая", "Красная", "Оранжевая", "Жёлтая", "Зелёная", "Бирюзовая", "Синяя", "Фиолетовая", "Розовая"];
     const expectedAccents = ["Зелёный", "Голубой", "Синий", "Фиолетовый", "Розовый", "Малиновый", "Красный", "Оранжевый", "Жёлтый", "Салатовый", "Бежевый", "Белый"];
     assert(JSON.stringify(themeNames) === JSON.stringify(expectedThemes), "темы: " + themeNames.join(", "));
     assert(JSON.stringify(accentNames) === JSON.stringify(expectedAccents), "акценты: " + accentNames.join(", "));
@@ -151,14 +151,18 @@ async function run() {
     await context.close();
   });
 
-  await test("Размер шрифта: пресеты и ползунок", async () => {
+  await test("Размер шрифта: ползунок и сброс", async () => {
     const { page, context } = await open({ view: "settings" });
     const size = () => page.evaluate(() => parseFloat(getComputedStyle(document.querySelector(".settings-card h2")).fontSize));
     const base = await size();
-    await page.click('[data-font-preset="130"]');
+    await page.locator("#font-scale").fill("130");
+    await page.locator("#font-scale").dispatchEvent("input");
     const big = await size();
     assert(Math.abs(big / base - 1.3) < 0.02, `масштаб ${big / base}`);
+    await page.click("#font-scale-reset");
+    assert((await page.textContent("#font-scale-value")).trim() === "100%", "сброс к 100%");
     await page.locator("#font-scale").fill("85");
+    await page.locator("#font-scale").dispatchEvent("input");
     assert((await page.textContent("#font-scale-value")).trim() === "85%", "подпись ползунка");
     await page.reload(); await page.waitForTimeout(300);
     assert(await page.evaluate(() => localStorage.getItem("cgs-font-scale")) === "85", "не сохранился");
@@ -224,6 +228,8 @@ async function run() {
 
   await test("Сервис манифестов: ссылки на Ryuu и HubCap", async () => {
     const { page, context } = await open({ view: "settings" });
+    await page.click('[data-settings-tab="modules"]');
+    await page.waitForTimeout(50);
     await page.click('[data-external-url="https://generator.ryuu.lol/"]');
     await page.click('[data-external-url="https://hubcapmanifest.com/"]');
     await page.waitForTimeout(100);
@@ -234,6 +240,7 @@ async function run() {
 
   await test("Папка загрузки: по умолчанию, выбор, открытие, сброс, передача в загрузку", async () => {
     const { page, context, errors } = await open({ view: "settings" });
+    await page.click('[data-settings-tab="storage"]');
     await page.waitForTimeout(150);
     assert((await page.textContent("#download-dir-path")).includes("Downloads"), "путь по умолчанию не показан");
     assert(await page.isHidden("#download-dir-reset"), "сброс виден без своей папки");

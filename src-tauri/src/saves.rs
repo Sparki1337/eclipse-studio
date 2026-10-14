@@ -674,22 +674,49 @@ fn find_winrar() -> Option<PathBuf> {
 }
 
 fn create_zip(stage: &Path, destination: &Path) -> Result<(), String> {
-    let script = r#"Add-Type -AssemblyName System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::CreateFromDirectory($env:CGS_STAGE, $env:CGS_ARCHIVE, [IO.Compression.CompressionLevel]::Optimal, $false)"#;
-    let mut command = Command::new("powershell.exe");
-    command
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .env("CGS_STAGE", stage)
-        .env("CGS_ARCHIVE", destination);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000);
-    let output = command
-        .output()
-        .map_err(|error| format!("Не удалось запустить ZIP-архиватор: {error}"))?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    let file = File::create(destination)
+        .map_err(|error| format!("Не удалось создать ZIP-архив: {error}"))?;
+    let mut archive = zip::ZipWriter::new(file);
+    let file_options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o644);
+    let directory_options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Stored)
+        .unix_permissions(0o755);
+    for entry in WalkDir::new(stage)
+        .follow_links(false)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        let Ok(relative) = entry.path().strip_prefix(stage) else {
+            continue;
+        };
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+        let name = relative.to_string_lossy().replace('\\', "/");
+        if entry.file_type().is_dir() {
+            archive
+                .add_directory(
+                    format!("{}/", name.trim_end_matches('/')),
+                    directory_options,
+                )
+                .map_err(|error| format!("Не удалось добавить папку в ZIP: {error}"))?;
+        } else if entry.file_type().is_file() {
+            archive
+                .start_file(name, file_options)
+                .map_err(|error| format!("Не удалось добавить файл в ZIP: {error}"))?;
+            let mut source = File::open(entry.path()).map_err(|error| {
+                format!("Не удалось прочитать {}: {error}", entry.path().display())
+            })?;
+            std::io::copy(&mut source, &mut archive)
+                .map_err(|error| format!("Не удалось записать файл в ZIP: {error}"))?;
+        }
     }
+    archive
+        .finish()
+        .map(|_| ())
+        .map_err(|error| format!("Не удалось завершить ZIP-архив: {error}"))
 }
 
 fn create_rar(stage: &Path, destination: &Path) -> Result<(), String> {

@@ -49,6 +49,25 @@
           gold: ["#e3c88a", "227, 200, 138"],
           ice: ["#dfe7f2", "223, 231, 242"]
         };
+        var shape = localStorage.getItem("cgs-shape") || "soft";
+        root.dataset.shape = shape;
+        var fontKey = localStorage.getItem("cgs-font-family") || "system";
+        root.dataset.font = fontKey;
+        var fontMap = {
+          system: '"Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
+          jetbrains: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
+          minecraft: '"Minecraft", "Minecraftia", "Monocraft", monospace',
+          bahnschrift: 'Bahnschrift, "Segoe UI", system-ui, sans-serif',
+          verdana: 'Verdana, "Segoe UI", sans-serif',
+          tahoma: 'Tahoma, "Segoe UI", sans-serif',
+          consolas: 'Consolas, "Cascadia Mono", monospace'
+        };
+        if (fontMap[fontKey]) root.style.setProperty("--font", fontMap[fontKey]);
+        var weight = localStorage.getItem("cgs-text-weight") || "regular";
+        root.dataset.weight = weight;
+        if (localStorage.getItem("cgs-contrast") === "1") root.dataset.contrast = "high";
+        if (localStorage.getItem("cgs-glow") === "0") root.dataset.glow = "off";
+        else root.dataset.glow = "on";
         var acc = accentMap[localStorage.getItem("accent") || "mint"] || accentMap.mint;
         root.style.setProperty("--accent", acc[0]);
         root.style.setProperty("--accent-rgb", acc[1]);
@@ -107,6 +126,11 @@
       --theme-bg: #11141a !important;
     }
   </style>
+  <link rel="stylesheet" href="./styles-base.css" />
+  <link rel="stylesheet" href="./styles-modules.css" />
+  <link rel="stylesheet" href="./hypervisor-artwork.css" />
+  <link rel="stylesheet" href="./styles-themes.css" />
+  <link rel="stylesheet" href="./styles-appearance.css" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -129,7 +153,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>6.3.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>6.6.6</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -220,7 +244,7 @@
         <div class="home-hero premium-panel">
           <div class="home-glow"></div>
           <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 6.3.0</span>
+            <span class="hero-kicker">ECLIPSE STUDIO 6.6.6</span>
             <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
             <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
           </div>
@@ -595,29 +619,68 @@
               </div>
             </section>
 
+            <section class="premium-panel hv-selected-panel">
+              <div class="hv-selected-icon hv-cover hv-selected-cover" id="hv-selected-cover" aria-hidden="true"></div>
+              <div class="hv-selected-copy">
+                <span class="coming-label">ВЫБРАННАЯ ИГРА</span>
+                <h3 id="hv-selected-title">Игра не выбрана</h3>
+                <p id="hv-selected-path">Выберите игру из списка ниже</p>
+                <div class="hv-chips-group">
+                  <span class="hv-chip"><small>ПРОФИЛЬ</small><b id="hv-selected-profile">—</b></span>
+                  <span class="hv-chip"><small>СТАТУС</small><b id="hv-selected-state">Нет игры</b></span>
+                  <span class="hv-chip"><small>ПРАВА</small><b id="hv-admin-status">Через UAC</b></span>
+                  <span id="hv-ready-status" class="hidden">Нет игры</span>
+                </div>
+              </div>
+
+              <div class="hv-selected-actions">
+                <div class="hv-selected-profiles" id="hv-selected-profiles"></div>
+                <button class="ghost-button hv-check-button" id="hv-selected-verify" disabled>
+                  <svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg>
+                  <span>Проверить</span>
+                </button>
+                <button class="primary-button hv-launch-button" id="hv-launch-button" disabled>
+                  <span class="hv-play">▶</span>
+                  <span>Запустить</span>
+                </button>
+              </div>
+            </section>
+
             <div class="hv-workspace">
-              <!-- Левая колонка: Библиотека добавленных игр + Журнал -->
-              <div class="hv-col">
-                <section class="premium-panel hv-library-panel">
-                  <div class="hv-panel-header">
+              <!-- Левая колонка: Библиотека добавленных игр -->
+              <section class="premium-panel hv-library-panel">
+                <div class="hv-panel-header">
+                  <div>
+                    <span class="coming-label">БИБЛИОТЕКА</span>
+                    <h3>Добавленные игры</h3>
+                    <p>Выберите игру для назначения профиля и запуска.</p>
+                  </div>
+                  <div class="hv-header-badge-wrap">
+                    <span class="required-chip" id="hv-library-count">0 игр</span>
+                    <span id="hv-games-count" class="hidden">0</span>
+                  </div>
+                </div>
+                <div class="hv-empty" id="hv-empty">
+                  <span class="hv-empty-icon">
+                    <svg viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+                  </span>
+                  <h3>Библиотека пустая</h3>
+                  <p>Нажмите «Добавить игру» и выберите исполняемый файл игры (.exe).</p>
+                </div>
+                <div class="hv-game-list hidden" id="hv-game-list"></div>
+              </section>
+
+              <!-- Правая колонка: Сценарий и Журнал операций -->
+              <div class="hv-side-stack">
+                <section class="premium-panel hv-steps-panel">
+                  <div class="hv-panel-title">
                     <div>
-                      <span class="coming-label">БИБЛИОТЕКА</span>
-                      <h3>Добавленные игры</h3>
-                      <p>Выберите игру для назначения профиля и запуска.</p>
+                      <span class="coming-label">СЦЕНАРИЙ</span>
+                      <h3>Что делает запуск</h3>
                     </div>
-                    <div class="hv-header-badge-wrap">
-                      <span class="required-chip" id="hv-library-count">0 игр</span>
-                      <span id="hv-games-count" class="hidden">0</span>
-                    </div>
+                    <b id="hv-run-state">Ожидание</b>
                   </div>
-                  <div class="hv-empty" id="hv-empty">
-                    <span class="hv-empty-icon">
-                      <svg viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
-                    </span>
-                    <h3>Библиотека пустая</h3>
-                    <p>Нажмите «Добавить игру» и выберите исполняемый файл игры (.exe).</p>
-                  </div>
-                  <div class="hv-game-list hidden" id="hv-game-list"></div>
+                  <div class="hv-steps" id="hv-steps"></div>
                 </section>
 
                 <section class="premium-panel hv-log-panel">
@@ -632,54 +695,6 @@
                     </div>
                   </div>
                   <div class="hv-log" id="hv-log" role="log" aria-live="polite"></div>
-                </section>
-              </div>
-
-              <!-- Правая колонка: Управление выбранной игрой + Сценарий -->
-              <div class="hv-col">
-                <section class="premium-panel hv-selected-panel">
-                  <div class="hv-selected-header">
-                    <div class="hv-selected-icon" aria-label="Гипервизор">
-                      <svg viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
-                    </div>
-                    <div class="hv-selected-copy">
-                      <span class="coming-label">ВЫБРАННАЯ ИГРА</span>
-                      <h3 id="hv-selected-title">Игра не выбрана</h3>
-                      <p id="hv-selected-path">Выберите игру из списка слева</p>
-                    </div>
-                  </div>
-
-                  <div class="hv-selected-meta-row">
-                    <div class="hv-selected-profiles" id="hv-selected-profiles"></div>
-                    <div class="hv-chips-group">
-                      <span class="hv-chip"><small>ПРОФИЛЬ</small><b id="hv-selected-profile">Профиль: —</b></span>
-                      <span class="hv-chip"><small>СТАТУС</small><b id="hv-selected-state">Нет игры</b></span>
-                      <span class="hv-chip"><small>ПРАВА</small><b id="hv-admin-status">Через UAC</b></span>
-                      <span id="hv-ready-status" class="hidden">Нет игры</span>
-                    </div>
-                  </div>
-
-                  <div class="hv-selected-actions">
-                    <button class="ghost-button hv-check-button" id="hv-selected-verify" disabled>
-                      <svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg>
-                      <span>Проверить</span>
-                    </button>
-                    <button class="primary-button hv-launch-button" id="hv-launch-button" disabled>
-                      <span class="hv-play">▶</span>
-                      <span>Запустить</span>
-                    </button>
-                  </div>
-                </section>
-
-                <section class="premium-panel hv-steps-panel">
-                  <div class="hv-panel-title">
-                    <div>
-                      <span class="coming-label">СЦЕНАРИЙ</span>
-                      <h3>Что делает запуск</h3>
-                    </div>
-                    <b id="hv-run-state">Ожидание</b>
-                  </div>
-                  <div class="hv-steps" id="hv-steps"></div>
                 </section>
               </div>
             </div>
@@ -825,6 +840,14 @@
                   </span>
                 </label>
                 <label class="files-search"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg><input id="files-search" type="text" placeholder="Найти файл…" autocomplete="off" spellcheck="false"/></label>
+                <div class="files-view-toggle" role="group" aria-label="Режим отображения каталога">
+                  <button type="button" class="files-view-btn active" id="files-view-grid" data-mode="grid" title="Плитка (сетка)" aria-pressed="true">
+                    <svg viewBox="0 0 16 16"><rect width="5" height="5" x="2" y="2" rx="1.5"/><rect width="5" height="5" x="9" y="2" rx="1.5"/><rect width="5" height="5" x="2" y="9" rx="1.5"/><rect width="5" height="5" x="9" y="9" rx="1.5"/></svg>
+                  </button>
+                  <button type="button" class="files-view-btn" id="files-view-list" data-mode="list" title="Компактный список" aria-pressed="false">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>
+                  </button>
+                </div>
                 <button class="files-refresh" id="files-refresh"><svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg><span>Обновить список</span></button>
               </div>
             </div>
@@ -898,109 +921,499 @@
       </section>
 
       <section class="view" id="view-settings" data-view-panel="settings">
-        <div class="settings-layout">
-          <section class="premium-panel settings-card appearance-card">
-            <span class="coming-label">ИНТЕРФЕЙС</span><h2>Внешний вид</h2>
-            <p>Тема оформления и цвет светового акцента. Настройки сохраняются локально.</p>
-            <div class="settings-subtitle">Тема</div>
-            <div class="theme-picker" role="group" aria-label="Тема"><button class="theme-option active" data-theme-option="graphite" title="Стандартная"><span class="theme-preview theme-preview-graphite"><i></i><b></b><em></em></span><span class="theme-name">Стандартная</span></button><button class="theme-option" data-theme-option="midnight" title="Тёмно-синяя"><span class="theme-preview theme-preview-midnight"><i></i><b></b><em></em></span><span class="theme-name">Тёмно-синяя</span></button><button class="theme-option" data-theme-option="oled" title="Чёрная"><span class="theme-preview theme-preview-oled"><i></i><b></b><em></em></span><span class="theme-name">Чёрная</span></button><button class="theme-option" data-theme-option="light" title="Белая"><span class="theme-preview theme-preview-light"><i></i><b></b><em></em></span><span class="theme-name">Белая</span></button><button class="theme-option" data-theme-option="forest" title="Зелёная"><span class="theme-preview theme-preview-forest"><i></i><b></b><em></em></span><span class="theme-name">Зелёная</span></button><button class="theme-option" data-theme-option="cosmos" title="Фиолетовая"><span class="theme-preview theme-preview-cosmos"><i></i><b></b><em></em></span><span class="theme-name">Фиолетовая</span></button><button class="theme-option" data-theme-option="wine" title="Бордовая"><span class="theme-preview theme-preview-wine"><i></i><b></b><em></em></span><span class="theme-name">Бордовая</span></button><button class="theme-option" data-theme-option="coffee" title="Коричневая"><span class="theme-preview theme-preview-coffee"><i></i><b></b><em></em></span><span class="theme-name">Коричневая</span></button><button class="theme-option" data-theme-option="steel" title="Серая"><span class="theme-preview theme-preview-steel"><i></i><b></b><em></em></span><span class="theme-name">Серая</span></button></div>
-            <div class="settings-subtitle">Цвет акцента</div>
-            <div class="accent-picker"><button class="accent active" data-accent="mint" style="--swatch:#63f5c2" title="Зелёный" aria-label="Зелёный"></button><button class="accent" data-accent="cyan" style="--swatch:#4fdfff" title="Голубой" aria-label="Голубой"></button><button class="accent" data-accent="blue" style="--swatch:#5ca8ff" title="Синий" aria-label="Синий"></button><button class="accent" data-accent="violet" style="--swatch:#a987ff" title="Фиолетовый" aria-label="Фиолетовый"></button><button class="accent" data-accent="pink" style="--swatch:#f67ee6" title="Розовый" aria-label="Розовый"></button><button class="accent" data-accent="rose" style="--swatch:#ff739d" title="Малиновый" aria-label="Малиновый"></button><button class="accent" data-accent="red" style="--swatch:#ff6161" title="Красный" aria-label="Красный"></button><button class="accent" data-accent="orange" style="--swatch:#ff9a4d" title="Оранжевый" aria-label="Оранжевый"></button><button class="accent" data-accent="amber" style="--swatch:#ffc94d" title="Жёлтый" aria-label="Жёлтый"></button><button class="accent" data-accent="lime" style="--swatch:#b8f25c" title="Салатовый" aria-label="Салатовый"></button><button class="accent" data-accent="gold" style="--swatch:#e3c88a" title="Бежевый" aria-label="Бежевый"></button><button class="accent" data-accent="ice" style="--swatch:#dfe7f2" title="Белый" aria-label="Белый"></button></div>
-          </section>
+        <div class="settings-container">
+          <nav class="settings-segmented-tabs" role="tablist" aria-label="Разделы настроек">
+            <button type="button" class="settings-tab-btn active" role="tab" aria-selected="true" data-settings-tab="interface">
+              <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm4 12V4"/></svg>
+              <span>Интерфейс</span>
+            </button>
+            <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="sidebar">
+              <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm5 0v12"/></svg>
+              <span>Боковая панель</span>
+            </button>
+            <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="modules">
+              <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7 3H4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm9 0h-3a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zM7 12H4a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1zm9 0h-3a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1z"/></svg>
+              <span>Модули и API</span>
+            </button>
+            <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="storage">
+              <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2.5 5a1.5 1.5 0 0 1 1.5-1.5h4.2a1.5 1.5 0 0 1 1.06.44L10.8 5.5h5.7a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5V5z"/></svg>
+              <span>Пути и загрузки</span>
+            </button>
+          </nav>
 
-          <section class="premium-panel settings-card layout-card">
-            <span class="coming-label">ИНТЕРФЕЙС</span><h2>Отображение</h2>
-            <p>Плотность интерфейса, размер текста и язык. Изменения применяются сразу.</p>
-            <label class="pref-row">
-              <div><strong>Компактный режим</strong><small>Уменьшает отступы и высоту элементов — на экран помещается больше</small></div>
-              <span class="switch"><input type="checkbox" id="compact-mode" checked /><i></i></span>
-            </label>
-            <label class="pref-row">
-              <div><strong>Анимации интерфейса</strong><small>Плавное появление разделов, карточек и списков</small></div>
-              <span class="switch"><input type="checkbox" id="motion-mode" checked /><i></i></span>
-            </label>
-            <div class="pref-row pref-row-splash">
-              <label for="splash-mode" class="pref-label">
-                <strong>Заставка при запуске</strong>
-                <small>Анимация при открытии программы</small>
-              </label>
-              <div class="splash-setting-ctrl">
-                <button type="button" class="svc-link" id="replay-splash-button" title="Посмотреть заставку">Посмотреть</button>
-                <label class="switch" for="splash-mode"><input type="checkbox" id="splash-mode" checked /><i></i></label>
-              </div>
-            </div>
-            <div class="pref-row pref-row-font">
-              <div><strong>Размер шрифта</strong><small>Масштаб всего текста в приложении</small></div>
-              <div class="font-size-control">
-                <div class="font-size-picker" role="group" aria-label="Размер шрифта">
-                  <button data-font-preset="90">A<sup>−</sup></button><button data-font-preset="100">A</button><button data-font-preset="115">A<sup>+</sup></button><button data-font-preset="130">A<sup>++</sup></button>
+          <!-- Раздел: Интерфейс -->
+          <div class="settings-tab-panel active" id="settings-panel-interface" role="tabpanel" data-tab-panel="interface">
+            <section class="premium-panel settings-card appearance-card">
+              <h2>Интерфейс</h2>
+              <p>Персонализация внешнего вида, темы и параметров отображения</p>
+
+              <details class="settings-collapsible" id="collapse-theme" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M10 2a8 8 0 1 0 8 8 8 8 0 0 0-8-8zm0 0v16a8 8 0 0 0 0-16z"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Тема оформления</strong>
+                      <small>Основная цветовая палитра интерфейса</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="theme-picker" role="group" aria-label="Тема">
+                    <button class="theme-option" data-theme-option="oled" title="Чёрная"><span class="theme-preview theme-preview-oled"><i></i><b></b><em></em></span><span class="theme-name">Чёрная</span></button>
+                    <button class="theme-option active" data-theme-option="graphite" title="Графит"><span class="theme-preview theme-preview-graphite"><i></i><b></b><em></em></span><span class="theme-name">Графит</span></button>
+                    <button class="theme-option" data-theme-option="steel" title="Серая"><span class="theme-preview theme-preview-steel"><i></i><b></b><em></em></span><span class="theme-name">Серая</span></button>
+                    <button class="theme-option" data-theme-option="light" title="Белая"><span class="theme-preview theme-preview-light"><i></i><b></b><em></em></span><span class="theme-name">Белая</span></button>
+                    <button class="theme-option" data-theme-option="ruby" title="Красная"><span class="theme-preview theme-preview-ruby"><i></i><b></b><em></em></span><span class="theme-name">Красная</span></button>
+                    <button class="theme-option" data-theme-option="amber" title="Оранжевая"><span class="theme-preview theme-preview-amber"><i></i><b></b><em></em></span><span class="theme-name">Оранжевая</span></button>
+                    <button class="theme-option" data-theme-option="gold" title="Жёлтая"><span class="theme-preview theme-preview-gold"><i></i><b></b><em></em></span><span class="theme-name">Жёлтая</span></button>
+                    <button class="theme-option" data-theme-option="forest" title="Зелёная"><span class="theme-preview theme-preview-forest"><i></i><b></b><em></em></span><span class="theme-name">Зелёная</span></button>
+                    <button class="theme-option" data-theme-option="cyan" title="Бирюзовая"><span class="theme-preview theme-preview-cyan"><i></i><b></b><em></em></span><span class="theme-name">Бирюзовая</span></button>
+                    <button class="theme-option" data-theme-option="midnight" title="Синяя"><span class="theme-preview theme-preview-midnight"><i></i><b></b><em></em></span><span class="theme-name">Синяя</span></button>
+                    <button class="theme-option" data-theme-option="cosmos" title="Фиолетовая"><span class="theme-preview theme-preview-cosmos"><i></i><b></b><em></em></span><span class="theme-name">Фиолетовая</span></button>
+                    <button class="theme-option" data-theme-option="rose" title="Розовая"><span class="theme-preview theme-preview-rose"><i></i><b></b><em></em></span><span class="theme-name">Розовая</span></button>
+                  </div>
                 </div>
-                <div class="font-size-slider"><input type="range" id="font-scale" min="85" max="140" step="5" value="120" aria-label="Размер шрифта" /><b id="font-scale-value">120%</b></div>
-              </div>
-            </div>
-            <div class="language-setting"><div><strong>Язык интерфейса</strong><small>Меняется моментально без перезапуска</small></div><div class="language-picker" role="group" aria-label="Язык интерфейса"><button class="active" data-language="ru">Русский</button><button data-language="en">English</button></div></div>
-          </section>
+              </details>
 
-          <section class="premium-panel settings-card svc-card">
-            <span class="coming-label">CROCLUA</span><h2>Сервис манифестов</h2>
-            <p>Откуда искать и получать манифесты для вкладки CrocLua.</p>
-            <div class="svc-options">
-              <button class="svc-option active" data-service="ryuu">
-                <strong>Ryuu</strong><small>Ключ уже встроен — ничего вводить не нужно</small>
-              </button>
-              <button class="svc-option" data-service="hubcap">
-                <strong>HubCap</strong><small>Нужен свой API-ключ с их сайта</small>
-              </button>
-            </div>
-            <div class="svc-links">
-              <span>Сайты сервисов</span>
-              <button class="svc-link" data-external-url="https://generator.ryuu.lol/"><svg viewBox="0 0 20 20"><path d="M12 3h5v5M9 11l8-8M15 9v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg>Открыть Ryuu</button>
-              <button class="svc-link" data-external-url="https://hubcapmanifest.com/"><svg viewBox="0 0 20 20"><path d="M12 3h5v5M9 11l8-8M15 9v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6"/></svg>Открыть HubCap</button>
-            </div>
-            <div class="svc-key hidden" id="svc-key-block">
-              <label>API-ключ HubCap</label>
-              <input id="hubcap-key" type="password" autocomplete="off" spellcheck="false" placeholder="smm_…" />
-              <div class="svc-key-row">
-                <button class="ghost-button" id="hubcap-key-get">Получить ключ</button>
-                <span id="hubcap-key-status"></span>
-              </div>
-              <div class="hubcap-usage" id="hubcap-usage">
-                <div><span>Использовано сегодня</span><b id="hubcap-usage-used">0/25</b></div>
-                <div><span>Осталось скачиваний</span><b id="hubcap-usage-remaining">25</b></div>
-                <small id="hubcap-usage-status">Добавьте ключ для синхронизации</small>
-              </div>
-            </div>
-          </section>
+              <details class="settings-collapsible" id="collapse-accent" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="10" cy="10" r="3" fill="currentColor"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Цвет акцента</strong>
+                      <small>Цветовой акцент для кнопок, переключателей и подсветки</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="accent-picker" role="group" aria-label="Цвет акцента">
+                    <button class="accent" data-accent="white" style="--swatch:#ffffff" title="Белый" aria-label="Белый"></button>
+                    <button class="accent" data-accent="red" style="--swatch:#ff5252" title="Красный" aria-label="Красный"></button>
+                    <button class="accent" data-accent="orange" style="--swatch:#ff8c42" title="Оранжевый" aria-label="Оранжевый"></button>
+                    <button class="accent" data-accent="amber" style="--swatch:#ffc83b" title="Жёлтый" aria-label="Жёлтый"></button>
+                    <button class="accent" data-accent="gold" style="--swatch:#e5c158" title="Золотой" aria-label="Золотой"></button>
+                    <button class="accent" data-accent="lime" style="--swatch:#b4f043" title="Лаймовый" aria-label="Лаймовый"></button>
+                    <button class="accent active" data-accent="mint" style="--swatch:#52ebb5" title="Мятный" aria-label="Мятный"></button>
+                    <button class="accent" data-accent="cyan" style="--swatch:#38d9f5" title="Бирюзовый" aria-label="Бирюзовый"></button>
+                    <button class="accent" data-accent="blue" style="--swatch:#4d9fff" title="Синий" aria-label="Синий"></button>
+                    <button class="accent" data-accent="violet" style="--swatch:#a77bfe" title="Фиолетовый" aria-label="Фиолетовый"></button>
+                    <button class="accent" data-accent="pink" style="--swatch:#f768b7" title="Розовый" aria-label="Розовый"></button>
+                    <button class="accent" data-accent="rose" style="--swatch:#ff6987" title="Малиновый" aria-label="Малиновый"></button>
+                  </div>
+                </div>
+              </details>
 
-          <section class="premium-panel settings-card downloads-card">
-            <span class="coming-label">КРЯКИ</span><h2>Папка загрузки</h2>
-            <p>Куда сохраняются кряки, скачанные во вкладке «Кряки».</p>
-            <div class="download-path">
-              <span class="download-path-icon"><svg viewBox="0 0 24 24"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><path d="M12 10v6m-3-3 3 3 3-3"/></svg></span>
-              <div><small id="download-dir-kind">По умолчанию</small><code id="download-dir-path" title="">Папка «Загрузки»</code></div>
-            </div>
-            <div class="download-actions">
-              <button class="ghost-button" id="download-dir-pick">Выбрать папку</button>
-              <button class="ghost-button" id="download-dir-open">Открыть</button>
-              <button class="ghost-button hidden" id="download-dir-reset">Сбросить</button>
-            </div>
-          </section>
+              <details class="settings-collapsible" id="collapse-display" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><rect x="3" y="4" width="14" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="3" y1="9" x2="17" y2="9" stroke="currentColor" stroke-width="1.8"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Параметры отображения</strong>
+                      <small>Компактный режим, скругление углов, эффекты и заставка</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="settings-group">
+                    <label class="pref-row">
+                      <div><strong>Компактный режим</strong><small>Уменьшает отступы и высоту элементов — на экран помещается больше</small></div>
+                      <span class="switch"><input type="checkbox" id="compact-mode" checked /><i></i></span>
+                    </label>
+                    <div class="pref-row">
+                      <div><strong>Форма углов</strong><small>Радиус скругления панелей, кнопок и карточек</small></div>
+                      <div class="personalization-segment" role="group" aria-label="Форма углов">
+                        <button type="button" data-shape-choice="sharp">Строгое</button>
+                        <button type="button" class="active" data-shape-choice="soft">Мягкое</button>
+                        <button type="button" data-shape-choice="round">Круглое</button>
+                      </div>
+                    </div>
+                    <label class="pref-row" for="ui-contrast">
+                      <div><strong>Высокая контрастность</strong><small>Более яркий текст и выразительные границы элементов</small></div>
+                      <span class="switch"><input type="checkbox" id="ui-contrast" /><i></i></span>
+                    </label>
+                    <label class="pref-row" for="ui-glow">
+                      <div><strong>Акцентное свечение</strong><small>Неоновый отблеск и тени в цвет выбранного акцента</small></div>
+                      <span class="switch"><input type="checkbox" id="ui-glow" checked /><i></i></span>
+                    </label>
+                    <label class="pref-row">
+                      <div><strong>Анимации интерфейса</strong><small>Плавное появление разделов, карточек и списков</small></div>
+                      <span class="switch"><input type="checkbox" id="motion-mode" checked /><i></i></span>
+                    </label>
+                    <div class="pref-row pref-row-splash">
+                      <label for="splash-mode" class="pref-label">
+                        <strong>Заставка при запуске</strong>
+                        <small>Анимация при открытии программы</small>
+                      </label>
+                      <div class="splash-setting-ctrl">
+                        <button type="button" class="splash-preview-btn svc-link" id="replay-splash-button" title="Посмотреть заставку">
+                          <svg viewBox="0 0 16 16"><path fill="currentColor" d="M4.5 3.5v9l8-4.5-8-4.5z"/></svg>
+                          <span>Посмотреть</span>
+                        </button>
+                        <label class="switch" for="splash-mode"><input type="checkbox" id="splash-mode" checked /><i></i></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
 
-          <section class="premium-panel settings-card update-card">
-            <span class="coming-label">ПРИЛОЖЕНИЕ</span><h2>Обновления</h2>
-            <p>Проверка новых версий через официальный репозиторий Eclipse Studio.</p>
-            <div class="about-row"><span>Текущая версия</span><b id="update-current-version">6.3.0</b></div>
-            <div class="update-actions">
-              <button class="ghost-button" id="check-update-button">Проверить обновления</button>
-              <span id="update-status">Проверка ещё не выполнялась</span>
-            </div>
-            <div class="update-download-actions hidden" id="update-download-actions">
-              <button class="ghost-button hidden" id="download-portable-button">Скачать EXE</button>
-              <button class="ghost-button hidden" id="download-installer-button">Скачать Setup</button>
-            </div>
-          </section>
+              <details class="settings-collapsible" id="collapse-typography" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 6h12M10 6v10M7 16h6"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Типографика и масштаб</strong>
+                      <small>Шрифт интерфейса, плотность текста и размер шрифта</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="settings-group">
+                    <div class="pref-row pref-row-font-select">
+                      <div>
+                        <strong>Шрифт интерфейса</strong>
+                        <small>Основной шрифт текста программы</small>
+                      </div>
+                      <div class="font-select-wrap">
+                        <select id="ui-font" class="ui-font-select" aria-label="Шрифт интерфейса">
+                          <option value="system">Segoe UI Variable / Segoe UI</option>
+                          <option value="jetbrains">JetBrains Mono</option>
+                          <option value="minecraft">Minecraft</option>
+                          <option value="bahnschrift">Bahnschrift</option>
+                          <option value="verdana">Verdana</option>
+                          <option value="tahoma">Tahoma</option>
+                          <option value="consolas">Consolas</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="typography-preview-card" id="ui-font-preview" aria-label="Предпросмотр шрифта">
+                      <div class="typography-preview-lead">
+                        <strong>Aa Bb Gg 123 · Быстрый старт</strong>
+                        <small id="ui-font-current-name">Segoe UI Variable</small>
+                      </div>
+                      <div class="typography-preview-chips">
+                        <span>Online Fix</span>
+                        <span>Сохранения</span>
+                        <span>DLC Unlocker</span>
+                        <span>Hypervisor</span>
+                        <span>Cracks</span>
+                      </div>
+                    </div>
+                    <div class="pref-row">
+                      <div><strong>Плотность текста</strong><small>Толщина шрифта заголовков и надписей</small></div>
+                      <div class="personalization-segment" role="group" aria-label="Плотность текста">
+                        <button type="button" data-weight-choice="light">Легче</button>
+                        <button type="button" class="active" data-weight-choice="regular">Стандартная</button>
+                        <button type="button" data-weight-choice="bold">Плотнее</button>
+                      </div>
+                    </div>
+                    <div class="pref-row pref-row-font">
+                      <div><strong>Размер шрифта</strong><small>Масштаб всего текста в приложении</small></div>
+                      <div class="font-size-control">
+                        <div class="font-size-slider">
+                          <input type="range" id="font-scale" min="85" max="140" step="5" value="120" aria-label="Размер шрифта" />
+                          <b id="font-scale-value">120%</b>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
 
-          <section class="premium-panel settings-card about-card"><span class="coming-label">ПРИЛОЖЕНИЕ</span><h2>О программе</h2><div class="about-row"><span>Версия</span><b>6.3.0</b></div><div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div><div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · CrocLua · Гипервизор · Кряки · Утилиты</b></div></section>
+              <details class="settings-collapsible" id="collapse-language" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" d="M3.5 10h13M10 3a10.5 10.5 0 0 0 0 14M10 3a10.5 10.5 0 0 1 0 14"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Язык интерфейса</strong>
+                      <small>Язык перевода приложения</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="pref-row language-setting" style="margin-top:0;padding-top:6px;border:none">
+                    <div><strong>Язык интерфейса</strong><small>Меняется моментально без перезапуска</small></div>
+                    <div class="language-picker" role="group" aria-label="Язык интерфейса">
+                      <button class="active" data-language="ru">Русский</button>
+                      <button data-language="en">English</button>
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </section>
+          </div>
+
+          <!-- Раздел: Боковая панель -->
+          <div class="settings-tab-panel hidden" id="settings-panel-sidebar" role="tabpanel" data-tab-panel="sidebar">
+            <section class="premium-panel settings-card sidebar-settings-card">
+              <h2>Боковая панель</h2>
+              <p>Настройка режима отображения, быстрого редактирования и состава бокового меню</p>
+
+              <details class="settings-collapsible" id="collapse-sidebar-mode" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm5 0v12"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Вид и управление</strong>
+                      <small>Режим отображения боковой панели и редактирование «На лету»</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="sidebar-mode-picker" role="group" aria-label="Вид боковой панели">
+                    <button type="button" class="sidebar-mode-btn active" data-sidebar-mode="default">Обычная</button>
+                    <button type="button" class="sidebar-mode-btn" data-sidebar-mode="compact">Компактная</button>
+                    <button type="button" class="sidebar-mode-btn" data-sidebar-mode="icons">Иконки</button>
+                  </div>
+
+                  <div class="sidebar-live-edit-row">
+                    <div class="sidebar-live-edit-info">
+                      <strong>Редактирование «На лету»</strong>
+                      <p>Разрешить перетаскивать кнопки и открывать меню настроек прямо на боковой панели</p>
+                    </div>
+                    <label class="switch" title="Включить редактирование «На лету»">
+                      <input type="checkbox" id="sidebar-live-edit-toggle" />
+                      <i></i>
+                    </label>
+                  </div>
+                </div>
+              </details>
+
+              <details class="settings-collapsible" id="collapse-sidebar-modules" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 5h12M4 10h12M4 15h12"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Список модулей</strong>
+                      <small>Включение, отключение, скрытие и перестановка модулей</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="sidebar-modules-list" id="sidebar-modules-list"></div>
+
+                  <div class="sidebar-settings-actions">
+                    <button type="button" class="secondary-button" id="sidebar-show-all">Показать все модули</button>
+                    <button type="button" class="ghost-button" id="sidebar-reset-order">Сбросить порядок</button>
+                  </div>
+                </div>
+              </details>
+            </section>
+          </div>
+
+          <!-- Раздел: Модули и API -->
+          <div class="settings-tab-panel hidden" id="settings-panel-modules" role="tabpanel" data-tab-panel="modules">
+            <section class="premium-panel settings-card svc-card">
+              <h2>Модули и API</h2>
+              <p>Настройки внешних сервисов и параметров интеграции</p>
+
+              <details class="settings-collapsible" id="collapse-modules-manifests" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM7 8h6M7 12h4"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Сервис манифестов</strong>
+                      <small>Откуда искать и получать манифесты для вкладки CrocLua</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="svc-options">
+                    <div class="svc-option active" data-service="ryuu" role="button" tabindex="0">
+                      <div class="svc-option-header">
+                        <strong>Ryuu</strong>
+                        <button type="button" class="svc-card-ext-btn" data-external-url="https://generator.ryuu.lol/" title="Открыть сайт Ryuu" aria-label="Открыть Ryuu">
+                          <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M6 3h7v7M13 3L7 9M11 8v5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>
+                        </button>
+                      </div>
+                      <small>Ключ уже встроен — ничего вводить не нужно</small>
+                    </div>
+                    <div class="svc-option" data-service="hubcap" role="button" tabindex="0">
+                      <div class="svc-option-header">
+                        <strong>HubCap</strong>
+                        <button type="button" class="svc-card-ext-btn" data-external-url="https://hubcapmanifest.com/" title="Открыть сайт HubCap" aria-label="Открыть HubCap">
+                          <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M6 3h7v7M13 3L7 9M11 8v5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>
+                        </button>
+                      </div>
+                      <small>Нужен свой API-ключ с их сайта</small>
+                    </div>
+                  </div>
+
+                  <div class="svc-key hidden" id="svc-key-block">
+                    <div class="svc-key-header">
+                      <label class="svc-key-label" for="hubcap-key">API-КЛЮЧ HUBCAP</label>
+                      <div class="svc-key-meta">
+                        <span class="hubcap-status-badge" id="hubcap-key-status">Ключ не указан</span>
+                        <button type="button" class="svc-key-link" id="hubcap-key-get" data-external-url="https://hubcapmanifest.com/api-keys/stats">
+                          <span>Получить ключ</span>
+                          <svg viewBox="0 0 14 14"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 10l6-6m0 0H5m5 0v5"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="svc-input-box">
+                      <input id="hubcap-key" type="password" autocomplete="off" spellcheck="false" placeholder="smm_…" />
+                      <div class="svc-input-tools">
+                        <button type="button" class="svc-tool-btn" id="hubcap-key-paste" title="Вставить из буфера обмена" aria-label="Вставить из буфера">
+                          <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M5 2h6v2H5zM3 4h2v2h6V4h2a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/></svg>
+                        </button>
+                        <button type="button" class="svc-tool-btn" id="hubcap-key-visibility" title="Показать или скрыть ключ" aria-label="Показать ключ">
+                          <svg class="eye-show" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M1.5 8s2.5-4.5 6.5-4.5 6.5 4.5 6.5 4.5-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                          <svg class="eye-hide hidden" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M2 2l12 12M6.5 6.6a2 2 0 0 0 2.9 2.9m-4.2-4A7.2 7.2 0 0 0 1.5 8s2.5-4.5 6.5-4.5c1.6 0 3-.7 4.1-1.7m-1.7-4.1a6.6 6.6 0 0 0-2.4-.7c-4 0-6.5 4.5-6.5 4.5"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="hubcap-usage-card" id="hubcap-usage">
+                      <div class="hubcap-usage-row">
+                        <span class="hubcap-usage-title">
+                          Дневной лимит: <b id="hubcap-usage-used">0/25</b> (осталось <b id="hubcap-usage-remaining">25</b>)
+                        </span>
+                        <small id="hubcap-usage-status">Добавьте ключ для синхронизации</small>
+                      </div>
+                      <div class="hubcap-progress-track">
+                        <div class="hubcap-progress-bar" id="hubcap-progress-bar" style="width: 0%;"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </section>
+          </div>
+
+          <!-- Раздел: Пути и загрузки -->
+          <div class="settings-tab-panel hidden" id="settings-panel-storage" role="tabpanel" data-tab-panel="storage">
+            <section class="premium-panel settings-card downloads-card">
+              <h2>Пути и обновления</h2>
+              <p>Управление директориями загрузок, версиями и сведениями о программе</p>
+
+              <details class="settings-collapsible" id="collapse-storage-folder" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2.5 5a1.5 1.5 0 0 1 1.5-1.5h4.2a1.5 1.5 0 0 1 1.06.44L10.8 5.5h5.7a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5V5z"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Папка загрузки</strong>
+                      <small>Куда сохраняются кряки, скачанные во вкладке «Кряки»</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="download-bar">
+                    <div class="download-bar-left">
+                      <span class="download-bar-icon">
+                        <svg viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+                      </span>
+                      <div class="download-bar-text">
+                        <span class="download-bar-badge" id="download-dir-kind">По умолчанию</span>
+                        <code class="download-bar-path" id="download-dir-path" title="">Папка «Загрузки»</code>
+                      </div>
+                    </div>
+                    <div class="download-bar-actions">
+                      <button type="button" class="download-action-btn" id="download-dir-pick">Изменить</button>
+                      <button type="button" class="download-action-icon-btn" id="download-dir-open" title="Открыть в Проводнике" aria-label="Открыть в Проводнике">
+                        <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M2 13h12a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H7.5L6 2.5H2a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1z"/></svg>
+                      </button>
+                      <button type="button" class="download-action-icon-btn hidden" id="download-dir-reset" title="Сбросить к папке по умолчанию" aria-label="Сбросить">
+                        <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M3 8a5 5 0 1 1 1.5 3.5L3 13m0-4.5V13h4.5"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="settings-collapsible" id="collapse-storage-updates" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M16 10a6 6 0 1 1-1.8-4.2L16 4m0 4.5V4h-4.5"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Обновления</strong>
+                      <small>Проверка новых версий через официальный репозиторий</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">6.6.6</b></div>
+                  <div class="update-actions">
+                    <button class="ghost-button" id="check-update-button">Проверить обновления</button>
+                    <span id="update-status">Проверка ещё не выполнялась</span>
+                  </div>
+                  <div class="update-download-actions hidden" id="update-download-actions">
+                    <button class="ghost-button hidden" id="download-portable-button">Скачать EXE</button>
+                    <button class="ghost-button hidden" id="download-installer-button">Скачать Setup</button>
+                  </div>
+                </div>
+              </details>
+
+              <details class="settings-collapsible" id="collapse-storage-about" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><path stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M10 9v5m0-8h.01"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>О программе</strong>
+                      <small>Версия и активные модули программы</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="about-row"><span>Версия</span><b>6.6.6</b></div>
+                  <div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div>
+                  <div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · CrocLua · Гипервизор · Кряки · Утилиты</b></div>
+                </div>
+              </details>
+            </section>
+          </div>
         </div>
       </section>
     </main>
@@ -1092,6 +1505,45 @@
       </div>
     </div>
   </div>
+
+  <!-- Контекстное меню для кнопок боковой панели -->
+  <div class="nav-context-menu hidden" id="nav-context-menu" role="menu">
+    <div class="nav-context-header">
+      <span class="nav-context-icon" id="nav-context-icon"></span>
+      <strong class="nav-context-title" id="nav-context-title">Модуль</strong>
+    </div>
+    <button type="button" class="nav-context-item" id="nav-context-toggle-size" role="menuitem">
+      <svg id="nav-context-size-icon" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2 5V2h3M14 5V2h-3M2 11v3h3M14 11v3h-3"/></svg>
+      <span id="nav-context-size-text">Растянуть на 2 слота</span>
+    </button>
+    <button type="button" class="nav-context-item danger" id="nav-context-hide" role="menuitem">
+      <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h10M6 4V2.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5V4m2 0v9a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 3 13V4"/></svg>
+      <span>Удалить из панели</span>
+    </button>
+    <div class="nav-context-divider"></div>
+    <button type="button" class="nav-context-item" id="nav-context-move-up" role="menuitem">
+      <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M3 10l5-5 5 5"/></svg>
+      <span>Переместить выше</span>
+    </button>
+    <button type="button" class="nav-context-item" id="nav-context-move-down" role="menuitem">
+      <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M3 6l5 5 5-5"/></svg>
+      <span>Переместить ниже</span>
+    </button>
+    <button type="button" class="nav-context-item" id="nav-context-live-toggle" role="menuitem">
+      <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z"/></svg>
+      <span id="nav-context-live-text">Редактирование «На лету»</span>
+    </button>
+    <div class="nav-context-divider"></div>
+    <button type="button" class="nav-context-item" id="nav-context-settings" role="menuitem">
+      <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.5"/><path fill="none" stroke="currentColor" stroke-width="1.6" d="M8 1.5v1.2M8 13.3v1.2M1.5 8h1.2M13.3 8h1.2M3.4 3.4l.8.8M11.8 11.8l.8.8M3.4 12.6l.8-.8M11.8 4.2l.8-.8"/></svg>
+      <span>Настройки панели…</span>
+    </button>
+    <button type="button" class="nav-context-item danger" id="nav-context-reset" role="menuitem">
+      <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M3 8a5 5 0 1 1 1.5 3.5L3 13m0-4.5V13h4.5"/></svg>
+      <span>Сбросить панель</span>
+    </button>
+  </div>
+
   <div class="toast-stack" id="toast-stack"></div>
   <script src="./scale.js"></script>
   <script src="./i18n.js"></script>

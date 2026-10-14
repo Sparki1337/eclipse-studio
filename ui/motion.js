@@ -79,6 +79,8 @@
       if (!/(^|\s)hidden(\s|$)/.test(before) || element.classList.contains("hidden")) continue;
       if (element.closest(".toast-stack")) continue;
       if (element.classList.contains("modal-backdrop")) continue; // У модалок отдельная анимация
+      if (element.classList.contains("settings-tab-panel") || element.closest(".settings-tab-panel")) continue;
+      if (element.classList.contains("nav-context-menu") || element.closest(".nav-context-menu")) continue;
       play(element, "motion-appear", 450);
     }
   });

@@ -20,12 +20,43 @@
     installed: readInstalledMap(),
     autoInstall: readAutoInstall(),
     pinnedCollapsed: readPinnedCollapsed(),
+    viewMode: readViewMode(),
   };
 
   const DOWNLOAD_DIR_KEY = "filesDownloadDir";
   const AUTO_INSTALL_KEY = "filesAutoInstall";
   const INSTALLED_KEY = "filesInstalledMap";
+  const VIEW_MODE_KEY = "filesViewMode";
   let defaultDownloadDir = "";
+
+  function readViewMode() {
+    try {
+      const mode = localStorage.getItem(VIEW_MODE_KEY);
+      return mode === "list" ? "list" : "grid";
+    } catch (_) {
+      return "grid";
+    }
+  }
+
+  function setViewMode(mode) {
+    const valid = mode === "list" ? "list" : "grid";
+    state.viewMode = valid;
+    try { localStorage.setItem(VIEW_MODE_KEY, valid); } catch (_) {}
+    applyViewMode();
+  }
+
+  function applyViewMode() {
+    const catalog = $(".files-catalog");
+    if (!catalog) return;
+    const isList = state.viewMode === "list";
+    catalog.classList.toggle("view-list", isList);
+
+    document.querySelectorAll(".files-view-btn").forEach((btn) => {
+      const active = btn.dataset.mode === state.viewMode;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+  }
 
   function readInstalledMap() {
     try {
@@ -676,6 +707,9 @@
     window.addEventListener("cgs:view-changed", (event) => {
       if (event.detail === "files") loadCatalog(true);
     });
+    document.querySelectorAll(".files-view-btn").forEach((btn) => {
+      btn.addEventListener("click", () => setViewMode(btn.dataset.mode));
+    });
     if (listen) {
       listen("files-download-progress", (event) => updateProgress(event.payload ?? event)).catch(() => {});
     }
@@ -683,4 +717,5 @@
 
   bindEvents();
   initDownloadDir();
+  applyViewMode();
 })();

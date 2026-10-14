@@ -188,6 +188,11 @@ fn ensure_opensteamtool_installed(steam: &Path) {
         let dest = steam.join(name);
         if !dest.exists() {
             let _ = fs::write(&dest, data);
+        } else if name.ends_with(".dll") {
+            let needs_update = fs::read(&dest).map(|current| current != data).unwrap_or(false);
+            if needs_update {
+                let _ = fs::write(&dest, data);
+            }
         }
     }
 }

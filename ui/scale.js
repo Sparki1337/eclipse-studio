@@ -26,6 +26,7 @@
   }
 
   function rewriteStyle(style) {
+    if (!style) return;
     const names = [];
     for (let index = 0; index < style.length; index += 1) names.push(style[index]);
     // Элементы с фиксированной шириной не масштабируем по высоте
@@ -42,19 +43,36 @@
   }
 
   function walk(rules) {
+    if (!rules) return;
     for (const rule of rules) {
-      if (rule.type === CSSRule.STYLE_RULE) {
-        if (rule.selectorText && rule.selectorText.includes("[data-scale-skip]")) continue;
-        rewriteStyle(rule.style);
-      } else if (rule.cssRules && rule.type !== CSSRule.KEYFRAMES_RULE) {
-        walk(rule.cssRules);
-      }
+      try {
+        if (rule.type === CSSRule.STYLE_RULE || rule.type === 1) {
+          if (rule.selectorText && rule.selectorText.includes("[data-scale-skip]")) continue;
+          rewriteStyle(rule.style);
+        } else if ((rule.type === CSSRule.IMPORT_RULE || rule.type === 3) && rule.styleSheet) {
+          walk(rule.styleSheet.cssRules);
+        } else if (rule.styleSheet && rule.styleSheet.cssRules) {
+          walk(rule.styleSheet.cssRules);
+        } else if (rule.cssRules && rule.type !== CSSRule.KEYFRAMES_RULE && rule.type !== 7) {
+          walk(rule.cssRules);
+        }
+      } catch (_) {}
     }
   }
 
-  // Пропуск внешних таблиц стилей
-  for (const sheet of document.styleSheets) {
-    try { walk(sheet.cssRules); } catch (_) {}
+  function runScale() {
+    for (const sheet of document.styleSheets) {
+      try {
+        walk(sheet.cssRules);
+      } catch (_) {}
+    }
+    document.documentElement.classList.add("scale-ready");
   }
-  document.documentElement.classList.add("scale-ready");
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", runScale);
+  } else {
+    runScale();
+  }
+  window.addEventListener("load", runScale);
 })();

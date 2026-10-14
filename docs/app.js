@@ -836,7 +836,8 @@
       .catch(() => {
         syncState.fail++;
         const fallback = [
-          { tag: 'v6.3.0', rawDate: '2026-10-13T18:00:00Z', rawBytes: 44983910, url: 'https://github.com/Sparki1337/eclipse-studio/releases/latest', fallbackSize: '42.9 МБ' },
+          { tag: 'v6.6.6', rawDate: '2026-10-14T18:00:00Z', rawBytes: 46500000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/latest', fallbackSize: '44.3 МБ' },
+          { tag: 'v6.3.0', rawDate: '2026-10-13T18:00:00Z', rawBytes: 44983910, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.3.0', fallbackSize: '42.9 МБ' },
           { tag: 'v6.2.0', rawDate: '2026-10-12T12:00:00Z', rawBytes: 44774195, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.2.0', fallbackSize: '42.7 МБ' },
           { tag: 'v6.1.0', rawDate: '2026-10-12T10:00:00Z', rawBytes: 44774195, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.1.0', fallbackSize: '42.7 МБ' },
           { tag: 'v6.0.0', rawDate: '2026-10-12T08:00:00Z', rawBytes: 44564480, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.0.0', fallbackSize: '42.5 МБ' },
@@ -1068,7 +1069,7 @@
 
     fetch(GIST_URL, { cache: 'no-store' })
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .catch(() => fetch(`${FALLBACK_URL}?v=6.3.0`, { cache: 'no-store' }).then((r) => r.json()))
+      .catch(() => fetch(`${FALLBACK_URL}?v=6.6.6`, { cache: 'no-store' }).then((r) => r.json()))
       .then((data) => {
         const cracks = Array.isArray(data) ? data : (data?.cracks || []);
         allGames = cracks.filter((c) => c && c.name && c.url);

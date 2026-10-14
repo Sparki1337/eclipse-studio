@@ -3,11 +3,14 @@ mod dlc;
 mod dlc_catalog;
 mod engine;
 mod files;
+mod game_artwork;
 mod hubcap;
 mod hypervisor;
 mod luatools;
 mod millennium;
 mod models;
+mod native_dialog;
+mod native_drop;
 mod ryuu;
 mod saves;
 mod smaki;
@@ -74,42 +77,20 @@ const EMBEDDED_DLC_COMPONENTS: &[(&str, &[u8])] = &[
     ),
 ];
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
 #[tauri::command]
-async fn pick_game_directory() -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(pick_game_directory_blocking)
-        .await
-        .map_err(|error| format!("Диалог выбора прерван: {error}"))?
-}
-
-fn pick_game_directory_blocking() -> Result<Option<String>, String> {
-    let script = r#"
-Add-Type -AssemblyName System.Windows.Forms
-$d = New-Object System.Windows.Forms.OpenFileDialog
-$d.Title = 'Выберите папку с игрой'
-$d.ValidateNames = $false
-$d.CheckFileExists = $false
-$d.CheckPathExists = $true
-$d.FileName = 'Выбор папки'
-if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-    [Console]::OutputEncoding = [Text.Encoding]::UTF8
-    Write-Output ([System.IO.Path]::GetDirectoryName($d.FileName))
-}
-"#;
-    let mut command = Command::new("powershell.exe");
-    command.args(["-NoProfile", "-STA", "-Command", script]);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000);
-    let output = command
-        .output()
-        .map_err(|error| format!("Не удалось открыть проводник: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-    }
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Ok((!path.is_empty()).then_some(path))
+async fn pick_game_directory(window: WebviewWindow) -> Result<Option<String>, String> {
+    #[cfg(windows)]
+    let owner = window.hwnd().map_err(|error| error.to_string())?.0 as isize;
+    #[cfg(not(windows))]
+    let owner = {
+        let _ = window;
+        0
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        native_dialog::pick_folder("Выберите папку с игрой", owner)
+    })
+    .await
+    .map_err(|error| format!("Диалог выбора прерван: {error}"))?
 }
 
 #[tauri::command]
@@ -192,16 +173,105 @@ fn start_dragging_window(window: WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|error| error.to_string())
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PlatformInfo {
+    os: &'static str,
+    windows: bool,
+    windows_only_modules: Vec<&'static str>,
+}
+
+#[tauri::command]
+fn platform_info() -> PlatformInfo {
+    PlatformInfo {
+        os: std::env::consts::OS,
+        windows: cfg!(target_os = "windows"),
+        windows_only_modules: if cfg!(target_os = "windows") {
+            Vec::new()
+        } else {
+            vec!["hypervisor"]
+        },
+    }
+}
+
+#[tauri::command]
+fn process_is_elevated() -> bool {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        Command::new("fltmc.exe")
+            .creation_flags(0x08000000)
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn relaunch_as_admin() -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::{
+        core::PCWSTR,
+        Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
+    };
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("Не удалось определить путь программы: {error}"))?;
+    let executable: Vec<u16> = executable
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let verb: Vec<u16> = "runas".encode_utf16().chain(std::iter::once(0)).collect();
+    let result = unsafe {
+        ShellExecuteW(
+            None,
+            PCWSTR(verb.as_ptr()),
+            PCWSTR(executable.as_ptr()),
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    if result.0 as isize <= 32 {
+        return Err(if result.0 as isize == 5 {
+            "Запрос прав администратора отменён".into()
+        } else {
+            format!(
+                "Не удалось запустить программу с правами администратора (код {})",
+                result.0 as isize
+            )
+        });
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn relaunch_as_admin() -> Result<(), String> {
+    Err("Повышение прав через UAC доступно только в Windows".into())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             pick_game_directory,
+            native_drop::enable_file_drop,
             open_path,
             open_external,
+            platform_info,
+            process_is_elevated,
+            relaunch_as_admin,
             minimize_window,
             toggle_maximize_window,
             close_window,
             start_dragging_window,
+            game_artwork::game_artwork,
+            game_artwork::game_artwork_store_url,
             saves::scan_save_locations,
             saves::pick_save_archive,
             saves::create_save_archive,

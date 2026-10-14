@@ -172,41 +172,21 @@ pub(crate) fn files_default_download_dir(app: tauri::AppHandle) -> Result<String
 }
 
 #[tauri::command]
-pub(crate) async fn files_pick_download_dir() -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(pick_download_dir_blocking)
-        .await
-        .map_err(|error| format!("Диалог выбора прерван: {error}"))?
-}
-
-fn pick_download_dir_blocking() -> Result<Option<String>, String> {
-    let script = r#"
-Add-Type -AssemblyName System.Windows.Forms
-$d = New-Object System.Windows.Forms.OpenFileDialog
-$d.Title = 'Выберите папку для загрузки'
-$d.ValidateNames = $false
-$d.CheckFileExists = $false
-$d.CheckPathExists = $true
-$d.FileName = 'Выбор папки'
-if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-    [Console]::OutputEncoding = [Text.Encoding]::UTF8
-    Write-Output ([System.IO.Path]::GetDirectoryName($d.FileName))
-}
-"#;
-    let mut command = std::process::Command::new("powershell.exe");
-    command.args(["-NoProfile", "-STA", "-Command", script]);
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000);
-    }
-    let output = command
-        .output()
-        .map_err(|error| format!("Не удалось открыть проводник: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-    }
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Ok((!path.is_empty()).then_some(path))
+pub(crate) async fn files_pick_download_dir(
+    window: tauri::WebviewWindow,
+) -> Result<Option<String>, String> {
+    #[cfg(windows)]
+    let owner = window.hwnd().map_err(|error| error.to_string())?.0 as isize;
+    #[cfg(not(windows))]
+    let owner = {
+        let _ = window;
+        0
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::native_dialog::pick_folder("Выберите папку для загрузки", owner)
+    })
+    .await
+    .map_err(|error| format!("Диалог выбора прерван: {error}"))?
 }
 
 #[tauri::command]
@@ -262,7 +242,7 @@ fn download_file(
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(900))
             .pool_max_idle_per_host(PARALLEL_DOWNLOAD_PARTS as usize)
-            .user_agent("EclipseStudio/6.3.0")
+            .user_agent("EclipseStudio/6.6.6")
             .build()
             .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
         let head = client
@@ -719,7 +699,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/6.3.0")
+        .user_agent("EclipseStudio/6.6.6")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -889,6 +869,28 @@ fn extract_archive_file(
         .to_lowercase();
     let pass = password.map(str::trim).filter(|p| !p.is_empty());
 
+    // 1. Попытка нативной распаковки в Rust (не требует внешних архиваторов в системе)
+    if ext == "zip" {
+        match extract_zip_native(archive, dest, pass) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                if find_extractor().is_none() {
+                    return Err(e);
+                }
+            }
+        }
+    } else if ext == "rar" {
+        match extract_rar_native(archive, dest, pass) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                if find_extractor().is_none() {
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    // 2. Внешний CLI архиватор (7-Zip, WinRAR, NanaZip, tar), если нативный парсинг не удался
     if let Some((exe, kind)) = find_extractor() {
         let mut cmd = std::process::Command::new(&exe);
         match kind {
@@ -957,22 +959,25 @@ fn extract_archive_file(
         }
     }
 
-    if ext == "zip" {
-        return extract_zip_fallback(archive, dest);
-    }
-
-    Err("Для распаковки архивов необходим WinRAR или 7-Zip. Пожалуйста, установите один из них.".into())
+    Err("Не удалось распаковать архив встроенным распаковщиком. Установите WinRAR или 7-Zip.".into())
 }
 
-fn extract_zip_fallback(archive: &Path, dest: &Path) -> Result<(), String> {
+fn extract_zip_native(archive: &Path, dest: &Path, password: Option<&str>) -> Result<(), String> {
     let file = fs::File::open(archive)
         .map_err(|e| format!("Не удалось открыть zip-архив: {e}"))?;
     let mut zip = zip::ZipArchive::new(file)
         .map_err(|e| format!("Не удалось прочитать zip-архив: {e}"))?;
+    let pass_bytes = password.map(str::trim).filter(|p| !p.is_empty()).map(str::as_bytes);
+
     for i in 0..zip.len() {
-        let mut entry = zip
-            .by_index(i)
-            .map_err(|e| format!("Ошибка чтения записи zip: {e}"))?;
+        let mut entry = if let Some(pw) = pass_bytes {
+            zip.by_index_decrypt(i, pw)
+                .map_err(|e| format!("Ошибка расшифровки zip (неверный пароль?): {e}"))?
+        } else {
+            zip.by_index(i)
+                .map_err(|e| format!("Ошибка чтения записи zip: {e}"))?
+        };
+
         let outpath = match entry.enclosed_name() {
             Some(path) => dest.join(path),
             None => continue,
@@ -991,6 +996,37 @@ fn extract_zip_fallback(archive: &Path, dest: &Path) -> Result<(), String> {
                 .map_err(|e| format!("Не удалось создать файл: {e}"))?;
             std::io::copy(&mut entry, &mut outfile)
                 .map_err(|e| format!("Ошибка записи файла: {e}"))?;
+        }
+    }
+    Ok(())
+}
+
+fn extract_rar_native(archive: &Path, dest: &Path, password: Option<&str>) -> Result<(), String> {
+    let pw = password.unwrap_or("");
+    let mut arc = unrar::Archive::with_password(archive, pw)
+        .open_for_processing()
+        .map_err(|e| format!("Не удалось открыть RAR-архив: {e}"))?;
+
+    while let Some(header) = arc.read_header().map_err(|e| format!("Ошибка чтения заголовка RAR: {e}"))? {
+        let entry = header.entry();
+        let filename = entry.filename.to_string_lossy();
+        let relative = PathBuf::from(filename.replace('\\', "/"));
+
+        // Защита от path traversal
+        if relative.is_absolute() || relative.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+            arc = header.skip().map_err(|e| format!("Ошибка пропуска записи: {e}"))?;
+            continue;
+        }
+
+        let outpath = dest.join(&relative);
+        if entry.is_directory() {
+            let _ = fs::create_dir_all(&outpath);
+            arc = header.skip().map_err(|e| format!("Ошибка пропуска директории: {e}"))?;
+        } else {
+            if let Some(parent) = outpath.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            arc = header.extract_to(&outpath).map_err(|e| format!("Ошибка распаковки {}: {e}", outpath.display()))?;
         }
     }
     Ok(())
@@ -1360,7 +1396,8 @@ mod tests {
 
     #[test]
     fn detects_artifact_folder() {
-        let temp = std::env::temp_dir().join(format!("test_cgs_{}", std::time::SystemTime::now().elapsed().unwrap().as_nanos()));
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let temp = std::env::temp_dir().join(format!("test_cgs_artifact_{ts}"));
         let artifact = temp.join("ARTIFACT");
         let _ = std::fs::create_dir_all(&artifact);
         let _ = std::fs::write(temp.join("readme.txt"), "hello");
@@ -1372,7 +1409,8 @@ mod tests {
 
     #[test]
     fn detects_razor1911_folder() {
-        let temp = std::env::temp_dir().join(format!("test_cgs_{}", std::time::SystemTime::now().elapsed().unwrap().as_nanos()));
+        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let temp = std::env::temp_dir().join(format!("test_cgs_razor_{ts}"));
         let razor = temp.join("Razor1911");
         let _ = std::fs::create_dir_all(&razor);
         let detected = super::detect_crack_source_dir(&temp);

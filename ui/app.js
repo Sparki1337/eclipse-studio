@@ -212,6 +212,7 @@
   }
 
   window.cgsShowModal = showModal;
+  window.cgsToast = toast;
 
   function basename(path) {
     return String(path || "").split(/[\\/]/).filter(Boolean).pop() || "Неизвестная игра";
@@ -1786,19 +1787,20 @@
 
   function applyAccent(name) {
     const values = {
-      mint: ["#63f5c2", "99, 245, 194"],
-      violet: ["#a987ff", "169, 135, 255"],
-      blue: ["#5ca8ff", "92, 168, 255"],
-      rose: ["#ff739d", "255, 115, 157"],
-      cyan: ["#4fdfff", "79, 223, 255"],
-      pink: ["#f67ee6", "246, 126, 230"],
-      red: ["#ff6161", "255, 97, 97"],
-      orange: ["#ff9a4d", "255, 154, 77"],
-      amber: ["#ffc94d", "255, 201, 77"],
-      lime: ["#b8f25c", "184, 242, 92"],
-      gold: ["#e3c88a", "227, 200, 138"],
-      ice: ["#dfe7f2", "223, 231, 242"],
+      white:  ["#ffffff", "255, 255, 255"],
+      red:    ["#ff5252", "255, 82, 82"],
+      orange: ["#ff8c42", "255, 140, 66"],
+      amber:  ["#ffc83b", "255, 200, 59"],
+      gold:   ["#e5c158", "229, 193, 88"],
+      lime:   ["#b4f043", "180, 240, 67"],
+      mint:   ["#52ebb5", "82, 235, 181"],
+      cyan:   ["#38d9f5", "56, 217, 245"],
+      blue:   ["#4d9fff", "77, 159, 255"],
+      violet: ["#a77bfe", "167, 123, 254"],
+      pink:   ["#f768b7", "247, 104, 183"],
+      rose:   ["#ff6987", "255, 105, 135"],
     };
+    if (name === "ice") name = "white";
     if (!values[name]) name = "mint";
     const accent = values[name];
     document.documentElement.style.setProperty("--accent", accent[0]);
@@ -1825,7 +1827,11 @@
 
   function updateHubcapKeyStatus() {
     const status = $("#hubcap-key-status");
-    if (status) status.textContent = state.lua.hubcapKey.trim() ? "Ключ сохранён" : "Ключ не указан";
+    if (status) {
+      const hasKey = Boolean(state.lua.hubcapKey.trim());
+      status.textContent = hasKey ? "Ключ активен" : "Ключ не указан";
+      status.classList.toggle("active", hasKey);
+    }
   }
 
   function renderHubcapUsage() {
@@ -1835,19 +1841,32 @@
     const remaining = unlimited ? "∞" : usage.remaining;
     const badge = $("#hubcap-limit-badge");
     const status = $("#hubcap-usage-status");
-    badge.textContent = state.lua.hubcapUsageError
-      ? "HubCap: лимит недоступен"
-      : `HubCap: ${usage.dailyUsage}/${limit} · осталось ${remaining}`;
-    badge.classList.toggle("error", Boolean(state.lua.hubcapUsageError));
-    $("#hubcap-usage-used").textContent = `${usage.dailyUsage}/${limit}`;
-    $("#hubcap-usage-remaining").textContent = String(remaining);
-    status.classList.toggle("error", Boolean(state.lua.hubcapUsageError));
-    status.textContent = state.lua.hubcapUsageError
-      || (state.lua.hubcapUsageLoading
-        ? "Обновление данных HubCap…"
-        : state.lua.hubcapKey.trim()
-          ? "Данные HubCap · обновляются каждые 30 секунд"
-          : "Добавьте ключ для синхронизации");
+    if (badge) {
+      badge.textContent = state.lua.hubcapUsageError
+        ? "HubCap: лимит недоступен"
+        : `HubCap: ${usage.dailyUsage}/${limit} · осталось ${remaining}`;
+      badge.classList.toggle("error", Boolean(state.lua.hubcapUsageError));
+    }
+    const usedEl = $("#hubcap-usage-used");
+    if (usedEl) usedEl.textContent = `${usage.dailyUsage}/${limit}`;
+    const remEl = $("#hubcap-usage-remaining");
+    if (remEl) remEl.textContent = String(remaining);
+    if (status) {
+      status.classList.toggle("error", Boolean(state.lua.hubcapUsageError));
+      status.textContent = state.lua.hubcapUsageError
+        || (state.lua.hubcapUsageLoading
+          ? "Обновление данных HubCap…"
+          : state.lua.hubcapKey.trim()
+            ? "Данные HubCap · обновляются каждые 30 секунд"
+            : "Добавьте ключ для синхронизации");
+    }
+    const progressBar = $("#hubcap-progress-bar");
+    if (progressBar) {
+      const pct = (usage.dailyLimit > 0 && !unlimited)
+        ? Math.min(100, Math.max(0, Math.round((usage.dailyUsage / usage.dailyLimit) * 100)))
+        : 0;
+      progressBar.style.width = `${pct}%`;
+    }
   }
 
   async function refreshHubcapUsage() {
@@ -2196,10 +2215,19 @@
     $("#window-close").addEventListener("click", () => call("close_window").catch(() => {}));
     $$(".accent").forEach((button) => button.addEventListener("click", () => applyAccent(button.dataset.accent)));
 
-    $$(".svc-option").forEach((button) => button.addEventListener("click", () => {
-      applyManifestService(button.dataset.service);
-      updateHubcapKeyStatus();
-    }));
+    $$(".svc-option").forEach((button) => {
+      button.addEventListener("click", () => {
+        applyManifestService(button.dataset.service);
+        updateHubcapKeyStatus();
+      });
+      button.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          applyManifestService(button.dataset.service);
+          updateHubcapKeyStatus();
+        }
+      });
+    });
     $("#hubcap-key").addEventListener("input", (event) => {
       state.lua.hubcapKey = event.currentTarget.value.trim();
       localStorage.setItem("hubcapKey", state.lua.hubcapKey);
@@ -2207,7 +2235,26 @@
       clearTimeout(hubcapKeyTimer);
       hubcapKeyTimer = setTimeout(() => refreshHubcapUsage(), 650);
     });
-    $("#hubcap-key-get").addEventListener("click", async () => {
+    $("#hubcap-key-visibility")?.addEventListener("click", () => {
+      const input = $("#hubcap-key");
+      if (!input) return;
+      const isPassword = input.type === "password";
+      input.type = isPassword ? "text" : "password";
+      $(".eye-show", "#hubcap-key-visibility")?.classList.toggle("hidden", isPassword);
+      $(".eye-hide", "#hubcap-key-visibility")?.classList.toggle("hidden", !isPassword);
+    });
+    $("#hubcap-key-paste")?.addEventListener("click", async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          const input = $("#hubcap-key");
+          input.value = text.trim();
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      } catch (_) {}
+    });
+    $("#hubcap-key-get").addEventListener("click", async (e) => {
+      e.preventDefault();
       try { await call("open_external", { url: "https://hubcapmanifest.com/api-keys/stats" }); }
       catch (error) { toast(errorText(error), "error"); }
     });
@@ -2224,9 +2271,9 @@
     });
 
     if (tauri?.event?.listen) {
-      tauri.event.listen("tauri://drag-drop", (event) => {
-        const paths = event.payload?.paths || [];
-        const path = paths[0];
+      call("enable_file_drop").catch(() => {});
+      const onDropPaths = (paths) => {
+        const path = (paths || [])[0];
         if (!path) return;
         if ($("#view-lua").classList.contains("active")) {
           luaInstall(paths);
@@ -2236,7 +2283,9 @@
           switchView("fix");
           scanDirectory(path);
         }
-      }).catch(() => {});
+      };
+      tauri.event.listen("cgs-file-drop", (event) => onDropPaths(event.payload?.paths)).catch(() => {});
+      tauri.event.listen("tauri://drag-drop", (event) => onDropPaths(event.payload?.paths)).catch(() => {});
       tauri.event.listen("tauri://drag-enter", () => dropZone.classList.add("dragover")).catch(() => {});
       tauri.event.listen("tauri://drag-leave", () => dropZone.classList.remove("dragover")).catch(() => {});
     }
@@ -2264,7 +2313,7 @@
       if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
       call("luatools_restore_manifests", { steamPath: state.lua.steamPath || null }).catch(() => {});
     }, 3_000);
-    log("Eclipse Studio 6.3.0 инициализирован", "system");
+    log("Eclipse Studio 6.6.6 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
     if (invoke) setTimeout(() => checkForUpdates(false), 1800);
   }
