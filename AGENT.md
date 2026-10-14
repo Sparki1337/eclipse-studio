@@ -3,8 +3,12 @@
 > **CRITICAL DIRECTIVE FOR THE AI AGENT / MODEL:**
 > 1. **LANGUAGE REQUIREMENT:** When interacting with the user, you must **ALWAYS communicate and respond in RUSSIAN** (`Всегда отвечай пользователю на русском языке`), unless explicitly requested otherwise by the user.
 > 2. **CODE COMMENTS REQUIREMENT:** ALL code comments across ALL languages (Rust, JavaScript, CSS, HTML, Python) **MUST BE WRITTEN IN RUSSIAN** (`Все комментарии в коде обязаны быть строго на русском языке`). No English code comments in new or modified code.
-> 3. **GIT SAFETY PROTOCOL:** You must **NEVER commit (`git commit`) or push (`git push`) without explicit confirmation** from the user. Never perform destructive git commands (`git reset --hard`, `git checkout .`, `git clean -fd`) autonomously.
-> 4. **POST-CHANGE VERIFICATION:** After making any changes to files, you must **ALWAYS verify** that the project remains healthy:
+> 3. **EXCLUSIVE BUILD RULES (PORTABLE ONLY, HYPERVISOR ONLY, EXACT NAME):**
+>    - **BUILD TYPE:** You must build **EXCLUSIVELY PORTABLE** builds (`--type portable` / `cargo build --release`). NEVER build NSIS installers, debug builds, or multi-target builds unless explicitly ordered by the user.
+>    - **TARGET DIRECTORY:** Output destination must be **EXCLUSIVELY** `C:\Users\Sparki\Desktop\Programms\Hypervisor` (the Hypervisor folder).
+>    - **EXACT FILE NAME:** The output binary must be named **EXCLUSIVELY** `Eclipse-Studio-vX.X.X.exe` (where `X.X.X` is the project version, e.g. `Eclipse-Studio-v6.6.6.exe`). **NEVER** use `-Portable`, `-Setup`, or any other suffixes.
+> 4. **GIT SAFETY PROTOCOL:** You must **NEVER commit (`git commit`) or push (`git push`) without explicit confirmation** from the user. Never perform destructive git commands (`git reset --hard`, `git checkout .`, `git clean -fd`) autonomously.
+> 5. **POST-CHANGE VERIFICATION:** After making any changes to files, you must **ALWAYS verify** that the project remains healthy:
 >    - For Rust backend: run `cargo check --manifest-path src-tauri/Cargo.toml` and `cargo test --manifest-path src-tauri/Cargo.toml`.
 >    - For UI / Frontend: inspect changes, ensure all invoked Tauri commands are registered in `src-tauri/src/lib.rs`, and verify JS/CSS syntax.
 >    - For Git: check `git status` and `git diff` to confirm only the intended files were modified.
@@ -52,9 +56,10 @@
   - `upstream`: `https://github.com/LeoBanned/crocodile-gena-studio-releases.git` (Upstream)
 
 ### 2.2 Output Directory for Portable Builds & Tools
-- **Default User Path:** `C:\Users\Sparki\Desktop\Programms\Hypervisor`
-- **Configuration File:** `build_config.json` at repo root.
-- **Purpose:** This folder is where Sparki keeps portable executables, release packages, hypervisor tools, and test builds. `build.py` automatically remembers this path and writes compiled `.exe` files directly here.
+- **Mandatory Output Path:** `C:\Users\Sparki\Desktop\Programms\Hypervisor`
+- **Mandatory Artifact Filename:** `Eclipse-Studio-vX.X.X.exe` (strictly portable build; e.g. `Eclipse-Studio-v6.6.6.exe`).
+- **Configuration File:** `build_config.json` at repo root (`"output_dir": "C:\\Users\\Sparki\\Desktop\\Programms\\Hypervisor"`, `"last_build_type": "portable"`).
+- **Purpose:** This folder is Sparki's dedicated hub for all portable builds, releases, and tools. When building, the model must **NEVER** save binaries elsewhere and must **NEVER** build installer bundles.
 
 ### 2.3 Project Tree Overview
 ```text
@@ -281,19 +286,20 @@ To maintain pristine codebase quality, adhere to the following conventions:
 2. **Rust & Cargo:** Stable x64 (`x86_64-pc-windows-msvc`).
 3. **Visual Studio C++ Build Tools:** MSVC v143+ with Windows 10/11 SDK.
 
-### 5.2 Building the Project
-Run the automated build script:
-```powershell
-# Interactive menu:
-python build.py
+### 5.2 Building the Project (PORTABLE ONLY)
+> [!IMPORTANT]
+> **MANDATORY BUILD SPECIFICATION:**
+> The AI agent must build **EXCLUSIVELY PORTABLE BUILDS** (`--type portable`).
+> Target output directory: **EXCLUSIVELY** `C:\Users\Sparki\Desktop\Programms\Hypervisor`.
+> Target executable name: **EXCLUSIVELY** `Eclipse-Studio-vX.X.X.exe` (e.g. `Eclipse-Studio-v6.6.6.exe`).
+> **NEVER** build NSIS installers or debug builds, and **NEVER** append `-Portable` or any other suffix to the executable.
 
-# CLI build options:
-python build.py --type portable                                  # Portable EXE (fast Cargo release)
-python build.py --type nsis                                      # Windows NSIS installer
-python build.py --type all                                       # Both Portable EXE + NSIS installer
-python build.py --type portable --out "C:\Custom\Output\Dir"    # Specify custom output path
+Run the build command:
+```powershell
+python build.py --type portable --out "C:\Users\Sparki\Desktop\Programms\Hypervisor" --no-open
 ```
-By default, artifacts are saved to `C:\Users\Sparki\Desktop\Programms\Hypervisor` (persisted in `build_config.json`).
+The script compiles via Cargo release and copies the resulting binary to:
+`C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-Studio-v{version}.exe`.
 
 ### 5.3 Bumping Project Version
 When releasing a new version, always use `bump_version.py`:
@@ -333,5 +339,6 @@ Whenever you modify any code or configuration in this repository, you must compl
 3. [ ] **Frontend Integrity:** If UI files were touched, verify that any new or changed Tauri command calls are properly registered in `src-tauri/src/lib.rs` under `generate_handler!`.
 4. [ ] **Git Scope Check:** Run `git status` and `git diff` to ensure no unexpected files were modified or deleted.
 5. [ ] **No Unauthorized Git Actions:** Ensure no commits or pushes were executed without explicit user consent.
-6. [ ] **Russian Code Comments:** Verify that all newly created or updated code comments across Rust, JS, Python, and CSS are written in Russian.
-7. [ ] **Russian Language Response:** Formulate your response to the user **strictly in Russian**.
+6. [ ] **Strict Portable Build Rules:** If a build was performed, verify it was strictly a PORTABLE build (`--type portable`), copied to `C:\Users\Sparki\Desktop\Programms\Hypervisor`, and named exactly `Eclipse-Studio-vX.X.X.exe`.
+7. [ ] **Russian Code Comments:** Verify that all newly created or updated code comments across Rust, JS, Python, and CSS are written in Russian.
+8. [ ] **Russian Language Response:** Formulate your response to the user **strictly in Russian**.

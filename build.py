@@ -251,7 +251,7 @@ def collect_artifacts(build_type: str, version: str, out_dir: Path) -> list[dict
     if build_type in ("portable", "all"):
         exe_src = target_rel / "eclipse-studio.exe"
         if exe_src.exists():
-            dst_name = f"Eclipse-Studio-v{version}-Portable.exe"
+            dst_name = f"Eclipse-Studio-v{version}.exe"
             dst_path = out_dir / dst_name
             sha = compute_sha256(exe_src)
             shutil.copy2(exe_src, dst_path)
