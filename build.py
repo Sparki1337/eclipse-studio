@@ -97,7 +97,7 @@ def check_prerequisites(build_type: str) -> bool:
         / "src-tauri"
         / "src"
         / "assets"
-        / "crocodile-manifest"
+        / "eclipse-manifest"
         / ".millennium"
         / "Dist"
         / "index.js"
