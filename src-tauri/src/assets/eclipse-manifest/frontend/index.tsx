@@ -1,8 +1,42 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { callable, definePlugin } from '@steambrew/client';
 
-type CardMode = 'full' | 'button' | 'crocodile';
+type CardMode = 'full' | 'button' | 'crocodile' | 'eclipse';
 type ManifestService = 'ryuu' | 'hubcap';
+type ThemeId =
+  | 'graphite'
+  | 'oled'
+  | 'steel'
+  | 'light'
+  | 'ruby'
+  | 'amber'
+  | 'gold'
+  | 'forest'
+  | 'cyan'
+  | 'midnight'
+  | 'cosmos'
+  | 'rose';
+
+type ThemeOption = {
+  id: ThemeId;
+  name: string;
+  color: string;
+};
+
+const THEMES: ThemeOption[] = [
+  { id: 'midnight', name: 'Бирюзовый', color: '#66c0f4' },
+  { id: 'graphite', name: 'Мятный', color: '#52ebb5' },
+  { id: 'oled', name: 'Белый', color: '#ffffff' },
+  { id: 'steel', name: 'Серый', color: '#93a4b8' },
+  { id: 'light', name: 'Синий', color: '#0284c7' },
+  { id: 'ruby', name: 'Красный', color: '#ff5252' },
+  { id: 'amber', name: 'Оранжевый', color: '#ff8c42' },
+  { id: 'gold', name: 'Золотой', color: '#ffc83b' },
+  { id: 'forest', name: 'Зелёный', color: '#4ade80' },
+  { id: 'cyan', name: 'Голубой', color: '#38d9f5' },
+  { id: 'cosmos', name: 'Фиолетовый', color: '#a77bfe' },
+  { id: 'rose', name: 'Розовый', color: '#f768b7' },
+];
 
 type HubcapUsage = {
   used: number;
@@ -22,6 +56,7 @@ type PluginStateReply = {
   success: boolean;
   message: string;
   cardMode?: CardMode;
+  theme?: string;
   service?: ManifestService;
   hasRyuuKey?: boolean;
   hasHubcapKey?: boolean;
@@ -33,6 +68,7 @@ type PluginStateReply = {
 
 const getPluginState = callable<[], string>('get_plugin_state');
 const setCardModeRequest = callable<[{ mode: CardMode }], string>('set_card_mode');
+const setThemeRequest = callable<[{ theme: string }], string>('set_theme');
 const setServiceSettings = callable<[{ payload: string }], string>('set_service_settings');
 const removeManifest = callable<[{ appid: string }], string>('remove_manifest');
 const KEY_PAGES: Record<ManifestService, string> = {
@@ -87,13 +123,13 @@ function modeButtonStyle(active: boolean): CSSProperties {
     gap: 7,
     minHeight: 82,
     padding: '12px 9px',
-    border: active ? '1px solid rgba(255,110,155,.28)' : '1px solid rgba(255,255,255,.075)',
+    border: active ? '1px solid rgba(102,192,244,.35)' : '1px solid rgba(255,255,255,.075)',
     borderRadius: 10,
-    color: active ? '#f3e7eb' : '#a9b0bb',
+    color: active ? '#ffffff' : '#a9b0bb',
     background: active
-      ? 'rgba(255,110,155,.055)'
+      ? 'rgba(102,192,244,.08)'
       : 'rgba(0,0,0,.15)',
-    boxShadow: active ? 'inset 3px 0 rgba(255,110,155,.55), inset 0 1px 0 rgba(255,255,255,.04)' : 'none',
+    boxShadow: active ? 'inset 3px 0 rgba(102,192,244,.7), inset 0 1px 0 rgba(255,255,255,.04)' : 'none',
     cursor: 'pointer',
     font: 'inherit',
   };
@@ -103,10 +139,10 @@ function smallButtonStyle(danger = false): CSSProperties {
   return {
     height: 32,
     padding: '0 12px',
-    border: danger ? '1px solid rgba(255,112,137,.25)' : '1px solid rgba(255,110,155,.18)',
+    border: danger ? '1px solid rgba(255,112,137,.25)' : '1px solid rgba(102,192,244,.25)',
     borderRadius: 8,
-    color: danger ? '#ff91a5' : '#d6a5b6',
-    background: danger ? 'rgba(145,42,65,.14)' : 'rgba(255,110,155,.045)',
+    color: danger ? '#ff91a5' : '#66c0f4',
+    background: danger ? 'rgba(145,42,65,.14)' : 'rgba(102,192,244,.08)',
     cursor: 'pointer',
     fontSize: 12,
     fontWeight: 600,
@@ -120,13 +156,13 @@ function serviceButtonStyle(active: boolean): CSSProperties {
     minWidth: 0,
     gap: 5,
     padding: '13px 14px',
-    border: active ? '1px solid rgba(255,110,155,.28)' : '1px solid rgba(255,255,255,.075)',
+    border: active ? '1px solid rgba(102,192,244,.35)' : '1px solid rgba(255,255,255,.075)',
     borderRadius: 10,
-    color: active ? '#f3e7eb' : '#a9b0bb',
+    color: active ? '#ffffff' : '#a9b0bb',
     background: active
-      ? 'rgba(255,110,155,.055)'
+      ? 'rgba(102,192,244,.08)'
       : 'rgba(0,0,0,.15)',
-    boxShadow: active ? 'inset 3px 0 rgba(255,110,155,.55), inset 0 1px 0 rgba(255,255,255,.04)' : 'none',
+    boxShadow: active ? 'inset 3px 0 rgba(102,192,244,.7), inset 0 1px 0 rgba(255,255,255,.04)' : 'none',
     cursor: 'pointer',
     font: 'inherit',
     textAlign: 'left',
@@ -143,10 +179,10 @@ function keyLinkButtonStyle(active: boolean): CSSProperties {
     minWidth: 0,
     height: 32,
     padding: '0 6px',
-    border: active ? '1px solid rgba(255,110,155,.23)' : '1px solid rgba(255,255,255,.07)',
+    border: active ? '1px solid rgba(102,192,244,.28)' : '1px solid rgba(255,255,255,.07)',
     borderRadius: 7,
-    color: active ? '#df9fb3' : '#939ca9',
-    background: active ? 'rgba(255,110,155,.055)' : 'rgba(0,0,0,.11)',
+    color: active ? '#66c0f4' : '#939ca9',
+    background: active ? 'rgba(102,192,244,.08)' : 'rgba(0,0,0,.11)',
     cursor: 'pointer',
     font: '600 10px/1 inherit',
     whiteSpace: 'nowrap',
@@ -156,9 +192,25 @@ function keyLinkButtonStyle(active: boolean): CSSProperties {
 function discordButtonStyle(): CSSProperties {
   return {
     ...keyLinkButtonStyle(false),
-    border: '1px solid rgba(169,135,255,.14)',
-    color: '#b9afd0',
-    background: 'rgba(169,135,255,.045)',
+    border: '1px solid rgba(102,192,244,.2)',
+    color: '#8bc3e6',
+    background: 'rgba(102,192,244,.05)',
+  };
+}
+
+function themeColorCircleButtonStyle(active: boolean, accentColor: string): CSSProperties {
+  return {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    padding: 0,
+    border: active ? `2px solid ${accentColor}` : '1px solid rgba(255,255,255,.08)',
+    borderRadius: 10,
+    background: active ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.18)',
+    boxShadow: active ? `0 0 12px ${accentColor}44, inset 0 0 6px ${accentColor}22` : 'none',
+    cursor: 'pointer',
+    transition: 'all .15s ease',
   };
 }
 
@@ -194,6 +246,7 @@ function openDiscordPage(service: ManifestService): void {
 
 function PluginContent() {
   const [cardMode, setCardModeState] = useState<CardMode>('full');
+  const [currentTheme, setCurrentTheme] = useState<ThemeId>('midnight');
   const [service, setService] = useState<ManifestService>('ryuu');
   const [ryuuKey, setRyuuKey] = useState('');
   const [hubcapKey, setHubcapKey] = useState('');
@@ -212,6 +265,7 @@ function PluginContent() {
       const reply = JSON.parse(await getPluginState()) as PluginStateReply;
       if (!reply.success) throw new Error(reply.message);
       setCardModeState(reply.cardMode || 'full');
+      if (reply.theme) setCurrentTheme(reply.theme as ThemeId);
       setService(reply.service || 'ryuu');
       setHasRyuuKey(reply.hasRyuuKey === true);
       setHasHubcapKey(reply.hasHubcapKey === true);
@@ -227,6 +281,19 @@ function PluginContent() {
   useEffect(() => {
     void loadState();
   }, [loadState]);
+
+  const changeTheme = async (themeId: ThemeId) => {
+    const previous = currentTheme;
+    setCurrentTheme(themeId);
+    try {
+      const reply = JSON.parse(await setThemeRequest({ theme: themeId })) as PluginStateReply;
+      if (!reply.success) throw new Error(reply.message);
+      setMessage(`Цвет «${THEMES.find((t) => t.id === themeId)?.name || themeId}» сохранён`);
+    } catch (error) {
+      setCurrentTheme(previous);
+      setMessage(`Не удалось сохранить цвет: ${String(error)}`);
+    }
+  };
 
   const changeCardMode = async (mode: CardMode) => {
     const previous = cardMode;
@@ -289,7 +356,7 @@ function PluginContent() {
   const modes: Array<{ id: CardMode; icon: string; title: string; description: string }> = [
     { id: 'full', icon: '▤', title: 'Full', description: 'Полная карточка' },
     { id: 'button', icon: '▬', title: 'Button', description: 'Только кнопка' },
-    { id: 'crocodile', icon: '🐊', title: 'Crocodile', description: 'Только эмодзи' },
+    { id: 'eclipse', icon: '🌒', title: 'Eclipse', description: 'Только иконка' },
   ];
 
   return (
@@ -299,7 +366,7 @@ function PluginContent() {
           ...sectionStyle,
           padding: 18,
           background:
-            'radial-gradient(circle at 0 0, rgba(255,110,155,.06), transparent 42%), linear-gradient(145deg, rgba(17,20,29,.98), rgba(9,12,18,.99))',
+            'radial-gradient(circle at 0 0, rgba(102,192,244,.1), transparent 42%), linear-gradient(145deg, rgba(16,24,34,.98), rgba(10,15,22,.99))',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
@@ -309,16 +376,18 @@ function PluginContent() {
               width: 44,
               height: 44,
               placeItems: 'center',
-              border: '1px solid rgba(255,110,155,.24)',
+              border: '1px solid rgba(102,192,244,.3)',
               borderRadius: 11,
-              background: 'rgba(255,110,155,.075)',
+              background: 'rgba(102,192,244,.12)',
               fontSize: 24,
             }}
           >
-            🐊
+            🌒
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <h2 style={{ margin: 0, color: '#f5f8fb', fontSize: 18 }}>Crocodile Manifest</h2>
+            <h2 style={{ margin: 0, color: '#f5f8fb', fontSize: 18 }}>
+              Eclipse Manifest <span style={{ fontSize: 12, color: '#66c0f4', fontWeight: 500, marginLeft: 6 }}>(форк CrocLua)</span>
+            </h2>
             <p style={{ margin: '4px 0 0', color: '#8fa0ae', fontSize: 12 }}>
               Управление видом карточки и установленными манифестами
             </p>
@@ -326,15 +395,15 @@ function PluginContent() {
           <span
             style={{
               padding: '5px 9px',
-              border: '1px solid rgba(255,110,155,.14)',
+              border: '1px solid rgba(102,192,244,.25)',
               borderRadius: 99,
-              color: '#d99aaf',
-              background: 'rgba(255,110,155,.04)',
+              color: '#66c0f4',
+              background: 'rgba(102,192,244,.08)',
               fontSize: 11,
               fontWeight: 700,
             }}
           >
-            v0.4.9
+            v0.5.0
           </span>
         </div>
       </section>
@@ -343,10 +412,10 @@ function PluginContent() {
         <div
           style={{
             padding: '10px 12px',
-            border: '1px solid rgba(255,110,155,.14)',
+            border: '1px solid rgba(102,192,244,.25)',
             borderRadius: 9,
-            color: '#c9a5b1',
-            background: 'rgba(255,110,155,.04)',
+            color: '#8bc3e6',
+            background: 'rgba(102,192,244,.08)',
             fontSize: 12,
           }}
         >
@@ -365,10 +434,10 @@ function PluginContent() {
           <span
             style={{
               padding: '5px 9px',
-              border: '1px solid rgba(255,110,155,.14)',
+              border: '1px solid rgba(102,192,244,.25)',
               borderRadius: 99,
-              color: '#d99aaf',
-              background: 'rgba(255,110,155,.04)',
+              color: '#66c0f4',
+              background: 'rgba(102,192,244,.08)',
               fontSize: 10,
               fontWeight: 700,
             }}
@@ -566,26 +635,81 @@ function PluginContent() {
           <div>
             <strong style={{ color: '#edf3f7', fontSize: 14 }}>Вид карточки</strong>
             <div style={{ marginTop: 4, color: '#8293a1', fontSize: 12 }}>
-              Выберите, сколько места Crocodile Manifest занимает на странице игры
+              Выберите, сколько места Eclipse Manifest занимает на странице игры
             </div>
           </div>
         </div>
         <div style={modeGridStyle}>
-          {modes.map((mode) => (
-            <button
-              key={mode.id}
-              type="button"
-              style={modeButtonStyle(cardMode === mode.id)}
-              disabled={loading}
-              onClick={() => void changeCardMode(mode.id)}
-            >
-              <span style={{ fontSize: mode.id === 'crocodile' ? 24 : 21 }}>{mode.icon}</span>
-              <strong style={{ fontSize: 13 }}>{mode.title}</strong>
-              <span style={{ color: cardMode === mode.id ? '#cda7b3' : '#75808e', fontSize: 10 }}>
-                {mode.description}
-              </span>
-            </button>
-          ))}
+          {modes.map((mode) => {
+            const isActive = cardMode === mode.id || (mode.id === 'eclipse' && cardMode === 'crocodile');
+            return (
+              <button
+                key={mode.id}
+                type="button"
+                style={modeButtonStyle(isActive)}
+                disabled={loading}
+                onClick={() => void changeCardMode(mode.id)}
+              >
+                <span style={{ fontSize: mode.id === 'eclipse' || mode.id === 'crocodile' ? 24 : 21 }}>{mode.icon}</span>
+                <strong style={{ fontSize: 13 }}>{mode.title}</strong>
+                <span style={{ color: isActive ? '#8bc3e6' : '#75808e', fontSize: 10 }}>
+                  {mode.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section style={sectionStyle}>
+        <div style={sectionHeaderStyle}>
+          <div>
+            <strong style={{ color: '#edf3f7', fontSize: 14 }}>Цвет оформления</strong>
+            <div style={{ marginTop: 4, color: '#8293a1', fontSize: 12 }}>
+              12 цветов для карточки манифеста на странице игры
+            </div>
+          </div>
+          <span
+            style={{
+              padding: '5px 12px',
+              border: `1px solid ${THEMES.find((t) => t.id === currentTheme)?.color || '#66c0f4'}55`,
+              borderRadius: 99,
+              color: THEMES.find((t) => t.id === currentTheme)?.color || '#66c0f4',
+              background: 'rgba(255,255,255,.05)',
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            {THEMES.find((t) => t.id === currentTheme)?.name || 'Бирюзовый'}
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 9, padding: 14 }}>
+          {THEMES.map((item) => {
+            const isActive = currentTheme === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                title={item.name}
+                aria-label={item.name}
+                style={themeColorCircleButtonStyle(isActive, item.color)}
+                disabled={loading}
+                onClick={() => void changeTheme(item.id)}
+              >
+                <span
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: '50%',
+                    background: item.color,
+                    boxShadow: isActive ? `0 0 10px ${item.color}` : 'none',
+                    transform: isActive ? 'scale(1.15)' : 'scale(1)',
+                    transition: 'transform .15s ease',
+                  }}
+                />
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -594,7 +718,7 @@ function PluginContent() {
 }
 
 export default definePlugin(() => ({
-  title: 'Crocodile Manifest',
-  icon: <span>🐊</span>,
+  title: 'Eclipse Manifest',
+  icon: <span>🌒</span>,
   content: <PluginContent />,
 }));

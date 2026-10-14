@@ -304,6 +304,8 @@ pub fn run() {
             millennium::millennium_plugin_status,
             millennium::millennium_install_plugin,
             millennium::millennium_remove_plugin,
+            millennium::millennium_migrate_from_croclua,
+            millennium::millennium_remove_legacy_croclua,
             millennium::millennium_install_bundled,
             ryuu::ryuu_search,
             ryuu::ryuu_get,

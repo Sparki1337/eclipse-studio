@@ -72,10 +72,11 @@
         pluginInstalled: false,
         pluginCurrent: false,
         pluginVersion: "",
-        bundledVersion: "0.4.9",
+        bundledVersion: "0.5.0",
         pluginPath: "",
       },
       millenniumPrompted: false,
+      crocluaPrompted: false,
     },
     updates: {
       checking: false,
@@ -88,7 +89,7 @@
     home: ["", "Главная"],
     fix: ["", "Online Fix"],
     dlc: ["", "DLC Unlocker"],
-    lua: ["", "CrocLua"],
+    lua: ["", "Eclipse Manifest"],
     hypervisor: ["", "Гипервизор"],
     files: ["", "Кряки"],
     utilities: ["", "Утилиты"],
@@ -1103,6 +1104,7 @@
     const badge = $("#millennium-plugin-badge");
     const installButton = $("#millennium-install-button");
     const installLabel = installButton.querySelector("span");
+    const migrateButton = $("#millennium-migrate-button");
     const siteButton = $("#millennium-site-button");
     const removeButton = $("#millennium-remove-button");
 
@@ -1111,6 +1113,7 @@
       steam_missing: "Steam не найден",
       steam_invalid: "Неверная папка Steam",
       millennium_missing: "Millennium не установлен",
+      croclua_detected: "Обнаружен CrocLua",
       plugin_missing: "Плагин не установлен",
       update_available: `Обновление · ${info.bundledVersion || ""}`,
       ready: `Установлен · ${info.pluginVersion || info.bundledVersion || ""}`,
@@ -1118,15 +1121,27 @@
     badge.textContent = labels[info.status] || "Неизвестный статус";
     badge.className = "millennium-plugin-badge";
     if (info.status === "ready") badge.classList.add("ready");
-    else if (["plugin_missing", "update_available"].includes(info.status)) badge.classList.add("warning");
+    else if (["plugin_missing", "update_available", "croclua_detected"].includes(info.status)) badge.classList.add("warning");
     else if (["steam_missing", "steam_invalid", "millennium_missing"].includes(info.status)) badge.classList.add("error");
     else badge.classList.add("checking");
 
     const canInstall = Boolean(info.millenniumInstalled) && !["checking", "steam_invalid", "steam_missing"].includes(info.status);
     installButton.disabled = !canInstall;
-    installButton.classList.toggle("hidden", !["plugin_missing", "update_available"].includes(info.status));
+    installButton.classList.toggle("hidden", info.status === "croclua_detected" || !["plugin_missing", "update_available"].includes(info.status));
     siteButton.classList.toggle("hidden", info.status !== "millennium_missing");
     removeButton.classList.toggle("hidden", !info.pluginInstalled);
+
+    if (migrateButton) {
+      const showMigrate = Boolean(info.legacyCrocluaFound) && Boolean(info.millenniumInstalled);
+      migrateButton.classList.toggle("hidden", !showMigrate);
+      const migrateLabel = migrateButton.querySelector("span");
+      if (migrateLabel) {
+        migrateLabel.textContent = info.pluginInstalled
+          ? "Удалить старый CrocLua"
+          : "Заменить CrocLua на Eclipse Manifest";
+      }
+    }
+
     if (installLabel) {
       installLabel.textContent = info.status === "ready"
         ? "Переустановить"
@@ -1146,8 +1161,8 @@
       if (!state.lua.millennium?.pluginInstalled) {
         const installPlugin = await showModal(
           "Millennium установлен",
-          "Файлы размещены прямо в папке Steam. Установить Crocodile Manifest сейчас? После этого потребуется полностью перезапустить Steam.",
-          { confirm: true, confirmText: "Установить плагин", cancelText: "Позже", symbol: "🐊" },
+          "Файлы размещены прямо в папке Steam. Установить Eclipse Manifest сейчас? После этого потребуется полностью перезапустить Steam.",
+          { confirm: true, confirmText: "Установить плагин", cancelText: "Позже", symbol: "🌒" },
         );
         if (installPlugin) await installMillenniumPlugin();
       }
@@ -1162,10 +1177,49 @@
   async function offerMillenniumInstall() {
     const accepted = await showModal(
       "Для плагина нужен Millennium",
-      "CrocLua установит встроенные файлы Millennium напрямую в выбранную папку Steam — без отдельного установщика. После установки потребуется полностью перезапустить Steam.",
+      "Eclipse Manifest установит встроенные файлы Millennium напрямую в выбранную папку Steam — без отдельного установщика. После установки потребуется полностью перезапустить Steam.",
       { confirm: true, confirmText: "Установить", cancelText: "Позже", symbol: "M" },
     );
     if (accepted) await downloadMillenniumInstaller();
+  }
+
+  async function offerCrocluaMigration() {
+    const accepted = await showModal(
+      "Обнаружен старый плагин CrocLua",
+      "В Millennium обнаружен устаревший плагин CrocLua (папка crocodile-manifest). Хотите удалить его и установить обновлённый Eclipse Manifest?",
+      { confirm: true, confirmText: "Заменить на Eclipse Manifest", cancelText: "Оставить", symbol: "🌒" },
+    );
+    if (accepted) await migrateCrocluaToEclipseManifest();
+  }
+
+  async function migrateCrocluaToEclipseManifest() {
+    const info = state.lua.millennium || {};
+    const onlyRemove = Boolean(info.pluginInstalled);
+    const button = $("#millennium-migrate-button");
+    if (button) setBusy(button, true, onlyRemove ? "Удаляем…" : "Заменяем…");
+    try {
+      const result = onlyRemove
+        ? await call("millennium_remove_legacy_croclua", { steamPath: state.lua.steamPath || null })
+        : await call("millennium_migrate_from_croclua", { steamPath: state.lua.steamPath || null });
+      if (!consumeResult(result)) return;
+      await luaRefresh();
+      const restart = await showModal(
+        onlyRemove ? "CrocLua удалён" : "Eclipse Manifest установлен",
+        onlyRemove
+          ? "Старый плагин CrocLua удалён из Millennium. Перезапустить Steam сейчас?"
+          : "Старый CrocLua удалён, Eclipse Manifest успешно установлен. Перезапустить Steam сейчас?",
+        { confirm: true, confirmText: "Перезапустить Steam", cancelText: "Позже", symbol: "🌒" },
+      );
+      if (restart) {
+        const restartResult = await call("luatools_restart_steam", { steamPath: state.lua.steamPath || null });
+        consumeResult(restartResult);
+      }
+    } catch (error) {
+      toast(errorText(error), "error");
+    } finally {
+      if (button) setBusy(button, false);
+      renderMillenniumStatus();
+    }
   }
 
   async function luaRefresh() {
@@ -1188,6 +1242,9 @@
       if (millennium?.status === "millennium_missing" && !state.lua.millenniumPrompted) {
         state.lua.millenniumPrompted = true;
         await offerMillenniumInstall();
+      } else if (millennium?.legacyCrocluaFound && !state.lua.crocluaPrompted) {
+        state.lua.crocluaPrompted = true;
+        await offerCrocluaMigration();
       }
     } catch (error) {
       log(`LuaTools: ошибка статуса — ${errorText(error)}`, "error");
@@ -1213,7 +1270,7 @@
   async function luaInstall(paths) {
     const files = (paths || []).filter(Boolean);
     if (!files.length) return;
-    log(`CrocLua: добавление файлов — ${files.length}`, "system");
+    log(`Eclipse Manifest: добавление файлов — ${files.length}`, "system");
     try {
       const result = await call("luatools_install", {
         paths: files,
@@ -1290,9 +1347,9 @@
       if (!consumeResult(result)) return;
       await luaRefresh();
       const restart = await showModal(
-        "Crocodile Manifest установлен",
+        "Eclipse Manifest установлен",
         "Плагин размещён в папке Millennium. Перезапустить Steam сейчас, чтобы он появился в настройках плагинов?",
-        { confirm: true, confirmText: "Перезапустить Steam", cancelText: "Позже", symbol: "🐊" },
+        { confirm: true, confirmText: "Перезапустить Steam", cancelText: "Позже", symbol: "🌒" },
       );
       if (restart) {
         const restartResult = await call("luatools_restart_steam", { steamPath: state.lua.steamPath || null });
@@ -1308,7 +1365,7 @@
 
   async function removeMillenniumPlugin() {
     const accepted = await showModal(
-      "Удалить Crocodile Manifest?",
+      "Удалить Eclipse Manifest?",
       "Папка плагина будет полностью удалена из Millennium. Сохранённая история операций останется на компьютере и будет доступна после повторной установки.",
       { confirm: true, confirmText: "Удалить плагин", cancelText: "Отмена", symbol: "↺" },
     );
@@ -1321,7 +1378,7 @@
       if (!consumeResult(result)) return;
       await luaRefresh();
       const restart = await showModal(
-        "Crocodile Manifest удалён",
+        "Eclipse Manifest удалён",
         "Перезапустить Steam сейчас, чтобы полностью выгрузить плагин?",
         { confirm: true, confirmText: "Перезапустить Steam", cancelText: "Позже", symbol: "✓" },
       );
@@ -2112,6 +2169,7 @@
     $("#lua-refresh-button").addEventListener("click", luaRefresh);
     $("#lua-restart-button").addEventListener("click", luaRestartSteam);
     $("#millennium-site-button").addEventListener("click", downloadMillenniumInstaller);
+    $("#millennium-migrate-button")?.addEventListener("click", migrateCrocluaToEclipseManifest);
     $("#millennium-install-button").addEventListener("click", installMillenniumPlugin);
     $("#millennium-remove-button").addEventListener("click", removeMillenniumPlugin);
     $("#lua-steam-browse").addEventListener("click", async () => {
@@ -2313,7 +2371,7 @@
       if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
       call("luatools_restore_manifests", { steamPath: state.lua.steamPath || null }).catch(() => {});
     }, 3_000);
-    log("Eclipse Studio 6.6.6 инициализирован", "system");
+    log("Eclipse Studio 6.6.7 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
     if (invoke) setTimeout(() => checkForUpdates(false), 1800);
   }

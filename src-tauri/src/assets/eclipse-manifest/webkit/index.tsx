@@ -20,7 +20,8 @@ type InstallReply = {
 
 type GameStatusReply = InstallReply & {
   state?: 'available' | 'installed' | 'update_available' | 'repair_required' | 'pending_restart' | 'error' | 'configuration_required';
-  cardMode?: 'full' | 'button' | 'crocodile';
+  cardMode?: 'full' | 'button' | 'crocodile' | 'eclipse';
+  theme?: string;
   installed?: boolean;
   updateAvailable?: boolean;
   lastMessage?: string;
@@ -36,11 +37,13 @@ const restartSteam = callable<[], string>('restart_steam');
 const getGameStatus = callable<[{ appid: string }], string>('get_game_status');
 const restoreManifestCache = callable<[], string>('restore_manifest_cache');
 
-const PANEL_ID = 'crocodile-manifest-panel';
-const STYLE_ID = 'crocodile-manifest-style';
-const MODAL_ID = 'crocodile-manifest-modal';
+const PANEL_ID = 'eclipse-manifest-panel';
+const LEGACY_PANEL_ID = 'crocodile-manifest-panel';
+const STYLE_ID = 'eclipse-manifest-style';
+const MODAL_ID = 'eclipse-manifest-modal';
 let cacheRestoreRunning = false;
 
+// Периодическое фоновое восстановление кэша манифестов
 async function keepManifestsAvailable(): Promise<void> {
   if (cacheRestoreRunning) return;
   cacheRestoreRunning = true;
@@ -53,15 +56,34 @@ async function keepManifestsAvailable(): Promise<void> {
   }
 }
 
+// Извлечение AppID текущей открытой игры из URL или DOM
 function currentAppId(): string | null {
-  return window.location.pathname.match(/\/app\/(\d+)/)?.[1] ?? null;
+  // 1. Из pathname (/app/12345/...)
+  const fromPath = window.location.pathname.match(/\/app\/(\d+)/)?.[1];
+  if (fromPath) return fromPath;
+
+  // 2. Из query string (?appid=12345)
+  const searchParams = new URLSearchParams(window.location.search);
+  const fromSearch = searchParams.get('appid') ?? searchParams.get('appId');
+  if (fromSearch && /^\d+$/.test(fromSearch)) return fromSearch;
+
+  // 3. Из скрытых полей или метатегов Steam
+  const metaAppId = document.querySelector<HTMLInputElement>('input[name="appid"]')?.value
+    ?? document.querySelector<HTMLElement>('[data-appid]')?.dataset.appid;
+  if (metaAppId && /^\d+$/.test(metaAppId)) return metaAppId;
+
+  return null;
 }
 
+// Определение названия текущей игры из заголовка или метатегов
 function currentGameName(): string {
-  const heading = document.querySelector<HTMLElement>('#appHubAppName')?.textContent?.trim();
+  const heading = document.querySelector<HTMLElement>('#appHubAppName')?.textContent?.trim()
+    ?? document.querySelector<HTMLElement>('.apphub_AppName')?.textContent?.trim();
   if (heading) return heading;
   const title = document.querySelector<HTMLMetaElement>('meta[property="og:title"]')?.content?.trim();
-  return title?.replace(/\s+on Steam$/i, '') || '';
+  if (title) return title.replace(/\s+on Steam$/i, '').trim();
+  const docTitle = document.title?.replace(/\s+on Steam$/i, '').trim();
+  return docTitle || '';
 }
 
 function addStyles(): void {
@@ -69,17 +91,200 @@ function addStyles(): void {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
+    #${PANEL_ID}, #${MODAL_ID} .ryuu-modal-card {
+      --em-accent: #66c0f4;
+      --em-accent-rgb: 102, 192, 244;
+      --em-bg: linear-gradient(145deg, rgba(16, 24, 34, .98), rgba(11, 16, 24, .99));
+      --em-border: rgba(102, 192, 244, .25);
+      --em-glow: rgba(102, 192, 244, .08);
+      --em-btn-color: #66c0f4;
+      --em-btn-bg: linear-gradient(90deg, rgba(41, 100, 142, .35), rgba(26, 68, 102, .45));
+      --em-btn-border: rgba(102, 192, 244, .35);
+      --em-btn-hover-bg: linear-gradient(90deg, rgba(41, 100, 142, .6), rgba(26, 68, 102, .7));
+      --em-btn-hover-border: rgba(102, 192, 244, .65);
+      --em-title-color: #f3f6f8;
+      --em-subtitle-color: #8c96a7;
+    }
+    #${PANEL_ID}[data-theme="oled"], #${MODAL_ID} .ryuu-modal-card[data-theme="oled"] {
+      --em-accent: #ffffff;
+      --em-accent-rgb: 255, 255, 255;
+      --em-bg: linear-gradient(145deg, #050507, #000000);
+      --em-border: rgba(255, 255, 255, .18);
+      --em-glow: transparent;
+      --em-btn-color: #ffffff;
+      --em-btn-bg: rgba(255, 255, 255, .08);
+      --em-btn-border: rgba(255, 255, 255, .25);
+      --em-btn-hover-bg: rgba(255, 255, 255, .16);
+      --em-btn-hover-border: rgba(255, 255, 255, .5);
+      --em-title-color: #ffffff;
+      --em-subtitle-color: #888888;
+    }
+    #${PANEL_ID}[data-theme="graphite"], #${MODAL_ID} .ryuu-modal-card[data-theme="graphite"] {
+      --em-accent: #52ebb5;
+      --em-accent-rgb: 82, 235, 181;
+      --em-bg: linear-gradient(145deg, rgba(14, 15, 19, .98), rgba(8, 9, 12, .99));
+      --em-border: rgba(82, 235, 181, .25);
+      --em-glow: rgba(82, 235, 181, .08);
+      --em-btn-color: #52ebb5;
+      --em-btn-bg: rgba(82, 235, 181, .09);
+      --em-btn-border: rgba(82, 235, 181, .32);
+      --em-btn-hover-bg: rgba(82, 235, 181, .18);
+      --em-btn-hover-border: rgba(82, 235, 181, .6);
+      --em-title-color: #f0fdf7;
+      --em-subtitle-color: #809a90;
+    }
+    #${PANEL_ID}[data-theme="steel"], #${MODAL_ID} .ryuu-modal-card[data-theme="steel"] {
+      --em-accent: #93a4b8;
+      --em-accent-rgb: 147, 164, 184;
+      --em-bg: linear-gradient(145deg, rgba(27, 31, 39, .98), rgba(17, 20, 26, .99));
+      --em-border: rgba(147, 164, 184, .25);
+      --em-glow: rgba(147, 164, 184, .08);
+      --em-btn-color: #d2dae4;
+      --em-btn-bg: rgba(147, 164, 184, .1);
+      --em-btn-border: rgba(147, 164, 184, .3);
+      --em-btn-hover-bg: rgba(147, 164, 184, .2);
+      --em-btn-hover-border: rgba(147, 164, 184, .55);
+      --em-title-color: #f1f5f9;
+      --em-subtitle-color: #94a3b8;
+    }
+    #${PANEL_ID}[data-theme="light"], #${MODAL_ID} .ryuu-modal-card[data-theme="light"] {
+      --em-accent: #0284c7;
+      --em-accent-rgb: 2, 132, 199;
+      --em-bg: linear-gradient(145deg, #f8fafc, #edf2f7);
+      --em-border: rgba(0, 0, 0, .14);
+      --em-glow: rgba(2, 132, 199, .06);
+      --em-btn-color: #0284c7;
+      --em-btn-bg: #ffffff;
+      --em-btn-border: rgba(2, 132, 199, .35);
+      --em-btn-hover-bg: rgba(2, 132, 199, .08);
+      --em-btn-hover-border: rgba(2, 132, 199, .65);
+      --em-title-color: #0f172a;
+      --em-subtitle-color: #475569;
+    }
+    #${PANEL_ID}[data-theme="ruby"], #${MODAL_ID} .ryuu-modal-card[data-theme="ruby"] {
+      --em-accent: #ff5252;
+      --em-accent-rgb: 255, 82, 82;
+      --em-bg: linear-gradient(145deg, rgba(26, 10, 16, .98), rgba(14, 5, 9, .99));
+      --em-border: rgba(255, 82, 82, .25);
+      --em-glow: rgba(255, 82, 82, .08);
+      --em-btn-color: #ff7575;
+      --em-btn-bg: rgba(255, 82, 82, .1);
+      --em-btn-border: rgba(255, 82, 82, .32);
+      --em-btn-hover-bg: rgba(255, 82, 82, .2);
+      --em-btn-hover-border: rgba(255, 82, 82, .6);
+      --em-title-color: #fff1f2;
+      --em-subtitle-color: #9e7f86;
+    }
+    #${PANEL_ID}[data-theme="amber"], #${MODAL_ID} .ryuu-modal-card[data-theme="amber"] {
+      --em-accent: #ff8c42;
+      --em-accent-rgb: 255, 140, 66;
+      --em-bg: linear-gradient(145deg, rgba(26, 16, 8, .98), rgba(14, 8, 4, .99));
+      --em-border: rgba(255, 140, 66, .25);
+      --em-glow: rgba(255, 140, 66, .08);
+      --em-btn-color: #ffa466;
+      --em-btn-bg: rgba(255, 140, 66, .1);
+      --em-btn-border: rgba(255, 140, 66, .32);
+      --em-btn-hover-bg: rgba(255, 140, 66, .2);
+      --em-btn-hover-border: rgba(255, 140, 66, .6);
+      --em-title-color: #fff7ed;
+      --em-subtitle-color: #9e8a7c;
+    }
+    #${PANEL_ID}[data-theme="gold"], #${MODAL_ID} .ryuu-modal-card[data-theme="gold"] {
+      --em-accent: #ffc83b;
+      --em-accent-rgb: 255, 200, 59;
+      --em-bg: linear-gradient(145deg, rgba(24, 20, 8, .98), rgba(12, 10, 4, .99));
+      --em-border: rgba(255, 200, 59, .25);
+      --em-glow: rgba(255, 200, 59, .08);
+      --em-btn-color: #ffd466;
+      --em-btn-bg: rgba(255, 200, 59, .1);
+      --em-btn-border: rgba(255, 200, 59, .32);
+      --em-btn-hover-bg: rgba(255, 200, 59, .2);
+      --em-btn-hover-border: rgba(255, 200, 59, .6);
+      --em-title-color: #fefce8;
+      --em-subtitle-color: #9c947c;
+    }
+    #${PANEL_ID}[data-theme="forest"], #${MODAL_ID} .ryuu-modal-card[data-theme="forest"] {
+      --em-accent: #4ade80;
+      --em-accent-rgb: 74, 222, 128;
+      --em-bg: linear-gradient(145deg, rgba(10, 20, 16, .98), rgba(5, 11, 9, .99));
+      --em-border: rgba(74, 222, 128, .25);
+      --em-glow: rgba(74, 222, 128, .08);
+      --em-btn-color: #6ee7a0;
+      --em-btn-bg: rgba(74, 222, 128, .1);
+      --em-btn-border: rgba(74, 222, 128, .32);
+      --em-btn-hover-bg: rgba(74, 222, 128, .2);
+      --em-btn-hover-border: rgba(74, 222, 128, .6);
+      --em-title-color: #f0fdf4;
+      --em-subtitle-color: #829a8a;
+    }
+    #${PANEL_ID}[data-theme="cyan"], #${MODAL_ID} .ryuu-modal-card[data-theme="cyan"] {
+      --em-accent: #38d9f5;
+      --em-accent-rgb: 56, 217, 245;
+      --em-bg: linear-gradient(145deg, rgba(8, 24, 30, .98), rgba(4, 12, 16, .99));
+      --em-border: rgba(56, 217, 245, .25);
+      --em-glow: rgba(56, 217, 245, .08);
+      --em-btn-color: #5fe0f8;
+      --em-btn-bg: rgba(56, 217, 245, .1);
+      --em-btn-border: rgba(56, 217, 245, .32);
+      --em-btn-hover-bg: rgba(56, 217, 245, .2);
+      --em-btn-hover-border: rgba(56, 217, 245, .6);
+      --em-title-color: #ecfeff;
+      --em-subtitle-color: #7b9ba2;
+    }
+    #${PANEL_ID}[data-theme="midnight"], #${MODAL_ID} .ryuu-modal-card[data-theme="midnight"] {
+      --em-accent: #66c0f4;
+      --em-accent-rgb: 102, 192, 244;
+      --em-bg: linear-gradient(145deg, rgba(16, 24, 34, .98), rgba(11, 16, 24, .99));
+      --em-border: rgba(102, 192, 244, .25);
+      --em-glow: rgba(102, 192, 244, .08);
+      --em-btn-color: #66c0f4;
+      --em-btn-bg: linear-gradient(90deg, rgba(41, 100, 142, .35), rgba(26, 68, 102, .45));
+      --em-btn-border: rgba(102, 192, 244, .35);
+      --em-btn-hover-bg: linear-gradient(90deg, rgba(41, 100, 142, .6), rgba(26, 68, 102, .7));
+      --em-btn-hover-border: rgba(102, 192, 244, .65);
+      --em-title-color: #f3f6f8;
+      --em-subtitle-color: #8c96a7;
+    }
+    #${PANEL_ID}[data-theme="cosmos"], #${MODAL_ID} .ryuu-modal-card[data-theme="cosmos"] {
+      --em-accent: #a77bfe;
+      --em-accent-rgb: 167, 123, 254;
+      --em-bg: linear-gradient(145deg, rgba(19, 13, 38, .98), rgba(9, 6, 20, .99));
+      --em-border: rgba(167, 123, 254, .25);
+      --em-glow: rgba(167, 123, 254, .08);
+      --em-btn-color: #be9dff;
+      --em-btn-bg: rgba(167, 123, 254, .1);
+      --em-btn-border: rgba(167, 123, 254, .32);
+      --em-btn-hover-bg: rgba(167, 123, 254, .2);
+      --em-btn-hover-border: rgba(167, 123, 254, .6);
+      --em-title-color: #faf5ff;
+      --em-subtitle-color: #9a8ca6;
+    }
+    #${PANEL_ID}[data-theme="rose"], #${MODAL_ID} .ryuu-modal-card[data-theme="rose"] {
+      --em-accent: #f768b7;
+      --em-accent-rgb: 247, 104, 183;
+      --em-bg: linear-gradient(145deg, rgba(26, 10, 24, .98), rgba(14, 5, 12, .99));
+      --em-border: rgba(247, 104, 183, .25);
+      --em-glow: rgba(247, 104, 183, .08);
+      --em-btn-color: #f988c7;
+      --em-btn-bg: rgba(247, 104, 183, .1);
+      --em-btn-border: rgba(247, 104, 183, .32);
+      --em-btn-hover-bg: rgba(247, 104, 183, .2);
+      --em-btn-hover-border: rgba(247, 104, 183, .6);
+      --em-title-color: #fdf2f8;
+      --em-subtitle-color: #a48293;
+    }
+
     #${PANEL_ID} {
       position: relative;
       isolation: isolate;
       overflow: hidden;
       margin: 0 0 16px;
       padding: 17px;
-      border: 1px solid rgba(255, 110, 155, .18);
+      border: 1px solid var(--em-border);
       border-radius: 11px;
       background:
-        radial-gradient(circle at 0 0, rgba(255, 110, 155, .055), transparent 42%),
-        linear-gradient(145deg, rgba(17, 20, 29, .98), rgba(9, 12, 18, .99));
+        radial-gradient(circle at 0 0, var(--em-glow), transparent 42%),
+        var(--em-bg);
       box-shadow:
         0 18px 42px rgba(0, 0, 0, .3),
         inset 0 1px 0 rgba(255, 255, 255, .035);
@@ -92,11 +297,12 @@ function addStyles(): void {
       inset: 0 auto auto 0;
       width: 100%;
       height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255, 110, 155, .68), transparent);
+      background: linear-gradient(90deg, transparent, var(--em-accent), transparent);
       opacity: .7;
     }
     #${PANEL_ID}[data-mode="button"],
-    #${PANEL_ID}[data-mode="crocodile"] {
+    #${PANEL_ID}[data-mode="crocodile"],
+    #${PANEL_ID}[data-mode="eclipse"] {
       width: fit-content;
       padding: 0;
       border: 0;
@@ -106,7 +312,8 @@ function addStyles(): void {
     #${PANEL_ID}[data-mode="button"] {
       min-width: 220px;
     }
-    #${PANEL_ID}[data-mode="crocodile"] {
+    #${PANEL_ID}[data-mode="crocodile"],
+    #${PANEL_ID}[data-mode="eclipse"] {
       display: flex;
       align-items: center;
       gap: 7px;
@@ -114,7 +321,9 @@ function addStyles(): void {
     #${PANEL_ID}[data-mode="button"]::before,
     #${PANEL_ID}[data-mode="button"] .ryuu-header,
     #${PANEL_ID}[data-mode="crocodile"]::before,
-    #${PANEL_ID}[data-mode="crocodile"] .ryuu-header {
+    #${PANEL_ID}[data-mode="crocodile"] .ryuu-header,
+    #${PANEL_ID}[data-mode="eclipse"]::before,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-header {
       display: none;
     }
     #${PANEL_ID}[data-mode="button"] .ryuu-button {
@@ -123,7 +332,8 @@ function addStyles(): void {
       height: 38px;
       padding: 0 40px 0 14px;
     }
-    #${PANEL_ID}[data-mode="crocodile"] .ryuu-button {
+    #${PANEL_ID}[data-mode="crocodile"] .ryuu-button,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-button {
       position: relative;
       display: grid;
       place-items: center;
@@ -136,10 +346,15 @@ function addStyles(): void {
     #${PANEL_ID}[data-mode="crocodile"] .ryuu-button-label,
     #${PANEL_ID}[data-mode="crocodile"] .ryuu-button-arrow,
     #${PANEL_ID}[data-mode="crocodile"] .ryuu-button-icon svg,
-    #${PANEL_ID}[data-mode="crocodile"] .ryuu-button-icon::before {
+    #${PANEL_ID}[data-mode="crocodile"] .ryuu-button-icon::before,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-button-label,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-button-arrow,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-button-icon svg,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-button-icon::before {
       display: none;
     }
-    #${PANEL_ID}[data-mode="crocodile"] .ryuu-button-icon {
+    #${PANEL_ID}[data-mode="crocodile"] .ryuu-button-icon,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-button-icon {
       position: absolute;
       inset: 0;
       display: grid;
@@ -147,8 +362,9 @@ function addStyles(): void {
       height: 100%;
       place-items: center;
     }
-    #${PANEL_ID}[data-mode="crocodile"] .ryuu-button-icon::after {
-      content: "🐊";
+    #${PANEL_ID}[data-mode="crocodile"] .ryuu-button-icon::after,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-button-icon::after {
+      content: "🌒";
       display: grid;
       place-items: center;
       font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
@@ -167,10 +383,10 @@ function addStyles(): void {
       width: 38px;
       height: 38px;
       place-items: center;
-      border: 1px solid rgba(255, 110, 155, .24);
+      border: 1px solid rgba(var(--em-accent-rgb), .3);
       border-radius: 10px;
       color: #fff;
-      background: rgba(255, 110, 155, .075);
+      background: rgba(var(--em-accent-rgb), .12);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055);
       font-family: "Segoe UI Emoji", "Apple Color Emoji", sans-serif;
       font-size: 21px;
@@ -181,16 +397,27 @@ function addStyles(): void {
       flex: 1;
     }
     #${PANEL_ID} .ryuu-title {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
       margin: 0 0 3px;
-      color: #f3f6f8;
+      color: var(--em-title-color);
       font-size: 15px;
       font-weight: 650;
       line-height: 1.2;
       letter-spacing: .1px;
     }
+    #${PANEL_ID} .ryuu-fork-badge {
+      display: inline-block;
+      margin-left: 6px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--em-accent);
+      opacity: .85;
+    }
     #${PANEL_ID} .ryuu-subtitle {
       overflow: hidden;
-      color: #8c96a7;
+      color: var(--em-subtitle-color);
       font-size: 11.5px;
       line-height: 1.35;
       text-overflow: ellipsis;
@@ -205,10 +432,10 @@ function addStyles(): void {
       gap: 5px;
       margin: -4px 0 9px auto;
       padding: 4px 7px;
-      border: 1px solid rgba(255, 110, 155, .14);
+      border: 1px solid rgba(var(--em-accent-rgb), .2);
       border-radius: 999px;
-      color: #8c96a7;
-      background: rgba(255, 110, 155, .04);
+      color: var(--em-subtitle-color);
+      background: rgba(var(--em-accent-rgb), .06);
       font-size: 10px;
       line-height: 1;
       white-space: nowrap;
@@ -217,7 +444,7 @@ function addStyles(): void {
       display: none;
     }
     #${PANEL_ID} .ryuu-service-name {
-      color: #db9caf;
+      color: var(--em-accent);
       font-weight: 700;
     }
     #${PANEL_ID} .ryuu-service-usage {
@@ -225,20 +452,22 @@ function addStyles(): void {
       font-weight: 650;
     }
     #${PANEL_ID} .ryuu-service-meta[data-error="true"] {
-      border-color: rgba(255, 139, 160, .2);
-      color: #e7a2af;
-      background: rgba(114, 39, 59, .16);
+      border-color: rgba(255, 112, 137, .24);
+      color: #ff91a5;
+      background: rgba(145, 42, 65, .16);
     }
     #${PANEL_ID}[data-mode="button"] .ryuu-service-meta {
       margin: 0 0 6px auto;
     }
-    #${PANEL_ID}[data-mode="crocodile"] .ryuu-service-meta {
+    #${PANEL_ID}[data-mode="crocodile"] .ryuu-service-meta,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-service-meta {
       order: 2;
       margin: 0;
       padding: 4px 7px;
       white-space: nowrap;
     }
-    #${PANEL_ID}[data-mode="crocodile"] .ryuu-service-name {
+    #${PANEL_ID}[data-mode="crocodile"] .ryuu-service-name,
+    #${PANEL_ID}[data-mode="eclipse"] .ryuu-service-name {
       display: none;
     }
     #${PANEL_ID} .ryuu-button {
@@ -251,29 +480,29 @@ function addStyles(): void {
       width: 100%;
       height: 44px;
       padding: 0 16px;
-      border: 1px solid rgba(255, 110, 155, .28);
+      border: 1px solid var(--em-btn-border);
       border-radius: 9px;
-      color: #e9a8bc;
-      background: rgba(255, 110, 155, .065);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
+      color: var(--em-btn-color);
+      background: var(--em-btn-bg);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
       font: 650 14px/1 "Motiva Sans", Arial, sans-serif;
       letter-spacing: .1px;
       cursor: pointer;
-      transition: color .16s ease, background .16s ease, border-color .16s ease, transform .16s ease;
+      transition: color .16s ease, background .16s ease, border-color .16s ease, transform .16s ease, box-shadow .16s ease;
     }
     #${PANEL_ID} .ryuu-button::before {
       display: none;
     }
     #${PANEL_ID} .ryuu-button:hover {
-      color: #ffc0d1;
-      border-color: rgba(255, 110, 155, .43);
-      background: rgba(255, 110, 155, .105);
+      color: #ffffff;
+      border-color: var(--em-btn-hover-border);
+      background: var(--em-btn-hover-bg);
       transform: translateY(-1px);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 12px rgba(var(--em-accent-rgb), .25);
     }
     #${PANEL_ID} .ryuu-button:active {
       transform: translateY(0);
-      background: rgba(255, 110, 155, .08);
+      background: var(--em-btn-bg);
     }
     #${PANEL_ID} .ryuu-button:disabled {
       cursor: wait;
@@ -397,11 +626,11 @@ function addStyles(): void {
       overflow: hidden;
       width: min(440px, calc(100vw - 48px));
       padding: 25px;
-      border: 1px solid rgba(255, 110, 155, .2);
+      border: 1px solid var(--em-border);
       border-radius: 16px;
       background:
-        radial-gradient(circle at 0 0, rgba(255, 110, 155, .055), transparent 42%),
-        linear-gradient(145deg, #11151e, #090c12);
+        radial-gradient(circle at 0 0, var(--em-glow), transparent 42%),
+        var(--em-bg);
       box-shadow: 0 28px 90px rgba(0, 0, 0, .62), inset 0 1px 0 rgba(255, 255, 255, .04);
       color: #d6d7d8;
       font-family: "Motiva Sans", Arial, sans-serif;
@@ -412,7 +641,7 @@ function addStyles(): void {
       position: absolute;
       inset: 0 0 auto;
       height: 2px;
-      background: linear-gradient(90deg, transparent, rgba(255, 110, 155, .72), transparent);
+      background: linear-gradient(90deg, transparent, var(--em-accent), transparent);
     }
     #${MODAL_ID} .ryuu-modal-card[data-kind="error"]::before {
       background: linear-gradient(90deg, transparent, rgba(255, 91, 125, .78), transparent);
@@ -447,18 +676,24 @@ function addStyles(): void {
       cursor: pointer;
       font-size: 14px;
       font-weight: 600;
-      transition: transform .15s ease, filter .15s ease, background .15s ease;
+      transition: transform .15s ease, filter .15s ease, background .15s ease, border-color .15s ease;
     }
-    #${MODAL_ID} button:hover { color: #fff; border-color: rgba(255, 110, 155, .22); background: rgba(255, 110, 155, .06); transform: translateY(-1px); }
+    #${MODAL_ID} button:hover { color: #fff; border-color: rgba(var(--em-accent-rgb), .35); background: rgba(var(--em-accent-rgb), .12); transform: translateY(-1px); }
     #${MODAL_ID} button.primary {
-      border-color: rgba(255, 110, 155, .28);
-      color: #f0abc0;
-      background: rgba(255, 110, 155, .085);
-      box-shadow: none;
+      border-color: var(--em-btn-border);
+      color: #ffffff;
+      background: var(--em-btn-bg);
+      box-shadow: 0 0 8px rgba(var(--em-accent-rgb), .25);
     }
     #${MODAL_ID} button.primary:hover {
-      filter: brightness(1.1);
+      filter: brightness(1.15);
+      border-color: var(--em-btn-hover-border);
     }
+    #${MODAL_ID} button:disabled { cursor: wait; opacity: .6; }
+    @keyframes ryuu-fade-in {
+      from { opacity: 0; }
+    }
+    @keyframes ryuu-card-in {
     #${MODAL_ID} button:disabled { cursor: wait; opacity: .6; }
     @keyframes ryuu-fade-in {
       from { opacity: 0; }
@@ -467,7 +702,10 @@ function addStyles(): void {
       from { opacity: 0; transform: translateY(8px) scale(.985); }
     }
   `;
-  document.head.appendChild(style);
+  const container = document.head || document.documentElement;
+  if (container) {
+    container.appendChild(style);
+  }
 }
 
 function createDownloadIcon(): SVGSVGElement {
@@ -500,6 +738,7 @@ function showMessage(title: string, message: string): void {
   const card = document.createElement('div');
   card.className = 'ryuu-modal-card';
   card.dataset.kind = 'error';
+  card.dataset.theme = document.getElementById(PANEL_ID)?.dataset.theme || 'midnight';
   const heading = document.createElement('h2');
   heading.textContent = title;
   const copy = document.createElement('p');
@@ -525,6 +764,7 @@ function showRestartPrompt(reply: InstallReply): void {
   const card = document.createElement('div');
   card.className = 'ryuu-modal-card';
   card.dataset.kind = 'success';
+  card.dataset.theme = document.getElementById(PANEL_ID)?.dataset.theme || 'midnight';
   const heading = document.createElement('h2');
   heading.textContent = 'Манифест получен';
   const copy = document.createElement('p');
@@ -603,7 +843,7 @@ function applyServiceStatus(panel: HTMLElement, status: InstallReply): void {
   if (status.configured === false) {
     meta.dataset.error = 'true';
     usageText.textContent = 'укажите API-ключ';
-    meta.title = 'Добавьте личный API-ключ HubCap в настройках Crocodile Manifest';
+    meta.title = 'Добавьте личный API-ключ HubCap в настройках Eclipse Manifest';
     return;
   }
   if (status.hubcapUsage) {
@@ -625,6 +865,7 @@ function applyGameStatus(
   status: GameStatusReply,
 ): void {
   panel.dataset.mode = status.cardMode || 'full';
+  panel.dataset.theme = status.theme || 'midnight';
   applyServiceStatus(panel, status);
   const gameState = status.state || 'available';
   button.dataset.gameState = gameState;
@@ -687,43 +928,83 @@ async function refreshGameStatus(panel: HTMLElement, appid: string, force = fals
   }
 }
 
+// Поиск оптимального контейнера на странице Steam для вставки карточки манифестов
 function findPurchaseArea(): Element | null {
-  return document.querySelector('#game_area_purchase')
-    ?? document.querySelector('.game_area_purchase_game_wrapper')?.parentElement
-    ?? document.querySelector('.queue_actions_ctn')?.parentElement
-    ?? null;
+  // 1. Стандартная область покупки игры
+  const gameArea = document.querySelector('#game_area_purchase')
+    ?? document.querySelector('.game_area_purchase');
+  if (gameArea) return gameArea;
+
+  // 2. Родительский контейнер первого блока покупки
+  const wrapper = document.querySelector('.game_area_purchase_game_wrapper')
+    ?? document.querySelector('.game_area_purchase_game');
+  if (wrapper?.parentElement) return wrapper.parentElement;
+
+  // 3. Контейнер опций покупки (новые макеты Steam)
+  const options = document.querySelector('#purchaseOptionsContent')
+    ?? document.querySelector('.purchase_options_content');
+  if (options && options.parentElement) return options.parentElement;
+
+  // 4. Основная левая колонка страницы игры
+  const mainCol = document.querySelector('.page_content_ctn .leftcol')
+    ?? document.querySelector('.game_page_autocollapse')
+    ?? document.querySelector('#tabletGrid .leftcol');
+  if (mainCol) return mainCol;
+
+  // 5. Блок действий очереди (желаемое / подписка)
+  const queueActions = document.querySelector('#queueActionsCtn')
+    ?? document.querySelector('.queue_actions_ctn');
+  if (queueActions?.parentElement?.parentElement) {
+    return queueActions.parentElement.parentElement;
+  }
+
+  return null;
 }
 
+// Внедрение плагина на страницу магазина Steam
 function injectButton(): void {
+  // Удаление устаревшей панели предыдущей версии, если осталась в DOM
+  document.getElementById(LEGACY_PANEL_ID)?.remove();
+
   const appid = currentAppId();
   const existing = document.getElementById(PANEL_ID);
   if (!appid) {
     existing?.remove();
     return;
   }
-  if (existing?.dataset.appid === appid) {
-    void refreshGameStatus(existing, appid);
-    return;
-  }
-  existing?.remove();
 
   const target = findPurchaseArea();
   if (!target) return;
+
+  // Если панель уже на месте в нужном контейнере и для нужного AppID — просто обновляем статус
+  if (existing) {
+    if (existing.dataset.appid === appid && target.contains(existing)) {
+      void refreshGameStatus(existing, appid);
+      return;
+    }
+    existing.remove();
+  }
 
   const panel = document.createElement('section');
   panel.id = PANEL_ID;
   panel.dataset.appid = appid;
   panel.dataset.mode = 'full';
+  panel.dataset.theme = 'midnight';
   const header = document.createElement('div');
   header.className = 'ryuu-header';
   const logo = document.createElement('div');
   logo.className = 'ryuu-logo';
-  logo.textContent = '🐊';
+  logo.textContent = '🌒';
   const copy = document.createElement('div');
   copy.className = 'ryuu-copy';
   const title = document.createElement('div');
   title.className = 'ryuu-title';
-  title.textContent = 'Crocodile Manifest';
+  const titleMain = document.createElement('span');
+  titleMain.textContent = 'Eclipse Manifest';
+  const titleBadge = document.createElement('span');
+  titleBadge.className = 'ryuu-fork-badge';
+  titleBadge.textContent = '(форк CrocLua)';
+  title.append(titleMain, titleBadge);
   const subtitle = document.createElement('div');
   subtitle.className = 'ryuu-subtitle';
   subtitle.textContent = 'Lua и манифесты прямо из магазина Steam';
@@ -769,12 +1050,8 @@ function injectButton(): void {
   void refreshGameStatus(panel, appid, true);
 }
 
-export default async function WebkitMain(): Promise<void> {
-  void keepManifestsAvailable();
-  window.setInterval((): void => {
-    void keepManifestsAvailable();
-  }, 2000);
-  if (!/^(store\.)?steampowered\.com$/i.test(window.location.hostname)) return;
+// Запуск наблюдателя и таймеров внедрения плагина
+function startWebkitInjection(): void {
   addStyles();
   injectButton();
 
@@ -785,8 +1062,25 @@ export default async function WebkitMain(): Promise<void> {
     window.setTimeout(() => {
       scheduled = false;
       injectButton();
-    }, 180);
+    }, 150);
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.setInterval(injectButton, 1500);
+  if (document.documentElement) {
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+  window.setInterval(injectButton, 1200);
+}
+
+export default async function WebkitMain(): Promise<void> {
+  void keepManifestsAvailable();
+  window.setInterval((): void => {
+    void keepManifestsAvailable();
+  }, 2000);
+
+  if (!/^(store\.)?steam(powered|china)\.com$/i.test(window.location.hostname)) return;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => startWebkitInjection(), { once: true });
+  } else {
+    startWebkitInjection();
+  }
 }

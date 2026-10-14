@@ -15,8 +15,10 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const NO_WINDOW: u32 = 0x08000000;
 
-// Путь к плагинам SteamTools
-const STPLUGIN_REL: &[&str] = &["config", "stplug-in"];
+// Основной каталог для Lua-скриптов в Steam
+const LUA_DIR_REL: &[&str] = &["config", "lua"];
+// Устаревший каталог плагинов SteamTools
+const LEGACY_STPLUGIN_REL: &[&str] = &["config", "stplug-in"];
 // Пути к кэшу манифестов
 const DEPOTCACHE_REL: &[&str] = &["depotcache"];
 const LEGACY_DEPOTCACHE_REL: &[&str] = &["config", "depotcache"];
@@ -161,8 +163,14 @@ pub(crate) fn resolve_steam_path(override_path: Option<String>) -> Option<PathBu
     detect_steam_path()
 }
 
+fn default_lua_dir(steam: &Path) -> PathBuf {
+    LUA_DIR_REL
+        .iter()
+        .fold(steam.to_path_buf(), |acc, part| acc.join(part))
+}
+
 fn legacy_stplugin_dir(steam: &Path) -> PathBuf {
-    STPLUGIN_REL
+    LEGACY_STPLUGIN_REL
         .iter()
         .fold(steam.to_path_buf(), |acc, part| acc.join(part))
 }
@@ -282,10 +290,12 @@ fn opensteamtool_lua_dirs(steam: &Path) -> Vec<PathBuf> {
 
 // Рабочая папка Lua для текущего загрузчика
 fn stplugin_dir(steam: &Path) -> PathBuf {
-    opensteamtool_lua_dirs(steam)
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| legacy_stplugin_dir(steam))
+    let preferred = default_lua_dir(steam);
+    let ost_dirs = opensteamtool_lua_dirs(steam);
+    if ost_dirs.iter().any(|d| d == &preferred) || preferred.is_dir() {
+        return preferred;
+    }
+    ost_dirs.into_iter().next().unwrap_or(preferred)
 }
 
 fn loader_state(steam: &Path) -> (String, Option<String>, Option<String>) {
@@ -316,7 +326,7 @@ fn loader_state(steam: &Path) -> (String, Option<String>, Option<String>) {
         return ("ready".into(), Some("OpenSteamTool".into()), None);
     }
 
-    if legacy_stplugin_dir(steam).is_dir() {
+    if default_lua_dir(steam).is_dir() || legacy_stplugin_dir(steam).is_dir() {
         // Старые версии SteamTools без отдельного маркера
         return ("legacy".into(), Some("SteamTools".into()), None);
     }
@@ -856,7 +866,7 @@ pub(crate) fn install_zip_bytes(
     if let Err(error) = fs::create_dir_all(&context.stplugin) {
         return LuaInstallResult {
             success: false,
-            message: format!("Не удалось подготовить папку stplug-in: {error}"),
+            message: format!("Не удалось подготовить папку lua: {error}"),
             logs: vec![],
             added_appids: vec![],
         };
@@ -960,7 +970,7 @@ fn luatools_install_blocking(
     if let Err(error) = fs::create_dir_all(&context.stplugin) {
         return LuaInstallResult {
             success: false,
-            message: format!("Не удалось подготовить папку stplug-in: {error}"),
+            message: format!("Не удалось подготовить папку lua: {error}"),
             logs: vec![],
             added_appids: vec![],
         };
@@ -1410,6 +1420,10 @@ paths = ["ignore"]
         assert_eq!(
             legacy_stplugin_dir(&steam),
             steam.join("config").join("stplug-in")
+        );
+        assert_eq!(
+            default_lua_dir(&steam),
+            steam.join("config").join("lua")
         );
         assert_eq!(depotcache_dir(&steam), steam.join("depotcache"));
         assert_eq!(

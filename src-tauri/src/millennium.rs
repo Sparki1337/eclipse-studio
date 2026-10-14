@@ -5,8 +5,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const PLUGIN_FOLDER_NAME: &str = "crocodile-manifest";
-const BUNDLED_PLUGIN_VERSION: &str = "0.4.9";
+const PLUGIN_FOLDER_NAME: &str = "eclipse-manifest";
+const BUNDLED_PLUGIN_VERSION: &str = "0.5.0";
 
 const EMBEDDED_MILLENNIUM_FILES: &[(&str, &[u8])] = &[
     ("wsock32.dll", include_bytes!("../../millenium/wsock32.dll")),
@@ -31,19 +31,19 @@ const EMBEDDED_MILLENNIUM_FILES: &[(&str, &[u8])] = &[
 const EMBEDDED_PLUGIN_FILES: &[(&str, &[u8])] = &[
     (
         "plugin.json",
-        include_bytes!("assets/crocodile-manifest/plugin.json"),
+        include_bytes!("assets/eclipse-manifest/plugin.json"),
     ),
     (
         "backend/main.lua",
-        include_bytes!("assets/crocodile-manifest/backend/main.lua"),
+        include_bytes!("assets/eclipse-manifest/backend/main.lua"),
     ),
     (
         ".millennium/Dist/index.js",
-        include_bytes!("assets/crocodile-manifest/.millennium/Dist/index.js"),
+        include_bytes!("assets/eclipse-manifest/.millennium/Dist/index.js"),
     ),
     (
         ".millennium/Dist/webkit.js",
-        include_bytes!("assets/crocodile-manifest/.millennium/Dist/webkit.js"),
+        include_bytes!("assets/eclipse-manifest/.millennium/Dist/webkit.js"),
     ),
 ];
 
@@ -58,6 +58,9 @@ pub struct MillenniumPluginStatus {
     pub plugin_current: bool,
     pub plugin_version: Option<String>,
     pub bundled_version: String,
+    pub legacy_croclua_found: bool,
+    pub legacy_croclua_path: Option<String>,
+    pub legacy_croclua_name: Option<String>,
     pub status: String,
     pub message: String,
 }
@@ -70,6 +73,63 @@ fn plugin_dir(steam: &Path) -> PathBuf {
     millennium_dir(steam)
         .join("plugins")
         .join(PLUGIN_FOLDER_NAME)
+}
+
+// Поиск устаревших папок плагина CrocLua (Crocodile Manifest)
+fn find_legacy_croclua_plugins(steam: &Path) -> Vec<PathBuf> {
+    let plugins_dir = millennium_dir(steam).join("plugins");
+    if !plugins_dir.is_dir() {
+        return Vec::new();
+    }
+    let mut matches = Vec::new();
+    let entries = match fs::read_dir(&plugins_dir) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let folder_name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+        if folder_name == PLUGIN_FOLDER_NAME {
+            continue;
+        }
+        if folder_name == "crocodile-manifest"
+            || folder_name == "croclua"
+            || folder_name == "croc-manifest"
+            || folder_name == "crocodile-lua"
+        {
+            matches.push(path);
+            continue;
+        }
+        let plugin_json = path.join("plugin.json");
+        if plugin_json.is_file() {
+            if let Ok(data) = fs::read(&plugin_json) {
+                if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&data) {
+                    let name = val
+                        .get("name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    let common_name = val
+                        .get("common_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    if name == "crocodile-manifest"
+                        || name == "croclua"
+                        || name == "croc-manifest"
+                        || common_name.contains("crocodile")
+                        || common_name.contains("croclua")
+                    {
+                        matches.push(path);
+                    }
+                }
+            }
+        }
+    }
+    matches
 }
 
 fn millennium_is_installed(steam: &Path) -> bool {
@@ -115,6 +175,9 @@ fn status_for(steam_path: Option<String>) -> MillenniumPluginStatus {
             plugin_current: false,
             plugin_version: None,
             bundled_version: BUNDLED_PLUGIN_VERSION.into(),
+            legacy_croclua_found: false,
+            legacy_croclua_path: None,
+            legacy_croclua_name: None,
             status: "steam_missing".into(),
             message: "Сначала укажите папку Steam".into(),
         };
@@ -127,12 +190,24 @@ fn status_for(steam_path: Option<String>) -> MillenniumPluginStatus {
     let plugin_installed = plugin.join("plugin.json").is_file();
     let plugin_current = plugin_version.as_deref() == Some(BUNDLED_PLUGIN_VERSION);
 
+    let legacy_croclua_paths = find_legacy_croclua_plugins(&steam);
+    let legacy_croclua_found = !legacy_croclua_paths.is_empty();
+    let legacy_croclua_path = legacy_croclua_paths.first().map(|p| p.display().to_string());
+    let legacy_croclua_name = legacy_croclua_paths.first().and_then(|p| {
+        installed_plugin_name(p).or_else(|| p.file_name().map(|f| f.to_string_lossy().to_string()))
+    });
+
     let (status, message) = if !steam.join("steam.exe").is_file() {
         ("steam_invalid", "В выбранной папке не найден steam.exe")
     } else if !millennium_installed {
         (
             "millennium_missing",
             "Millennium не установлен. Программа может установить встроенные файлы напрямую в Steam",
+        )
+    } else if legacy_croclua_found && !plugin_installed {
+        (
+            "croclua_detected",
+            "Обнаружен устаревший плагин CrocLua (Crocodile Manifest). Рекомендуется удалить его и установить Eclipse Manifest",
         )
     } else if !plugin_installed {
         (
@@ -145,7 +220,7 @@ fn status_for(steam_path: Option<String>) -> MillenniumPluginStatus {
             "Доступна новая встроенная версия плагина",
         )
     } else {
-        ("ready", "Crocodile Manifest установлен и готов к работе")
+        ("ready", "Eclipse Manifest установлен и готов к работе")
     };
 
     MillenniumPluginStatus {
@@ -157,6 +232,9 @@ fn status_for(steam_path: Option<String>) -> MillenniumPluginStatus {
         plugin_current,
         plugin_version,
         bundled_version: BUNDLED_PLUGIN_VERSION.into(),
+        legacy_croclua_found,
+        legacy_croclua_path,
+        legacy_croclua_name,
         status: status.into(),
         message: message.into(),
     }
@@ -187,6 +265,14 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
     let mut logs = Vec::new();
     let mut changed = 0_u32;
 
+    // Автоматическое удаление устаревшей папки crocodile-manifest при миграции
+    let legacy_plugin = millennium_dir(&steam).join("plugins").join("crocodile-manifest");
+    if legacy_plugin.is_dir() {
+        if fs::remove_dir_all(&legacy_plugin).is_ok() {
+            logs.push("Удалена устаревшая папка плагина: crocodile-manifest".to_string());
+        }
+    }
+
     for (relative, contents) in EMBEDDED_PLUGIN_FILES {
         let target = relative
             .split('/')
@@ -215,9 +301,9 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
     }
 
     let action = match previous_version.as_deref() {
-        None => "Плагин Crocodile Manifest установлен",
-        Some(BUNDLED_PLUGIN_VERSION) if changed == 0 => "Плагин Crocodile Manifest уже установлен",
-        Some(_) => "Плагин Crocodile Manifest обновлён",
+        None => "Плагин Eclipse Manifest установлен",
+        Some(BUNDLED_PLUGIN_VERSION) if changed == 0 => "Плагин Eclipse Manifest уже установлен",
+        Some(_) => "Плагин Eclipse Manifest обновлён",
     };
     logs.push(format!("Папка: {}", target_root.display()));
     OperationResult::ok(
@@ -232,26 +318,94 @@ pub fn millennium_remove_plugin(steam_path: Option<String>) -> OperationResult {
         return OperationResult::error("Папка Steam не найдена", vec![]);
     };
     let target = plugin_dir(&steam);
-    if !target.is_dir() {
-        return OperationResult::error("Плагин Crocodile Manifest не установлен", vec![]);
+    let legacy_target = millennium_dir(&steam).join("plugins").join("crocodile-manifest");
+    if !target.is_dir() && !legacy_target.is_dir() {
+        return OperationResult::error("Плагин Eclipse Manifest не установлен", vec![]);
     }
-    if installed_plugin_name(&target).as_deref() != Some(PLUGIN_FOLDER_NAME) {
+    if target.is_dir() && installed_plugin_name(&target).as_deref() != Some(PLUGIN_FOLDER_NAME) {
         return OperationResult::error(
-            "Удаление отменено: папка не принадлежит Crocodile Manifest",
+            "Удаление отменено: папка не принадлежит Eclipse Manifest",
             vec![],
         );
     }
 
-    match fs::remove_dir_all(&target) {
-        Ok(_) => OperationResult::ok(
-            "Плагин Crocodile Manifest удалён. Перезапустите Steam, чтобы применить изменения",
-            vec![format!("Удалена папка: {}", target.display())],
-        ),
-        Err(error) => OperationResult::error(
-            format!("Не удалось удалить плагин: {error}"),
-            vec![format!("Папка: {}", target.display())],
-        ),
+    let mut logs = Vec::new();
+    if legacy_target.is_dir() {
+        let _ = fs::remove_dir_all(&legacy_target);
+        logs.push(format!("Удалена устаревшая папка: {}", legacy_target.display()));
     }
+    if target.is_dir() {
+        match fs::remove_dir_all(&target) {
+            Ok(_) => {
+                logs.push(format!("Удалена папка: {}", target.display()));
+            }
+            Err(error) => {
+                return OperationResult::error(
+                    format!("Не удалось удалить плагин: {error}"),
+                    logs,
+                );
+            }
+        }
+    }
+
+    OperationResult::ok(
+        "Плагин Eclipse Manifest удалён. Перезапустите Steam, чтобы применить изменения",
+        logs,
+    )
+}
+
+// Замена устаревшего плагина CrocLua на Eclipse Manifest
+#[tauri::command]
+pub fn millennium_migrate_from_croclua(steam_path: Option<String>) -> OperationResult {
+    let Some(steam) = resolve_steam_path(steam_path.clone()) else {
+        return OperationResult::error("Папка Steam не найдена", vec![]);
+    };
+    let mut logs = Vec::new();
+    let legacy_paths = find_legacy_croclua_plugins(&steam);
+    for path in legacy_paths {
+        if let Err(err) = fs::remove_dir_all(&path) {
+            logs.push(format!("Не удалось удалить {}: {err}", path.display()));
+        } else {
+            logs.push(format!("Удалена папка устаревшего плагина CrocLua: {}", path.display()));
+        }
+    }
+    let install_res = millennium_install_plugin(steam_path);
+    logs.extend(install_res.logs);
+    if install_res.success {
+        OperationResult::ok(
+            "CrocLua успешно заменён на Eclipse Manifest. Перезапустите Steam, чтобы применить изменения",
+            logs,
+        )
+    } else {
+        OperationResult::error(
+            format!("Устаревший плагин удалён, но при установке Eclipse Manifest произошла ошибка: {}", install_res.message),
+            logs,
+        )
+    }
+}
+
+// Удаление устаревшего плагина CrocLua без немедленной установки
+#[tauri::command]
+pub fn millennium_remove_legacy_croclua(steam_path: Option<String>) -> OperationResult {
+    let Some(steam) = resolve_steam_path(steam_path) else {
+        return OperationResult::error("Папка Steam не найдена", vec![]);
+    };
+    let mut logs = Vec::new();
+    let legacy_paths = find_legacy_croclua_plugins(&steam);
+    if legacy_paths.is_empty() {
+        return OperationResult::ok("Устаревший плагин CrocLua не найден", logs);
+    }
+    for path in legacy_paths {
+        if let Err(err) = fs::remove_dir_all(&path) {
+            logs.push(format!("Не удалось удалить {}: {err}", path.display()));
+        } else {
+            logs.push(format!("Удалена папка CrocLua: {}", path.display()));
+        }
+    }
+    OperationResult::ok(
+        "Устаревший плагин CrocLua удалён. Перезапустите Steam, чтобы применить изменения",
+        logs,
+    )
 }
 
 fn install_bundled_runtime(steam: &Path) -> OperationResult {
@@ -399,6 +553,43 @@ mod tests {
         assert_eq!(status.status, "millennium_missing");
         assert!(!status.millennium_installed);
         assert!(!status.plugin_installed);
+
+        fs::remove_dir_all(steam).expect("clean test directory");
+    }
+
+    #[test]
+    fn detects_and_migrates_croclua_plugin() {
+        let steam = test_steam_dir();
+        fs::create_dir_all(&steam).expect("create fake Steam");
+        fs::write(steam.join("steam.exe"), []).expect("create fake steam.exe");
+        let runtime = install_bundled_runtime(&steam);
+        assert!(runtime.success, "{}", runtime.message);
+
+        // Имитируем наличие старого плагина crocodile-manifest
+        let legacy = steam
+            .join("millennium")
+            .join("plugins")
+            .join("crocodile-manifest");
+        fs::create_dir_all(&legacy).expect("create legacy folder");
+        fs::write(
+            legacy.join("plugin.json"),
+            br#"{"name":"crocodile-manifest","common_name":"Crocodile Manifest","version":"0.4.9"}"#,
+        )
+        .expect("write legacy plugin.json");
+
+        let status = status_for(Some(steam.display().to_string()));
+        assert_eq!(status.status, "croclua_detected");
+        assert!(status.legacy_croclua_found);
+
+        // Выполняем миграцию
+        let migration = millennium_migrate_from_croclua(Some(steam.display().to_string()));
+        assert!(migration.success, "{}", migration.message);
+        assert!(!legacy.exists(), "legacy plugin must be removed");
+
+        let after = status_for(Some(steam.display().to_string()));
+        assert_eq!(after.status, "ready");
+        assert!(!after.legacy_croclua_found);
+        assert!(after.plugin_installed);
 
         fs::remove_dir_all(steam).expect("clean test directory");
     }

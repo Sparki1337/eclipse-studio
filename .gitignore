@@ -26,5 +26,5 @@ desktop.ini
 *.local
 
 # Preserve essential hidden asset directories for Tauri compilation
-!src-tauri/src/assets/crocodile-manifest/.millennium/
-!src-tauri/src/assets/crocodile-manifest/.millennium/**
+!src-tauri/src/assets/eclipse-manifest/.millennium/
+!src-tauri/src/assets/eclipse-manifest/.millennium/**

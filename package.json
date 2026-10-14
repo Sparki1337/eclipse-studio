@@ -1,7 +1,7 @@
 {
   "name": "eclipse-studio",
   "private": true,
-  "version": "6.6.6",
+  "version": "6.6.7",
   "description": "Eclipse Studio — premium Tauri desktop client",
   "scripts": {
     "tauri": "tauri",

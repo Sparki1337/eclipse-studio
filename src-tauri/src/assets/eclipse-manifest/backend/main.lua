@@ -43,7 +43,12 @@ local function manifest_cache_directory(appid)
     if not local_app_data or local_app_data == "" then
         return nil
     end
-    return fs.join(local_app_data, "CrocodileManifest", "manifest-cache", tostring(appid))
+    local primary = fs.join(local_app_data, "EclipseManifest", "manifest-cache", tostring(appid))
+    local legacy = fs.join(local_app_data, "CrocodileManifest", "manifest-cache", tostring(appid))
+    if not fs.is_directory(primary) and fs.is_directory(legacy) then
+        return legacy
+    end
+    return primary
 end
 
 local function safe_manifest_name(value)
@@ -59,12 +64,24 @@ local function state_file()
     if not local_app_data or local_app_data == "" then
         return nil
     end
-    return fs.join(local_app_data, "CrocodileManifest", "state.json")
+    local primary = fs.join(local_app_data, "EclipseManifest", "state.json")
+    local legacy = fs.join(local_app_data, "CrocodileManifest", "state.json")
+    if not fs.is_file(primary) and fs.is_file(legacy) then
+        return legacy
+    end
+    return primary
 end
+
+local VALID_THEMES = {
+    graphite = true, oled = true, steel = true, light = true,
+    ruby = true, amber = true, gold = true, forest = true,
+    cyan = true, midnight = true, cosmos = true, rose = true
+}
 
 local function default_state()
     return {
         cardMode = "full",
+        theme = "midnight",
         service = "ryuu",
         ryuuKey = "",
         hubcapKey = "",
@@ -85,7 +102,7 @@ local function load_state()
     end
     local ok, decoded = pcall(json.decode, content)
     if not ok or type(decoded) ~= "table" then
-        logger:error("Crocodile Manifest state file is invalid")
+        logger:error("Eclipse Manifest state file is invalid")
         return default_state()
     end
     if type(decoded.history) ~= "table" then
@@ -97,8 +114,11 @@ local function load_state()
     if type(decoded.installedGames) ~= "table" then
         decoded.installedGames = {}
     end
-    if decoded.cardMode ~= "full" and decoded.cardMode ~= "button" and decoded.cardMode ~= "crocodile" then
+    if decoded.cardMode ~= "full" and decoded.cardMode ~= "button" and decoded.cardMode ~= "crocodile" and decoded.cardMode ~= "eclipse" then
         decoded.cardMode = decoded.compactMode == true and "button" or "full"
+    end
+    if type(decoded.theme) ~= "string" or not VALID_THEMES[decoded.theme] then
+        decoded.theme = "midnight"
     end
     if decoded.service ~= "ryuu" and decoded.service ~= "hubcap" then
         decoded.service = "ryuu"
@@ -114,15 +134,16 @@ local function load_state()
 end
 
 local function save_state(state)
-    local path = state_file()
-    if not path then
+    local local_app_data = utils.getenv("LOCALAPPDATA")
+    if not local_app_data or local_app_data == "" then
         return false, "LOCALAPPDATA недоступна"
     end
-    local directory = fs.join(utils.getenv("LOCALAPPDATA"), "CrocodileManifest")
+    local directory = fs.join(local_app_data, "EclipseManifest")
     local created, create_err = fs.create_directories(directory)
     if created == nil then
         return false, tostring(create_err)
     end
+    local path = fs.join(directory, "state.json")
     return write_binary(path, json.encode(state))
 end
 
@@ -162,7 +183,7 @@ local function add_history(appid, name, status, message, extra)
     end
     local ok, err = save_state(state)
     if not ok then
-        logger:error("Could not save Crocodile Manifest history: " .. tostring(err))
+        logger:error("Could not save Eclipse Manifest history: " .. tostring(err))
     end
 end
 
@@ -176,14 +197,32 @@ local function latest_history(state, appid)
 end
 
 local function installed_lua_path(steam_path, appid)
-    local directory = fs.join(steam_path, "config", "stplug-in")
-    local enabled = fs.join(directory, appid .. ".lua")
-    if fs.is_file(enabled) then
-        return enabled
+    local primary = fs.join(steam_path, "config", "lua")
+    local legacy_stplugin = fs.join(steam_path, "config", "stplug-in")
+    local legacy_root_lua = fs.join(steam_path, "lua")
+    local primary_enabled = fs.join(primary, appid .. ".lua")
+    if fs.is_file(primary_enabled) then
+        return primary_enabled
     end
-    local disabled = fs.join(directory, appid .. ".lua.disabled")
-    if fs.is_file(disabled) then
-        return disabled
+    local primary_disabled = fs.join(primary, appid .. ".lua.disabled")
+    if fs.is_file(primary_disabled) then
+        return primary_disabled
+    end
+    local legacy_enabled = fs.join(legacy_stplugin, appid .. ".lua")
+    if fs.is_file(legacy_enabled) then
+        return legacy_enabled
+    end
+    local legacy_disabled = fs.join(legacy_stplugin, appid .. ".lua.disabled")
+    if fs.is_file(legacy_disabled) then
+        return legacy_disabled
+    end
+    local root_enabled = fs.join(legacy_root_lua, appid .. ".lua")
+    if fs.is_file(root_enabled) then
+        return root_enabled
+    end
+    local root_disabled = fs.join(legacy_root_lua, appid .. ".lua.disabled")
+    if fs.is_file(root_disabled) then
+        return root_disabled
     end
     return nil
 end
@@ -649,15 +688,15 @@ local function install_package(appid, service, key)
             tostring(script_err or powershell_err or "ошибка PowerShell")
     end
 
-    local stplugin = fs.join(steam_path, "config", "stplug-in")
+    local lua_dir = fs.join(steam_path, "config", "lua")
     local depotcache = fs.join(steam_path, "depotcache")
     local manifest_cache = manifest_cache_directory(appid)
-    local plugin_ok, plugin_err = fs.create_directories(stplugin)
+    local lua_ok, lua_err = fs.create_directories(lua_dir)
     local depot_ok, depot_err = fs.create_directories(depotcache)
-    if plugin_ok == nil or depot_ok == nil then
+    if lua_ok == nil or depot_ok == nil then
         fs.remove_all(work_dir)
         return false,
-            "Не удалось подготовить папки Steam: " .. tostring(plugin_err or depot_err)
+            "Не удалось подготовить папки Steam: " .. tostring(lua_err or depot_err)
     end
 
     local entries, list_err = fs.list_recursive(extract_dir)
@@ -677,7 +716,7 @@ local function install_package(appid, service, key)
             if lower:match("^%d+%.lua$") then
                 local content, read_err = read_binary(entry.path)
                 if content then
-                    local target = fs.join(stplugin, name)
+                    local target = fs.join(lua_dir, name)
                     local ok, err = write_binary(target, patch_lua(content))
                     if ok then
                         lua_count = lua_count + 1
@@ -734,6 +773,10 @@ local function install_package(appid, service, key)
 end
 
 function install_manifest(appid, name)
+    if type(appid) == "table" then
+        name = name or appid.name or appid[2]
+        appid = appid.appid or appid[1]
+    end
     local clean = tostring(appid or ""):match("^(%d+)$")
     if not clean then
         return reply(false, "Некорректный AppID")
@@ -762,7 +805,7 @@ function install_manifest(appid, name)
         })
     end
 
-    logger:info("Crocodile Manifest is downloading data for AppID " .. clean .. " via " .. service)
+    logger:info("Eclipse Manifest is downloading data for AppID " .. clean .. " via " .. service)
     local ok, message, extra = install_package(clean, service, key)
     if not ok then
         logger:error(message)
@@ -775,13 +818,14 @@ function install_manifest(appid, name)
     extra.repaired = repairing
     extra.pendingRestart = not repairing
     add_history(clean, game_name, "success", message, extra)
-    logger:info("Crocodile Manifest installed data for AppID " .. clean)
+    logger:info("Eclipse Manifest installed data for AppID " .. clean)
     extra.configured = true
     return reply(true, message, extra)
 end
 
 function get_game_status(appid)
-    local clean = tostring(appid or ""):match("^(%d+)$")
+    local raw = type(appid) == "table" and (appid.appid or appid[1]) or appid
+    local clean = tostring(raw or ""):match("^(%d+)$")
     if not clean then
         return reply(false, "Некорректный AppID")
     end
@@ -839,6 +883,7 @@ function get_game_status(appid)
     local response = {
         state = game_state,
         cardMode = state.cardMode,
+        theme = state.theme,
         service = service,
         configured = configured,
         installed = installed_path ~= nil,
@@ -926,6 +971,7 @@ function get_plugin_state()
 
     return reply(true, "Состояние загружено", {
         cardMode = state.cardMode,
+        theme = state.theme,
         service = state.service,
         hasRyuuKey = utils.trim(tostring(state.ryuuKey or "")) ~= "",
         hasHubcapKey = utils.trim(tostring(state.hubcapKey or "")) ~= "",
@@ -985,8 +1031,9 @@ function set_service_settings(payload)
 end
 
 function set_card_mode(mode)
-    local clean = tostring(mode or ""):lower()
-    if clean ~= "full" and clean ~= "button" and clean ~= "crocodile" then
+    local raw = type(mode) == "table" and (mode.mode or mode[1]) or mode
+    local clean = tostring(raw or ""):lower()
+    if clean ~= "full" and clean ~= "button" and clean ~= "crocodile" and clean ~= "eclipse" then
         return reply(false, "Неизвестный режим карточки")
     end
     local state = load_state()
@@ -1000,8 +1047,26 @@ function set_card_mode(mode)
     })
 end
 
+function set_theme(theme_name)
+    local raw = type(theme_name) == "table" and (theme_name.theme or theme_name[1]) or theme_name
+    local clean = tostring(raw or ""):lower()
+    if not VALID_THEMES[clean] then
+        return reply(false, "Неизвестная тема оформления")
+    end
+    local state = load_state()
+    state.theme = clean
+    local ok, err = save_state(state)
+    if not ok then
+        return reply(false, "Не удалось сохранить тему: " .. tostring(err))
+    end
+    return reply(true, "Тема оформления изменена", {
+        theme = state.theme
+    })
+end
+
 function remove_manifest(appid)
-    local clean = tostring(appid or ""):match("^(%d+)$")
+    local raw = type(appid) == "table" and (appid.appid or appid[1]) or appid
+    local clean = tostring(raw or ""):match("^(%d+)$")
     if not clean then
         return reply(false, "Некорректный AppID")
     end
@@ -1015,11 +1080,17 @@ function remove_manifest(appid)
     local installed_game = state.installedGames[clean]
     local game_name = installed_game and tostring(installed_game.name or "")
         or (latest and tostring(latest.name or "") or ("AppID " .. clean))
+    local config_lua = fs.join(steam_path, "config", "lua")
     local stplugin = fs.join(steam_path, "config", "stplug-in")
+    local root_lua = fs.join(steam_path, "lua")
     local depotcache = fs.join(steam_path, "depotcache")
     local lua_paths = {
+        fs.join(config_lua, clean .. ".lua"),
+        fs.join(config_lua, clean .. ".lua.disabled"),
         fs.join(stplugin, clean .. ".lua"),
-        fs.join(stplugin, clean .. ".lua.disabled")
+        fs.join(stplugin, clean .. ".lua.disabled"),
+        fs.join(root_lua, clean .. ".lua"),
+        fs.join(root_lua, clean .. ".lua.disabled")
     }
     local depot_ids = {}
     local removed = 0
@@ -1127,9 +1198,9 @@ function restart_steam()
         return reply(false, "Не удалось определить временную папку Windows")
     end
     local token = tostring(os.time()) .. "-" .. utils.uuid()
-    local script_path = fs.join(temp_root, "crocodile-manifest-restart-" .. token .. ".ps1")
-    local launcher_path = fs.join(temp_root, "crocodile-manifest-launcher-" .. token .. ".ps1")
-    local success_marker = fs.join(temp_root, "crocodile-manifest-launcher-" .. token .. ".ok")
+    local script_path = fs.join(temp_root, "eclipse-manifest-restart-" .. token .. ".ps1")
+    local launcher_path = fs.join(temp_root, "eclipse-manifest-launcher-" .. token .. ".ps1")
+    local success_marker = fs.join(temp_root, "eclipse-manifest-launcher-" .. token .. ".ok")
     local script = "$ErrorActionPreference = 'SilentlyContinue'\n" ..
         "$steam = " .. powershell_quote(steam_exe) .. "\n" ..
         "$steamDir = " .. powershell_quote(steam_path) .. "\n" ..
@@ -1196,12 +1267,12 @@ local function on_load()
             sync_manifest_cache(steam_path, tostring(appid), manifest_files)
         end
     end
-    logger:info("Crocodile Manifest loaded")
+    logger:info("Eclipse Manifest loaded")
     millennium.ready()
 end
 
 local function on_unload()
-    logger:info("Crocodile Manifest unloaded")
+    logger:info("Eclipse Manifest unloaded")
 end
 
 return {
