@@ -207,7 +207,7 @@ fn status_for(steam_path: Option<String>) -> MillenniumPluginStatus {
     } else if legacy_croclua_found && !plugin_installed {
         (
             "croclua_detected",
-            "Обнаружен устаревший плагин CrocLua (Crocodile Manifest). Рекомендуется удалить его и установить Eclipse Manifest",
+            "Обнаружен плагин CrocLua (Crocodile Manifest). Рекомендуется удалить его и установить Eclipse Manifest",
         )
     } else if !plugin_installed {
         (
@@ -378,7 +378,7 @@ pub fn millennium_migrate_from_croclua(steam_path: Option<String>) -> OperationR
         )
     } else {
         OperationResult::error(
-            format!("Устаревший плагин удалён, но при установке Eclipse Manifest произошла ошибка: {}", install_res.message),
+            format!("Плагин удалён, но при установке Eclipse Manifest произошла ошибка: {}", install_res.message),
             logs,
         )
     }
@@ -403,7 +403,7 @@ pub fn millennium_remove_legacy_croclua(steam_path: Option<String>) -> Operation
         }
     }
     OperationResult::ok(
-        "Устаревший плагин CrocLua удалён. Перезапустите Steam, чтобы применить изменения",
+        "Плагин CrocLua удалён. Перезапустите Steam, чтобы применить изменения",
         logs,
     )
 }

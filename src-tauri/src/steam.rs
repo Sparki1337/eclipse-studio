@@ -229,7 +229,20 @@ fn search_game_inner(query: &str) -> Result<Option<GameSummary>, String> {
     }))
 }
 
+// Кэш полных данных приложений Steam Store в оперативной памяти
+fn details_cache() -> &'static Mutex<HashMap<u64, Value>> {
+    static CACHE: OnceLock<Mutex<HashMap<u64, Value>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 fn details_payload(appid: u64) -> Result<Option<Value>, String> {
+    if let Some(cached) = details_cache()
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(&appid).cloned())
+    {
+        return Ok(Some(cached));
+    }
     // Запрос с регионом US для обхода региональных ограничений
     let url =
         format!("https://store.steampowered.com/api/appdetails?appids={appid}&l=english&cc=US");
@@ -244,7 +257,13 @@ fn details_payload(appid: u64) -> Result<Option<Value>, String> {
     {
         return Ok(None);
     }
-    Ok(entry.get("data").cloned())
+    let data = entry.get("data").cloned();
+    if let Some(ref payload) = data {
+        if let Ok(mut cache) = details_cache().lock() {
+            cache.insert(appid, payload.clone());
+        }
+    }
+    Ok(data)
 }
 
 fn get_dlc_names(ids: &[u64]) -> BTreeMap<String, String> {

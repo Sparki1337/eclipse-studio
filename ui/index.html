@@ -47,7 +47,8 @@
           amber: ["#ffc94d", "255, 201, 77"],
           lime: ["#b8f25c", "184, 242, 92"],
           gold: ["#e3c88a", "227, 200, 138"],
-          ice: ["#dfe7f2", "223, 231, 242"]
+          ice: ["#dfe7f2", "223, 231, 242"],
+          white: ["#ffffff", "255, 255, 255"]
         };
         var shape = localStorage.getItem("cgs-shape") || "soft";
         root.dataset.shape = shape;
@@ -72,9 +73,13 @@
         root.style.setProperty("--accent", acc[0]);
         root.style.setProperty("--accent-rgb", acc[1]);
         root.style.setProperty("--accent-2", acc[0]);
+        // Мгновенная предварительная загрузка логотипа заставки для исключения черного экрана
+        window.__splashLogo = new Image();
+        window.__splashLogo.src = "./icon-loader.png";
       } catch (_) {}
     })();
   </script>
+  <link rel="preload" as="image" href="./icon-loader.png" />
   <style>
     :root {
       background: var(--theme-bg, #090a0d);
@@ -85,6 +90,87 @@
       height: 100%;
       overflow: hidden;
       background: var(--theme-bg, #090a0d);
+    }
+    .app-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--theme-bg, #090a0d);
+      overflow: hidden;
+      user-select: none;
+      cursor: default;
+      transition: opacity .5s cubic-bezier(0.16, 1, 0.3, 1),
+                  transform .5s cubic-bezier(0.16, 1, 0.3, 1),
+                  filter .5s ease;
+    }
+    html.no-splash .app-splash,
+    .app-splash.hidden {
+      display: none !important;
+    }
+    .app-splash.splash-dismissing {
+      opacity: 0;
+      transform: scale(1.02);
+      filter: blur(6px);
+      pointer-events: none;
+    }
+    .s4 {
+      background: var(--theme-bg, #090a0d);
+    }
+    .s4-box {
+      position: relative;
+      width: min(92vw, 528px);
+      height: 330px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .s4-box canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      filter: drop-shadow(0 14px 32px rgba(0, 0, 0, 0.75));
+    }
+    .s4-name {
+      margin-top: 8px;
+      font-size: 22px;
+      font-weight: 300;
+      letter-spacing: .08em;
+      color: var(--accent, #63f5c2);
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font, system-ui, sans-serif);
+    }
+    .s4-name span {
+      display: inline-block;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity .4s ease, transform .5s cubic-bezier(0.16, 1, 0.3, 1);
+      color: var(--accent, #63f5c2);
+    }
+    .s4-name span.on {
+      opacity: 1;
+      transform: none;
+      text-shadow: 0 0 16px rgba(var(--accent-rgb, 99, 245, 194), 0.65),
+                   0 0 32px rgba(var(--accent-rgb, 99, 245, 194), 0.3);
+    }
+    .s4-pct {
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--accent, #63f5c2);
+      letter-spacing: .15em;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+      font-family: var(--font, system-ui, sans-serif);
+      text-shadow: 0 0 14px rgba(var(--accent-rgb, 99, 245, 194), 0.55);
     }
     .app-splash, .s4 {
       background: var(--theme-bg, #090a0d) !important;
@@ -147,13 +233,15 @@
     </div>
     <div class="pct s4-pct" id="splash-percent" data-pct>0%</div>
   </aside>
+  <script src="./audio.js"></script>
+  <script src="./splash.js"></script>
 
   <div class="app-shell">
     <header class="titlebar" data-tauri-drag-region>
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>6.6.7</span>
+        <span class="titlebar-version" data-tauri-drag-region>7.0.0</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -244,14 +332,14 @@
         <div class="home-hero premium-panel">
           <div class="home-glow"></div>
           <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 6.6.7</span>
+            <span class="hero-kicker">ECLIPSE STUDIO 7.0.0</span>
             <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
             <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
           </div>
           <div class="hero-artwork"><img src="./hero-crocodile.png" alt="" /></div>
         </div>
         <div class="home-grid">
-          <article class="metric-card"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><div><small>Фикс</small><strong>Online Fix</strong><p>Готов к установке и восстановлению</p></div></article>
+          <article class="metric-card module-card" data-open-view="fix"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><div><small>Фикс</small><strong>Online Fix</strong><p>Готов к установке и восстановлению</p></div></article>
           <article class="metric-card module-card" data-open-view="saves"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span><div><small>Сохранения</small><strong>Менеджер сохранений</strong><p>Поиск и резервное копирование прогресса</p></div></article>
           <article class="metric-card module-card" data-open-view="dlc"><span class="metric-icon"><svg viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></span><div><small>DLC</small><strong>DLC Unlocker</strong><p>Выборочная разблокировка дополнений</p></div></article>
           <article class="metric-card module-card" data-open-view="lua"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></span><div><small>Манифесты</small><strong>Eclipse Manifest</strong><p>Игры в библиотеку Steam через манифесты</p></div></article>
@@ -1068,6 +1156,166 @@
                         <label class="switch" for="splash-mode"><input type="checkbox" id="splash-mode" checked /><i></i></label>
                       </div>
                     </div>
+                    <div class="pref-row pref-row-splash-speed" id="pref-row-splash-speed">
+                      <div>
+                        <strong>Скорость заставки</strong>
+                        <small>Длительность анимации при старте программы</small>
+                      </div>
+                      <div class="splash-speed-control">
+                        <div class="splash-speed-slider">
+                          <input type="range" id="splash-speed" min="0.5" max="3" step="0.25" value="1" aria-label="Скорость заставки" />
+                          <b id="splash-speed-value">1.0x</b>
+                        </div>
+                        <button type="button" class="font-scale-reset-btn" id="splash-speed-reset" title="Сбросить скорость (1.0x)" aria-label="Сбросить скорость">↺</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <details class="settings-collapsible" id="collapse-sound" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><polygon points="11 5 6 9 2 9 2 11 6 11 11 15 11 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.5 7.5a5 5 0 0 1 0 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18 5a9 9 0 0 1 0 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Звуковые эффекты</strong>
+                      <small>Озвучка запуска, кликов по кнопкам и успешных действий</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="settings-group" id="audio-settings-group">
+                    <label class="pref-row" for="audio-master-toggle">
+                      <div>
+                        <strong>Включить звуковые эффекты</strong>
+                        <small>Воспроизведение аудио при взаимодействии с программой</small>
+                      </div>
+                      <span class="switch"><input type="checkbox" id="audio-master-toggle" checked /><i></i></span>
+                    </label>
+
+                    <div class="pref-row pref-row-audio-pack">
+                      <div class="audio-pack-header">
+                        <div class="audio-pack-title">
+                          <strong>Звуковые профили</strong>
+                          <small id="audio-profile-desc">Создание и переключение наборов звуков</small>
+                        </div>
+                        <div class="audio-profile-actions">
+                          <button type="button" class="splash-preview-btn svc-link" id="audio-create-profile-btn" title="Сохранить текущие звуки как новый профиль">
+                            <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M8 2v12m-6-6h12"/></svg>
+                            <span>Создать профиль</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Форма создания нового звукового профиля -->
+                      <div class="audio-profile-form hidden" id="audio-profile-form">
+                        <div class="audio-profile-input-wrap">
+                          <input type="text" id="audio-profile-name-input" placeholder="Название профиля (напр. Мой сет)..." maxlength="32" autocomplete="off" />
+                          <button type="button" class="audio-profile-submit-btn" id="audio-profile-submit-btn" title="Сохранить профиль">
+                            <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3 8.5l3.5 3.5 6.5-7"/></svg>
+                            <span>Сохранить</span>
+                          </button>
+                          <button type="button" class="audio-profile-cancel-btn" id="audio-profile-cancel-btn" title="Отмена">
+                            <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 4l8 8m0-8l-8 8"/></svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- Список сохранённых звуковых профилей -->
+                      <div class="audio-profiles-bar" id="audio-profiles-bar"></div>
+                    </div>
+
+                    <div class="pref-row pref-row-audio-volume">
+                      <div>
+                        <strong>Общая громкость</strong>
+                        <small>Уровень громкости всех звуковых эффектов</small>
+                      </div>
+                      <div class="audio-volume-control">
+                        <div class="audio-volume-slider">
+                          <input type="range" id="audio-volume" min="0" max="100" step="5" value="65" aria-label="Общая громкость" />
+                          <b id="audio-volume-value">65%</b>
+                        </div>
+                        <button type="button" class="font-scale-reset-btn" id="audio-volume-reset" title="Сбросить громкость (65%)" aria-label="Сбросить громкость">↺</button>
+                      </div>
+                    </div>
+
+                    <div class="pref-row pref-row-audio-item">
+                      <div>
+                        <strong>Звук при запуске</strong>
+                        <small>Воспроизводится при открытии программы и заставке</small>
+                      </div>
+                      <div class="audio-item-ctrl">
+                        <select id="audio-sound-startup" class="ui-audio-select" aria-label="Звук при запуске">
+                          <option value="eclipse-dawn">Eclipse Dawn</option>
+                          <option value="cyber-pulse">Cyber Pulse</option>
+                          <option value="soft-glow">Soft Glow</option>
+                          <option value="arcade-fanfare">Arcade Fanfare</option>
+                          <option value="none">Без звука</option>
+                        </select>
+                        <button type="button" class="audio-play-btn" id="play-sound-startup" title="Прослушать звук" aria-label="Прослушать">
+                          <svg viewBox="0 0 16 16"><path fill="currentColor" d="M4.5 3.5v9l8-4.5-8-4.5z"/></svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="pref-row pref-row-audio-item">
+                      <div>
+                        <strong>Звук нажатия на кнопки</strong>
+                        <small>Воспроизводится при нажатии на кнопки и переключении разделов</small>
+                      </div>
+                      <div class="audio-item-ctrl">
+                        <select id="audio-sound-click" class="ui-audio-select" aria-label="Звук нажатия">
+                          <option value="cyber-click">Cyber Click</option>
+                          <option value="soft-pop">Soft Pop</option>
+                          <option value="mechanical-key">Mechanical Key</option>
+                          <option value="arcade-beep">Arcade Beep</option>
+                          <option value="none">Без звука</option>
+                        </select>
+                        <button type="button" class="audio-play-btn" id="play-sound-click" title="Прослушать звук" aria-label="Прослушать">
+                          <svg viewBox="0 0 16 16"><path fill="currentColor" d="M4.5 3.5v9l8-4.5-8-4.5z"/></svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="pref-row pref-row-audio-item">
+                      <div>
+                        <strong>Звук успешного действия</strong>
+                        <small>Сигнал завершения установки, скачивания или сохранения</small>
+                      </div>
+                      <div class="audio-item-ctrl">
+                        <select id="audio-sound-success" class="ui-audio-select" aria-label="Звук успешного действия">
+                          <option value="eclipse-success">Eclipse Success</option>
+                          <option value="chime-win">Chime Win</option>
+                          <option value="scifi-ping">Sci-Fi Ping</option>
+                          <option value="arcade-coin">Arcade Coin</option>
+                          <option value="none">Без звука</option>
+                        </select>
+                        <button type="button" class="audio-play-btn" id="play-sound-success" title="Прослушать звук" aria-label="Прослушать">
+                          <svg viewBox="0 0 16 16"><path fill="currentColor" d="M4.5 3.5v9l8-4.5-8-4.5z"/></svg>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Секция добавления и управления своими звуками в кэше -->
+                    <div class="pref-row pref-row-custom-sounds">
+                      <div>
+                        <strong>Пользовательские звуки</strong>
+                        <small id="audio-custom-summary">Загрузка своих аудиофайлов (MP3, OGG, WAV, FLAC) в кэш программы</small>
+                      </div>
+                      <div class="audio-custom-ctrl">
+                        <input type="file" id="audio-file-input" accept="audio/*,.mp3,.ogg,.wav,.m4a,.aac,.flac,.webm" multiple style="display:none;" />
+                        <button type="button" class="splash-preview-btn svc-link" id="audio-upload-btn" title="Добавить свои звуки (можно выбрать несколько файлов сразу)">
+                          <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M8 11V3m-3.5 3.5L8 3l3.5 3.5M2 13h12"/></svg>
+                          <span>Добавить звуки</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="audio-custom-list hidden" id="audio-custom-list"></div>
                   </div>
                 </div>
               </details>
@@ -1380,12 +1628,13 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">6.6.7</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">7.0.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
                   </div>
                   <div class="update-download-actions hidden" id="update-download-actions">
+                    <button class="install-button hidden" id="update-install-button">Обновить в 1 клик</button>
                     <button class="ghost-button hidden" id="download-portable-button">Скачать EXE</button>
                     <button class="ghost-button hidden" id="download-installer-button">Скачать Setup</button>
                   </div>
@@ -1408,7 +1657,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия</span><b>6.6.7</b></div>
+                  <div class="about-row"><span>Версия</span><b>7.0.0</b></div>
                   <div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div>
                   <div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · Eclipse Manifest · Гипервизор · Кряки · Утилиты</b></div>
                 </div>
@@ -1422,6 +1671,27 @@
 
   <div class="modal-backdrop hidden" id="modal-backdrop">
     <div class="modal premium-panel"><div class="modal-symbol" id="modal-symbol">!</div><h3 id="modal-title">Подтверждение</h3><p id="modal-message"></p><div class="modal-actions"><button class="secondary-button" id="modal-cancel">Отмена</button><button class="install-button" id="modal-confirm">Продолжить</button></div></div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="app-update-backdrop">
+    <div class="modal premium-panel app-update-modal">
+      <div class="modal-symbol" id="app-update-symbol">↑</div>
+      <h3 id="app-update-title">Обновление Eclipse Studio</h3>
+      <p id="app-update-message">Доступна новая версия программы.</p>
+      <div class="app-update-progress-wrap hidden" id="app-update-progress-wrap">
+        <div class="app-update-progress-bar">
+          <div class="app-update-progress-fill" id="app-update-progress-fill"></div>
+        </div>
+        <div class="app-update-progress-meta">
+          <span id="app-update-progress-bytes">0 МБ / 0 МБ</span>
+          <span id="app-update-progress-speed">0 МБ/с</span>
+        </div>
+      </div>
+      <div class="modal-actions" id="app-update-actions">
+        <button class="secondary-button" id="app-update-cancel">Отложить</button>
+        <button class="install-button" id="app-update-confirm">Обновить сейчас</button>
+      </div>
+    </div>
   </div>
 
   <div class="modal-backdrop hidden" id="telegram-hub-backdrop">
@@ -1555,7 +1825,7 @@
   <script src="./files.js"></script>
   <script src="./utilities.js"></script>
   <script src="./appearance.js"></script>
+  <script src="./custom-select.js"></script>
   <script src="./motion.js"></script>
-  <script src="./splash.js"></script>
 </body>
 </html>

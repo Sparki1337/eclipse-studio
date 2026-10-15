@@ -34,14 +34,14 @@
 | **Repository** | `https://github.com/LeoBanned/crocodile-gena-studio-releases` | `https://github.com/Sparki1337/eclipse-studio` |
 | **Official Website** | N/A | `https://sparki1337.github.io/eclipse-studio/` |
 | **Release Type** | Often bundled with loose external `.bat` & `.exe` files | **100% Standalone Portable single EXE** (or clean NSIS installer) |
-| **Crack Installation** | Manual download, manual password copy, manual extraction | **1-Click Auto-Installation**: detects ZIP/RAR layout, extracts nested game root, creates `.backup_orig`, handles passwords, auto-deletes archive |
-| **Folder Selection Dialog** | Outdated legacy WinForms tree folder browser | **Modern Native Windows COM `IFileOpenDialog`** (`native_dialog.rs`) |
-| **Drag & Drop** | Basic browser drop (often blocked by UAC/WebView2) | **Subclassed Windows Shell `WM_DROPFILES`** (`native_drop.rs`) across UAC integrity levels |
-| **Themes & Styling** | Fixed gradients with permanent blue halo in dark themes | **9 Curated Themes** (OLED, Graphite, Steel, Light, Forest, Cosmos, Wine, Coffee, etc.) with neutralized halos, **12 Neon Accents** |
-| **UI Customization** | Fixed scale and layout | **Compact mode toggle**, **font scaling (85% – 140%)**, and **resizable draggable sidebar (180px–380px)** |
+| **Crack Installation** | Multi-step staging dialog, leaves archives in Downloads | **1-Click Auto-Installation**: detects ZIP/RAR layout, extracts nested game root, creates `.backup_orig`, handles passwords, auto-deletes archive |
+| **Folder Dialog & Drop** | Originally WinForms / Web drop (backported native dialog from Eclipse) | **Pioneered Modern COM `IFileOpenDialog` & Subclassed `WM_DROPFILES`** (`native_dialog.rs`, `native_drop.rs`) across UAC levels |
+| **Themes & Styling** | Fixed gradients with permanent blue tint in dark themes | **14 Curated Themes** (OLED, Graphite, Steel, Light, Forest, Cosmos, Wine, Coffee, etc.) with neutralized halos, **12 Neon Accents** |
+| **UI Customization** | Fixed scale and layout (max 125% zoom, fixed sidebar) | **Compact mode toggle**, **font scaling (85% – 140%)**, and **resizable draggable sidebar (180px–380px)** |
 | **Icons & Visuals** | Mixed emojis and low-res raster icons | **Crisp Lucide SVG vector icon system** with 60 FPS CSS micro-animations |
 | **Application Startup** | Static white/blank window while checking environment | **Hardware-accelerated Canvas splash screen** with animated logo, status steps, and click-to-skip |
-| **Updates** | Intrusive modal dialogues | **Non-intrusive notification** with a "Snooze for 10 launches" option |
+| **Updates** | External browser tabs and leftover legacy executables | **In-app 1-Click Auto-Updater** with live progress bar, seamless restart, and auto-cleanup of legacy binaries (v7.0.0) |
+| **Audio FX & Menus** | Browser default select menus, no sound effects | **Custom Audio Profile designer** with 1-click preview and **theme-adaptive custom dropdown menus** |
 | **Download Storage** | Hardcoded download destination | **Configurable folder** with quick Explorer access and 1-click default reset |
 | **CSS Architecture** | Monolithic `styles.css` (2700+ lines) | **Modular CSS files** (`styles-base.css`, `styles-modules.css`, `styles-themes.css`, `styles-appearance.css`, `hypervisor-artwork.css`) |
 

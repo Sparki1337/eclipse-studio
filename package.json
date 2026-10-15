@@ -1,7 +1,7 @@
 {
   "name": "eclipse-studio",
   "private": true,
-  "version": "6.6.7",
+  "version": "7.0.0",
   "description": "Eclipse Studio — premium Tauri desktop client",
   "scripts": {
     "tauri": "tauri",
@@ -9,6 +9,7 @@
     "build": "tauri build"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.1"
+    "@tauri-apps/cli": "2.11.1",
+    "puppeteer-core": "^25.14.0"
   }
 }

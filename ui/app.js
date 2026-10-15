@@ -6,6 +6,27 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
+  // Кэш прямых ссылок на обложки добавленных игр в localStorage
+  const LUA_COVERS_STORAGE_KEY = "cgs-lua-covers";
+
+  function loadStoredLuaCovers() {
+    try {
+      const data = JSON.parse(localStorage.getItem(LUA_COVERS_STORAGE_KEY) || "{}");
+      return typeof data === "object" && data !== null ? data : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveStoredLuaCover(appid, url) {
+    if (!appid || !url) return;
+    try {
+      const data = loadStoredLuaCovers();
+      data[String(appid)] = url;
+      localStorage.setItem(LUA_COVERS_STORAGE_KEY, JSON.stringify(data));
+    } catch (_) {}
+  }
+
   const state = {
     gameDir: "",
     appid: null,
@@ -59,6 +80,7 @@
       loaderIssue: "",
       games: [],
       names: {},
+      headers: loadStoredLuaCovers(),
       loaded: false,
       service: "ryuu",
       hubcapKey: "",
@@ -134,6 +156,12 @@
   }
 
   function toast(message, type = "success") {
+    // Воспроизведение звука успешного действия
+    if (type === "success") {
+      try {
+        window.cgsAudio?.playSuccess();
+      } catch (_) {}
+    }
     const item = document.createElement("div");
     item.className = `toast ${type}`;
     item.textContent = message;
@@ -893,15 +921,44 @@
   }
 
   function loadCover(cover, img, appid) {
-    const urls = steamHeaderUrls(appid);
-    let index = 0;
-    img.onload = () => cover.classList.add("loaded");
-    img.onerror = () => {
-      index += 1;
-      if (index < urls.length) img.src = urls[index];
-      else cover.classList.remove("loaded");
-    };
-    img.src = urls[0];
+    const key = String(appid);
+    // 1. Проверяем сохранённый URL обложки из кэша
+    const cached = state.lua.headers[key];
+    if (cached) {
+      img.onload = () => cover.classList.add("loaded");
+      img.onerror = () => tryStaticUrls();
+      img.src = cached;
+      return;
+    }
+
+    tryStaticUrls();
+
+    function tryStaticUrls() {
+      const urls = steamHeaderUrls(appid);
+      let index = 0;
+      img.onload = () => cover.classList.add("loaded");
+      img.onerror = async () => {
+        index += 1;
+        if (index < urls.length) {
+          img.src = urls[index];
+        } else {
+          // 2. Если статические пути вернули 404, запрашиваем точный URL обложки из Steam Store API
+          try {
+            const storeUrl = await call("game_artwork_store_url", { appid: Number(appid) });
+            if (storeUrl) {
+              state.lua.headers[key] = storeUrl;
+              saveStoredLuaCover(key, storeUrl);
+              img.onload = () => cover.classList.add("loaded");
+              img.onerror = () => cover.classList.remove("loaded");
+              img.src = storeUrl;
+              return;
+            }
+          } catch (_) {}
+          cover.classList.remove("loaded");
+        }
+      };
+      img.src = urls[0];
+    }
   }
 
   function renderLuaGames() {
@@ -977,15 +1034,15 @@
       const actions = document.createElement("div");
       actions.className = "lua-game-actions";
       const details = document.createElement("button");
-      details.className = "ghost-button";
+      details.className = "ghost-button lua-action-btn lua-action-details";
       details.textContent = "Подробнее";
       details.addEventListener("click", () => luaOpenDetail(game.appid));
       const toggle = document.createElement("button");
-      toggle.className = "ghost-button";
+      toggle.className = `ghost-button lua-action-btn lua-action-toggle${game.enabled ? "" : " is-disabled"}`;
       toggle.textContent = game.enabled ? "Отключить" : "Включить";
       toggle.addEventListener("click", () => luaToggle(game.appid, !game.enabled));
       const remove = document.createElement("button");
-      remove.className = "ghost-button danger-ghost";
+      remove.className = "ghost-button danger-ghost lua-action-btn lua-action-remove";
       remove.textContent = "Удалить";
       remove.addEventListener("click", () => luaRemove(game.appid));
       actions.append(details, toggle, remove);
@@ -1000,14 +1057,26 @@
   }
 
   async function luaLoadNames() {
-    const missing = state.lua.games.map((g) => g.appid).filter((id) => !state.lua.names[id]);
-    if (!missing.length) return;
+    const missingNames = state.lua.games.map((g) => g.appid).filter((id) => !state.lua.names[id]);
+    const missingHeaders = state.lua.games.map((g) => g.appid).filter((id) => !state.lua.headers[id]);
+    if (!missingNames.length && !missingHeaders.length) return;
     try {
-      const names = await call("luatools_names", { appids: missing.map(Number) });
-      Object.assign(state.lua.names, names || {});
+      const [names, headers] = await Promise.all([
+        missingNames.length ? call("luatools_names", { appids: missingNames.map(Number) }) : null,
+        missingHeaders.length ? call("luatools_headers", { appids: missingHeaders.map(Number) }) : null,
+      ]);
+      if (names) Object.assign(state.lua.names, names);
+      if (headers) {
+        Object.assign(state.lua.headers, headers);
+        try {
+          const stored = loadStoredLuaCovers();
+          Object.assign(stored, headers);
+          localStorage.setItem(LUA_COVERS_STORAGE_KEY, JSON.stringify(stored));
+        } catch (_) {}
+      }
       renderLuaGames();
     } catch (error) {
-      log(`Не удалось получить названия игр: ${errorText(error)}`, "info");
+      log(`Не удалось получить сведения об играх: ${errorText(error)}`, "info");
     }
   }
 
@@ -1066,6 +1135,12 @@
     try {
       const detail = await call("luatools_game_detail", { appid, steamPath: state.lua.steamPath || null });
       if (detail.name) { $("#lua-detail-name").textContent = detail.name; state.lua.names[appid] = detail.name; }
+      if (detail.header) {
+        state.lua.headers[appid] = detail.header;
+        saveStoredLuaCover(appid, detail.header);
+        banner.src = detail.header;
+        banner.parentElement.classList.add("loaded");
+      }
       $("#lua-detail-added").textContent = detail.addedUnix ? `Добавлено ${luaDetailDate(detail.addedUnix)}` : "";
       $("#lua-detail-released").textContent = detail.releaseDate ? `Вышла ${detail.releaseDate}` : "";
       $("#lua-detail-in-count").textContent = `(${detail.inLua.length})`;
@@ -1183,13 +1258,52 @@
     if (accepted) await downloadMillenniumInstaller();
   }
 
+  const CROCLUA_POSTPONE_LAUNCH_COUNT = 5;
+
+  // Проверка: нужно ли показывать предложение удалить CrocLua (с учётом отсрочки на 5 перезапусков)
+  function shouldPromptCrocluaMigration() {
+    try {
+      const launchesLeftStr = localStorage.getItem("cgs-postpone-croclua-launches");
+      if (!launchesLeftStr) return true;
+      const launchesLeft = Number(launchesLeftStr) || 0;
+      if (launchesLeft > 0) {
+        localStorage.setItem("cgs-postpone-croclua-launches", String(launchesLeft - 1));
+        return false;
+      }
+      localStorage.removeItem("cgs-postpone-croclua-launches");
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  // Отложить напоминание о CrocLua на 5 перезапусков приложения
+  function postponeCrocluaMigration() {
+    try {
+      localStorage.setItem("cgs-postpone-croclua-launches", String(CROCLUA_POSTPONE_LAUNCH_COUNT));
+    } catch (_) {}
+  }
+
+  // Сбросить отсрочку напоминания о CrocLua при удалении или замене
+  function clearCrocluaPostpone() {
+    try {
+      localStorage.removeItem("cgs-postpone-croclua-launches");
+    } catch (_) {}
+  }
+
   async function offerCrocluaMigration() {
     const accepted = await showModal(
       "Обнаружен старый плагин CrocLua",
-      "В Millennium обнаружен устаревший плагин CrocLua (папка crocodile-manifest). Хотите удалить его и установить обновлённый Eclipse Manifest?",
+      "В Millennium обнаружен плагин CrocLua (папка crocodile-manifest). Хотите удалить его и установить обновлённый Eclipse Manifest?",
       { confirm: true, confirmText: "Заменить на Eclipse Manifest", cancelText: "Оставить", symbol: "🌒" },
     );
-    if (accepted) await migrateCrocluaToEclipseManifest();
+    if (accepted) {
+      clearCrocluaPostpone();
+      await migrateCrocluaToEclipseManifest();
+    } else {
+      postponeCrocluaMigration();
+      toast("Напоминание о CrocLua отложено на 5 перезапусков");
+    }
   }
 
   async function migrateCrocluaToEclipseManifest() {
@@ -1202,6 +1316,7 @@
         ? await call("millennium_remove_legacy_croclua", { steamPath: state.lua.steamPath || null })
         : await call("millennium_migrate_from_croclua", { steamPath: state.lua.steamPath || null });
       if (!consumeResult(result)) return;
+      clearCrocluaPostpone();
       await luaRefresh();
       const restart = await showModal(
         onlyRemove ? "CrocLua удалён" : "Eclipse Manifest установлен",
@@ -1244,7 +1359,9 @@
         await offerMillenniumInstall();
       } else if (millennium?.legacyCrocluaFound && !state.lua.crocluaPrompted) {
         state.lua.crocluaPrompted = true;
-        await offerCrocluaMigration();
+        if (shouldPromptCrocluaMigration()) {
+          await offerCrocluaMigration();
+        }
       }
     } catch (error) {
       log(`LuaTools: ошибка статуса — ${errorText(error)}`, "error");
@@ -1947,11 +2064,129 @@
     }
   }
 
+  // Переменные состояния процесса скачивания и обновления приложения
+  let appUpdateUnlisten = null;
+  let isUpdatingApp = false;
+
+  async function startAppUpdate(updateInfo) {
+    if (isUpdatingApp) return;
+    isUpdatingApp = true;
+
+    const backdrop = $("#app-update-backdrop");
+    const title = $("#app-update-title");
+    const message = $("#app-update-message");
+    const symbol = $("#app-update-symbol");
+    const progressWrap = $("#app-update-progress-wrap");
+    const progressFill = $("#app-update-progress-fill");
+    const bytesText = $("#app-update-progress-bytes");
+    const speedText = $("#app-update-progress-speed");
+    const confirmBtn = $("#app-update-confirm");
+    const cancelBtn = $("#app-update-cancel");
+
+    // Подготовка отображения диалога загрузки
+    backdrop.classList.remove("hidden", "closing");
+    title.textContent = `Загрузка Eclipse Studio v${updateInfo.latestVersion}`;
+    message.textContent = "Скачивание нового файла в папку программы…";
+    symbol.textContent = "↓";
+    progressWrap.classList.remove("hidden");
+    progressFill.style.width = "0%";
+    bytesText.textContent = "Подключение к серверу…";
+    speedText.textContent = "";
+    confirmBtn.classList.add("hidden");
+    cancelBtn.classList.add("hidden");
+
+    try {
+      if (window.__TAURI__?.event?.listen) {
+        appUpdateUnlisten = await window.__TAURI__.event.listen("app-update-progress", (event) => {
+          const payload = event.payload;
+          if (!payload) return;
+          const pct = Math.min(100, Math.max(0, payload.percentage || 0));
+          progressFill.style.width = `${pct}%`;
+
+          const dlMb = (payload.downloadedBytes / (1024 * 1024)).toFixed(1);
+          const totalMb = (payload.totalBytes / (1024 * 1024)).toFixed(1);
+          const speedMb = (payload.speedBytesPerSec / (1024 * 1024)).toFixed(1);
+
+          if (payload.totalBytes > 0) {
+            bytesText.textContent = `${dlMb} МБ / ${totalMb} МБ (${pct}%)`;
+          } else {
+            bytesText.textContent = `${dlMb} МБ скачано`;
+          }
+          speedText.textContent = payload.completed ? "Завершено" : `${speedMb} МБ/с`;
+        });
+      }
+
+      // Запуск скачивания в бэкенде
+      const result = await call("download_app_update", {
+        downloadUrl: updateInfo.portableUrl || null,
+        version: updateInfo.latestVersion || null,
+      });
+
+      // Успешно загружено
+      title.textContent = "Обновление готово к установке!";
+      message.textContent = `Версия v${result.version} успешно скачана. Перезапустить приложение сейчас? При запуске старая версия будет автоматически заменена.`;
+      symbol.textContent = "✓";
+      progressFill.style.width = "100%";
+      bytesText.textContent = "100% — загрузка завершена";
+      speedText.textContent = "";
+
+      confirmBtn.textContent = "Перезапустить сейчас";
+      confirmBtn.classList.remove("hidden");
+      cancelBtn.textContent = "Позже";
+      cancelBtn.classList.remove("hidden");
+
+      confirmBtn.onclick = async () => {
+        try {
+          setBusy(confirmBtn, true, "Перезапуск…");
+          await call("launch_app_update", { filePath: result.filePath });
+        } catch (error) {
+          toast(errorText(error), "error");
+          setBusy(confirmBtn, false);
+        }
+      };
+
+      cancelBtn.onclick = () => {
+        backdrop.classList.add("closing");
+        setTimeout(() => {
+          backdrop.classList.add("hidden");
+          backdrop.classList.remove("closing");
+        }, 190);
+        toast(`Обновление v${result.version} готово в папке программы`);
+      };
+
+    } catch (error) {
+      title.textContent = "Ошибка загрузки обновления";
+      message.textContent = errorText(error);
+      symbol.textContent = "!";
+      progressWrap.classList.add("hidden");
+      confirmBtn.classList.add("hidden");
+      cancelBtn.textContent = "Закрыть";
+      cancelBtn.classList.remove("hidden");
+      cancelBtn.onclick = () => {
+        backdrop.classList.add("closing");
+        setTimeout(() => {
+          backdrop.classList.add("hidden");
+          backdrop.classList.remove("closing");
+        }, 190);
+      };
+      toast(errorText(error), "error");
+    } finally {
+      isUpdatingApp = false;
+      if (appUpdateUnlisten) {
+        try { appUpdateUnlisten(); } catch (_) {}
+        appUpdateUnlisten = null;
+      }
+    }
+  }
+
   function renderUpdateDownloads(update = null) {
     state.updates.latest = update;
     const actions = $("#update-download-actions");
+    const installBtn = $("#update-install-button");
     const portable = $("#download-portable-button");
     const installer = $("#download-installer-button");
+    const hasPortable = Boolean(update?.portableUrl);
+    installBtn?.classList.toggle("hidden", !hasPortable);
     portable.classList.toggle("hidden", !update?.portableUrl);
     installer.classList.toggle("hidden", !update?.installerUrl);
     actions.classList.toggle("hidden", !update?.portableUrl && !update?.installerUrl);
@@ -2036,19 +2271,20 @@
 
       const notes = String(update.notes || "").trim();
       const shortNotes = notes.length > 700 ? `${notes.slice(0, 700).trim()}…` : notes;
-      const preferredUrl = update.portableUrl || update.installerUrl || update.releaseUrl;
-      const downloadLabel = "Обновиться";
-      const formatsHint = update.portableUrl && update.installerUrl
-        ? "\n\nВ настройках доступны два варианта: прямой EXE и установщик Setup."
-        : "";
+      const downloadLabel = update.portableUrl ? "Обновить сейчас" : "Скачать с сайта";
       const accepted = await showModal(
         `Доступна версия ${update.latestVersion}`,
-        `${shortNotes || "Опубликована новая версия Eclipse Studio."}${formatsHint}\n\nВы можете обновиться сейчас или отложить напоминание на 10 запусков программы.`,
+        `${shortNotes || "Опубликована новая версия Eclipse Studio."}\n\nНовая версия будет автоматически скачана прямо в эту папку, а старая версия удалится при перезапуске.`,
         { confirm: true, confirmText: downloadLabel, cancelText: "Отложить (на 10 запусков)", symbol: "↑" },
       );
       if (accepted) {
         clearPostponeUpdate();
-        await call("open_external", { url: preferredUrl });
+        if (update.portableUrl) {
+          await startAppUpdate(update);
+        } else {
+          const preferredUrl = update.installerUrl || update.releaseUrl;
+          await call("open_external", { url: preferredUrl });
+        }
       } else {
         postponeStartupUpdate(update.latestVersion);
         toast("Напоминание об обновлении отложено на 10 запусков");
@@ -2246,9 +2482,26 @@
     telegramModal?.addEventListener("click", (event) => {
       if (event.target === telegramModal) closeTelegramHub();
     });
+    const appUpdateModal = $("#app-update-backdrop");
+    appUpdateModal?.addEventListener("click", (event) => {
+      if (event.target === appUpdateModal && !isUpdatingApp) {
+        appUpdateModal.classList.add("closing");
+        setTimeout(() => {
+          appUpdateModal.classList.add("hidden");
+          appUpdateModal.classList.remove("closing");
+        }, 190);
+      }
+    });
+
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
-        if (telegramModal && !telegramModal.classList.contains("hidden")) {
+        if (appUpdateModal && !appUpdateModal.classList.contains("hidden") && !isUpdatingApp) {
+          appUpdateModal.classList.add("closing");
+          setTimeout(() => {
+            appUpdateModal.classList.add("hidden");
+            appUpdateModal.classList.remove("closing");
+          }, 190);
+        } else if (telegramModal && !telegramModal.classList.contains("hidden")) {
           closeTelegramHub();
         } else if (luaDetail && !luaDetail.classList.contains("hidden")) {
           closeLuaDetail();
@@ -2317,6 +2570,11 @@
       catch (error) { toast(errorText(error), "error"); }
     });
     $("#check-update-button").addEventListener("click", () => checkForUpdates(true));
+    $("#update-install-button")?.addEventListener("click", () => {
+      if (state.updates.latest) {
+        startAppUpdate(state.updates.latest);
+      }
+    });
     $("#download-portable-button").addEventListener("click", () => openUpdateDownload("portable").catch((error) => toast(errorText(error), "error")));
     $("#download-installer-button").addEventListener("click", () => openUpdateDownload("installer").catch((error) => toast(errorText(error), "error")));
 
@@ -2362,18 +2620,45 @@
     applyManifestService(state.lua.service);
     $("#hubcap-key").value = state.lua.hubcapKey;
     updateHubcapKeyStatus();
-    renderHubcapUsage();
-    if (state.lua.hubcapKey.trim()) refreshHubcapUsage();
-    setInterval(() => {
-      if (state.lua.hubcapKey.trim()) refreshHubcapUsage();
-    }, 30_000);
-    setInterval(() => {
-      if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
-      call("luatools_restore_manifests", { steamPath: state.lua.steamPath || null }).catch(() => {});
-    }, 3_000);
-    log("Eclipse Studio 6.6.7 инициализирован", "system");
+    log("Eclipse Studio 7.0.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
-    if (invoke) setTimeout(() => checkForUpdates(false), 1800);
+
+    // Страховочный вызов отображения окна, если заставка была отключена в параметрах
+    call("show_window").catch(() => {});
+
+    // Воспроизведение звука запуска, если графическая заставка была отключена
+    if (localStorage.getItem("cgs-splash") === "0") {
+      try {
+        window.cgsAudio?.playStartup();
+      } catch (_) {}
+    }
+
+    // Отложенный запуск фоновых задач после окончания заставки для обеспечения максимальной производительности интерфейса
+    let idleTasksStarted = false;
+    function scheduleIdleTasks() {
+      if (idleTasksStarted) return;
+      idleTasksStarted = true;
+      if (state.lua.hubcapKey.trim()) refreshHubcapUsage();
+      if (invoke) checkForUpdates(false);
+      setInterval(() => {
+        if (state.lua.hubcapKey.trim()) refreshHubcapUsage();
+      }, 30_000);
+      setInterval(() => {
+        if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
+        call("luatools_restore_manifests", { steamPath: state.lua.steamPath || null }).catch(() => {});
+      }, 4_000);
+    }
+
+    const splashEl = document.getElementById("app-splash");
+    if (!splashEl || splashEl.classList.contains("hidden") || localStorage.getItem("cgs-splash") === "0") {
+      setTimeout(scheduleIdleTasks, 600);
+    } else {
+      window.addEventListener("splash-finished", () => {
+        setTimeout(scheduleIdleTasks, 800);
+      }, { once: true });
+      // Страховочный таймер на случай быстрого пропуска или непредвиденного поведения
+      setTimeout(scheduleIdleTasks, 5500);
+    }
   }
 
   document.addEventListener("DOMContentLoaded", boot);

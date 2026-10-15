@@ -1,4 +1,5 @@
 mod anticheat;
+mod audio_cache;
 mod dlc;
 mod dlc_catalog;
 mod engine;
@@ -173,6 +174,13 @@ fn start_dragging_window(window: WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+fn show_window(window: WebviewWindow) -> Result<(), String> {
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PlatformInfo {
@@ -270,6 +278,11 @@ pub fn run() {
             toggle_maximize_window,
             close_window,
             start_dragging_window,
+            show_window,
+            audio_cache::audio_save_custom_sound,
+            audio_cache::audio_list_custom_sounds,
+            audio_cache::audio_delete_custom_sound,
+            audio_cache::audio_read_custom_sound,
             game_artwork::game_artwork,
             game_artwork::game_artwork_store_url,
             saves::scan_save_locations,
@@ -301,6 +314,7 @@ pub fn run() {
             luatools::luatools_restart_steam,
             luatools::luatools_game_detail,
             luatools::luatools_names,
+            luatools::luatools_headers,
             millennium::millennium_plugin_status,
             millennium::millennium_install_plugin,
             millennium::millennium_remove_plugin,
@@ -345,12 +359,29 @@ pub fn run() {
             steam::steam_drm_info,
             updates::check_for_update,
             updates::updates_page_url,
+            updates::download_app_update,
+            updates::launch_app_update,
+            updates::cleanup_old_app_versions,
         ])
         .setup(|app| {
+            // Окно создано скрытым (visible: false), чтобы исключить показ пустого синего/темного экрана до рендеринга страницы.
+            // Приложение отобразит окно сразу после отрисовки первого кадра заставки через команду show_window.
+            // Добавляем страховочный таймер на случай непредвиденных задержек в WebView2:
             if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+                let win = window.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(2500));
+                    let _ = win.show();
+                    let _ = win.set_focus();
+                });
             }
+
+            // Фоновая автоматическая очистка старых версий программы и временных файлов обновлений
+            std::thread::spawn(|| {
+                std::thread::sleep(std::time::Duration::from_millis(800));
+                let _ = updates::cleanup_old_versions();
+            });
+
             Ok(())
         })
         .run(tauri::generate_context!())

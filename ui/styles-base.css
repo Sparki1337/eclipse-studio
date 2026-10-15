@@ -26,9 +26,9 @@
 :root {
   color-scheme: dark;
   --bg: #090a0d;
-  --bg-elevated: #0c0f16;
-  --panel: rgba(15, 19, 28, .82);
-  --panel-solid: #10141d;
+  --bg-elevated: #0f1115;
+  --panel: rgba(20, 21, 26, .88);
+  --panel-solid: #131418;
   --panel-soft: rgba(255, 255, 255, .035);
   --line: rgba(255, 255, 255, .075);
   --line-strong: rgba(255, 255, 255, .13);
@@ -552,6 +552,15 @@ body { font-size: 16px; }
 .modal-actions .install-button:hover, .modal-actions #modal-confirm:hover { transform: translateY(-1px); border-color: var(--accent); background: rgba(var(--accent-rgb), 0.22); box-shadow: 0 6px 22px rgba(var(--accent-rgb), 0.22); filter: none; }
 .toast { min-width: 290px; max-width: 400px; padding: 14px 16px; font-size: 11px; }
 
+/* Стили модального окна автообновления */
+.app-update-modal { width: min(490px, calc(100vw - 44px)); text-align: center; }
+.app-update-progress-wrap { margin: 18px 0 12px; width: 100%; }
+.app-update-progress-wrap.hidden { display: none; }
+.app-update-progress-bar { width: 100%; height: 9px; background: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden; position: relative; border: 1px solid rgba(255, 255, 255, 0.06); }
+.app-update-progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #2ed573); box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.65); border-radius: 6px; transition: width 0.18s ease-out; }
+.app-update-progress-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 10.5px; color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; }
+#update-install-button { font-size: 11px; height: 34px; padding: 0 16px; }
+
 /* Social links */
 .social-links { display: flex; flex-direction: column; gap: 8px; }
 .social-links .channel-card { width: 100%; }
@@ -682,8 +691,8 @@ body { font-size: 16px; }
 .lua-heading-tools .lua-autoupdate { margin-left: 0; }
 .hubcap-limit-badge { font-size: 8.5px; padding: 5px 8px; border-radius: 7px; color: var(--accent); background: rgba(var(--accent-rgb), .08); border: 1px solid rgba(var(--accent-rgb), .13); white-space: nowrap; }
 .hubcap-limit-badge.error { color: #ff7994; border-color: rgba(255,121,148,.2); background: rgba(255,121,148,.06); }
-.lua-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; padding: 20px 27px 26px; }
-.lua-game { border: 1px solid rgba(255,255,255,.06); border-radius: 14px; overflow: hidden; background: rgba(255,255,255,.016); transition: .18s ease; }
+.lua-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; padding: 20px 27px 26px; }
+.lua-game { border: 1px solid rgba(255,255,255,.06); border-radius: 14px; overflow: hidden; background: rgba(255,255,255,.016); transition: .18s ease; display: flex; flex-direction: column; }
 .lua-game:hover { border-color: rgba(var(--accent-rgb), .22); }
 .lua-game.needs-attention { border-color: rgba(255,121,148,.18); }
 .lua-game.disabled { opacity: .5; }
@@ -698,8 +707,9 @@ body { font-size: 16px; }
 .lua-game-status { flex: none; font-size: 8.5px; padding: 3px 7px; border-radius: 6px; color: var(--accent); background: rgba(var(--accent-rgb), .08); }
 .lua-game.disabled .lua-game-status { color: #8993a1; background: rgba(255,255,255,.05); }
 .lua-game-status.missing_manifests, .lua-game-status.invalid_lua { color: #ff7994; background: rgba(255,121,148,.07); }
-.lua-game-actions { display: flex; gap: 7px; padding: 4px 13px 13px; }
-.lua-game-actions .ghost-button { flex: 1; height: 32px; font-size: 9px; padding: 0; }
+.lua-game-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 6px 13px 13px; margin-top: auto; }
+.lua-game-actions .ghost-button { height: 31px; min-height: 31px; font-size: 9.5px; font-weight: 650; padding: 0 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; }
+.lua-game-actions .lua-action-remove { grid-column: 1 / -1; height: 28px; min-height: 28px; font-size: 9px; }
 
 /* CrocLua — детальная карточка игры */
 .lua-detail { position: relative; width: min(420px, 92vw); max-height: 88vh; padding: 0; overflow: hidden; display: flex; flex-direction: column; border-radius: var(--radius-lg); }
@@ -736,13 +746,71 @@ body { font-size: 16px; }
 .lua-search-entry { margin-top: 0; }
 .lua-search-spin { width: 15px; height: 15px; margin: 0 12px; flex: none; border-radius: 50%; border: 2px solid rgba(var(--accent-rgb), .25); border-top-color: var(--accent); animation: lua-spin .7s linear infinite; }
 @keyframes lua-spin { to { transform: rotate(360deg); } }
-.lua-search-dropdown { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 6px); max-height: 340px; overflow-y: auto; scrollbar-width: thin; padding: 6px; border: 1px solid var(--line-strong); border-radius: 13px; background: var(--panel-solid); box-shadow: var(--shadow); }
-.lua-search-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 9px; border: 0; border-radius: 9px; background: transparent; text-align: left; cursor: pointer; transition: .13s; }
-.lua-search-item:hover { background: rgba(var(--accent-rgb), .08); }
-.lua-search-item img { width: 84px; height: 39px; flex: none; object-fit: cover; border-radius: 6px; background: #0a0c12; }
-.lua-search-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.lua-search-copy strong { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lua-search-copy code { color: #66717f; font: 9.5px/1 "Cascadia Code", Consolas, monospace; }
+.lua-search-dropdown {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  max-height: 340px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+  background: linear-gradient(145deg, var(--panel-a), var(--panel-b)), var(--panel-solid);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line);
+}
+.lua-search-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.lua-search-item:hover,
+.lua-search-item:focus-visible {
+  background: rgba(var(--accent-rgb), .09);
+  border-color: rgba(var(--accent-rgb), .18);
+  outline: none;
+}
+.lua-search-item img {
+  width: 84px;
+  height: 39px;
+  flex: none;
+  object-fit: cover;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line);
+}
+.lua-search-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lua-search-copy strong {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lua-search-copy code {
+  color: var(--muted);
+  font: 9.5px/1 "Cascadia Code", Consolas, monospace;
+}
 .lua-drm-badge { display: inline-flex; align-items: center; max-width: 160px; min-height: 16px; padding: 2px 7px; border: 1px solid transparent; border-radius: 999px; overflow: hidden; color: #aab4c1; background: rgba(122,135,153,.09); font-size: 8px; font-weight: 800; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
 .lua-drm-badge.loading { color: #778291; border-color: rgba(122,135,153,.13); animation: drm-badge-pulse 1.35s ease-in-out infinite; }
 .lua-drm-badge.denuvo { color: #ff8f9d; border-color: rgba(255,79,104,.28); background: rgba(255,79,104,.11); }
@@ -751,9 +819,28 @@ body { font-size: 16px; }
 .lua-drm-badge.third-party { color: #cba0ff; border-color: rgba(170,103,245,.28); background: rgba(170,103,245,.1); }
 .lua-drm-badge.unknown { color: #8994a2; border-color: rgba(122,135,153,.18); background: rgba(122,135,153,.07); }
 @keyframes drm-badge-pulse { 50% { opacity: .55; } }
-.lua-search-get { flex: none; font-size: 9px; font-weight: 750; color: var(--accent); padding: 6px 11px; border-radius: 8px; background: rgba(var(--accent-rgb), .1); }
-.lua-search-item:hover .lua-search-get { background: rgba(var(--accent-rgb), .18); }
-.lua-search-empty { padding: 14px; text-align: center; color: #667180; font-size: 10px; }
+.lua-search-get {
+  flex: none;
+  font-size: 9px;
+  font-weight: 750;
+  color: var(--accent);
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(var(--accent-rgb), .1);
+  border: 1px solid rgba(var(--accent-rgb), .22);
+  transition: all .15s ease;
+}
+.lua-search-item:hover .lua-search-get {
+  background: rgba(var(--accent-rgb), .22);
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(var(--accent-rgb), .25);
+}
+.lua-search-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+}
 
 
 

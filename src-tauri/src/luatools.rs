@@ -1340,6 +1340,43 @@ pub async fn luatools_names(appids: Vec<u64>) -> BTreeMap<String, String> {
         .unwrap_or_default()
 }
 
+// Запрос прямых ссылок на обложки приложений пачками для исключения rate-limit
+fn resolve_headers_map(ids: &[u64]) -> BTreeMap<String, String> {
+    let mut headers = BTreeMap::new();
+    for chunk in ids.chunks(5) {
+        let resolved = std::thread::scope(|scope| {
+            let handles = chunk
+                .iter()
+                .map(|id| {
+                    (
+                        *id,
+                        scope.spawn(move || {
+                            crate::steam::app_overview(*id).and_then(|app| app.header_image)
+                        }),
+                    )
+                })
+                .collect::<Vec<_>>();
+            handles
+                .into_iter()
+                .map(|(id, handle)| (id, handle.join().ok().flatten()))
+                .collect::<Vec<_>>()
+        });
+        for (id, header) in resolved {
+            if let Some(header) = header {
+                headers.insert(id.to_string(), header);
+            }
+        }
+    }
+    headers
+}
+
+#[tauri::command]
+pub async fn luatools_headers(appids: Vec<u64>) -> BTreeMap<String, String> {
+    tauri::async_runtime::spawn_blocking(move || resolve_headers_map(&appids))
+        .await
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
