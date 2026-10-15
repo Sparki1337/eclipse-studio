@@ -28,10 +28,10 @@
 Перед запуском компиляции убедитесь в наличии следующих компонентов:
 
 ### 1. Скрытые файлы плагина Millennium (`.millennium`)
-В Rust-коде (`millennium.rs`) компилируются встроенные ресурсы:
+В Rust-коде (`millennium.rs`) компилируются встроенные ресурсы плагина «Eclipse Manifest»:
 ```text
-src-tauri/src/assets/crocodile-manifest/.millennium/Dist/index.js
-src-tauri/src/assets/crocodile-manifest/.millennium/Dist/webkit.js
+src-tauri/src/assets/eclipse-manifest/.millennium/Dist/index.js
+src-tauri/src/assets/eclipse-manifest/.millennium/Dist/webkit.js
 ```
 > **Внимание:** В Windows папки, начинающиеся с точки (`.millennium`), считаются скрытыми системными директориями. При копировании файлов через некоторые архиваторы или проводник эта папка может не скопироваться.
 > 
@@ -50,7 +50,10 @@ CreamAPI/
 ```
 Они компилируются в бинарник через макрос `include_bytes!` и используются сборщиком ресурсов Tauri.
 
-### 3. Файлы гипервизора (Безопасность для GitHub)
+### 3. Встроенные библиотеки OpenSteamTool (Версия 1 и Версия 2)
+В каталогах `src-tauri/src/assets/` и `src-tauri/src/assets/ost_desktop/` находятся хуки загрузчиков манифестов (`OpenSteamTool.dll`, `dwmapi.dll`, `xinput1_4.dll`, `opensteamtool.toml`), вшиваемые в исполняемый файл приложения.
+
+### 4. Файлы гипервизора (Безопасность для GitHub)
 Бинарники гипервизора (`kvc.exe`, `drvloader.exe` и `.bat` файлы) намеренно **исключены из публичной сборки**, чтобы избежать ложных срабатываний антивирусов и блокировок репозитория со стороны GitHub. Код приложения адаптирован и компилируется без них автоматически.
 
 ---
@@ -66,7 +69,7 @@ CreamAPI/
 python bump_version.py
 
 # Или передача версии аргументом:
-python bump_version.py 6.0.1
+python bump_version.py 7.0.2
 ```
 Скрипт автоматически:
 * Обновляет `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `package.json` и `package-lock.json`.

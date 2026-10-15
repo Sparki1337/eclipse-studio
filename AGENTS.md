@@ -40,7 +40,7 @@
 | **UI Customization** | Fixed scale and layout (max 125% zoom, fixed sidebar) | **Compact mode toggle**, **font scaling (85% – 140%)**, and **resizable draggable sidebar (180px–380px)** |
 | **Icons & Visuals** | Mixed emojis and low-res raster icons | **Crisp Lucide SVG vector icon system** with 60 FPS CSS micro-animations |
 | **Application Startup** | Static white/blank window while checking environment | **Hardware-accelerated Canvas splash screen** with animated logo, status steps, and click-to-skip |
-| **Updates** | External browser tabs and leftover legacy executables | **In-app 1-Click Auto-Updater** with live progress bar, seamless restart, and auto-cleanup of legacy binaries (v7.0.0) |
+| **Updates & Manifests** | External browser tabs and single fixed loader DLL | **In-app 1-Click Auto-Updater** (live theme-colored progress bar, collapsible bilingual RU/EN changelog, safe restart), **Dual OpenSteamTool loader (v1/v2)** with active Steam detection & safe termination (v7.0.2) |
 | **Audio FX & Menus** | Browser default select menus, no sound effects | **Custom Audio Profile designer** with 1-click preview and **theme-adaptive custom dropdown menus** |
 | **Download Storage** | Hardcoded download destination | **Configurable folder** with quick Explorer access and 1-click default reset |
 | **CSS Architecture** | Monolithic `styles.css` (2700+ lines) | **Modular CSS files** (`styles-base.css`, `styles-modules.css`, `styles-themes.css`, `styles-appearance.css`, `hypervisor-artwork.css`) |
@@ -57,7 +57,7 @@
 
 ### 2.2 Output Directory for Portable Builds & Tools
 - **Mandatory Output Path:** `C:\Users\Sparki\Desktop\Programms\Hypervisor`
-- **Mandatory Artifact Filename:** `Eclipse-Studio-vX.X.X.exe` (strictly portable build; e.g. `Eclipse-Studio-v6.6.6.exe`).
+- **Mandatory Artifact Filename:** `Eclipse-Studio-vX.X.X.exe` (strictly portable build; e.g. `Eclipse-Studio-v7.0.2.exe`).
 - **Configuration File:** `build_config.json` at repo root (`"output_dir": "C:\\Users\\Sparki\\Desktop\\Programms\\Hypervisor"`, `"last_build_type": "portable"`).
 - **Purpose:** This folder is Sparki's dedicated hub for all portable builds, releases, and tools. When building, the model must **NEVER** save binaries elsewhere and must **NEVER** build installer bundles.
 
@@ -66,7 +66,7 @@
 E:\Projects\eclipse-studio\
 ├── .git\                               # Git version control metadata
 ├── .gitignore                          # Build artifacts & local config exclusions
-├── AGENT.md                            # This developer and AI agent guide
+├── AGENTS.md                           # This developer and AI agent guide
 ├── BUILD.md                            # Human-facing build instructions
 ├── README.md                           # Main repository documentation & overview
 ├── build.py                            # Automated Python build orchestrator
@@ -102,7 +102,7 @@ E:\Projects\eclipse-studio\
 │   ├── tauri.conf.json                 # Tauri v2 configuration (window, bundle, security)
 │   ├── build.rs                        # Tauri build script
 │   └── src\                            # Rust source code (detailed in Section 3)
-│       ├── assets\                     # Embedded runtime assets & Millennium plugin
+│       ├── assets\                     # Embedded runtime assets, ost_desktop (v2 loader) & Millennium plugin
 │       ├── anticheat.rs
 │       ├── dlc.rs
 │       ├── dlc_catalog.rs
@@ -183,7 +183,7 @@ All backend operations run asynchronously or via `tauri::async_runtime::spawn_bl
 | **`steam.rs`** | Direct interface to Steam Store Web APIs. Queries AppID details, searches games by title, and inspects DRM metadata. |
 | **`game_artwork.rs`** | Resolves game AppIDs from folder structures, manifest files, or `steam_appid.txt`. Returns Akamai/Cloudflare Steam header URLs and local client artwork paths. |
 | **`saves.rs`** | Save Manager engine. Scans 15+ save directories (Saved Games, Documents, LocalAppData, LocalLow, AppData, Steam userdata, Goldberg, GSE, SmartSteamEmu, CODEX, EMPRESS, RUNE, FLT, TENOKE, SKIDROW, OnlineFix). Filters out temporary cache and shaders. Creates ZIP or RAR archives with embedded `cgs-save-manifest.json`. Restores saves with path-traversal security checks. |
-| **`luatools.rs`** | Eclipse Manifest & Manifest manager. Reads Steam path from Windows Registry (`HKCU\Software\Valve\Steam`). Installs Lua scripts into `config/stplug-in/` and manifest files into `depotcache/`. Controls game activation, detail inspection, and Steam client restarts. |
+| **`luatools.rs`** | Eclipse Manifest & Manifest manager. Reads Steam path from Windows Registry (`HKCU\Software\Valve\Steam`). Installs Lua scripts into `config/stplug-in/` and manifest files into `depotcache/`. Features **Dual OpenSteamTool loader versions** (Version 1 Primary and Version 2 Alternative embedded in binary), active Steam detection (`luatools_is_steam_running`), 1-click safe shutdown (`luatools_close_steam`), and OS error 32/5 sharing violation protection. Controls game activation, detail inspection, and Steam client restarts. |
 | **`ryuu.rs`** | Ryuu Generator API (`generator.ryuu.lol`) client with Cloudflare user-agent emulation for searching and downloading manifest files. |
 | **`hubcap.rs`** | HubCap Manifest API (`hubcapmanifest.com`) client. Supports custom user API keys, tracks daily download quota (e.g. 0/25), and downloads `.manifest` files. |
 | **`millennium.rs`** | Millennium plugin ("Eclipse Manifest" v0.5.0) manager. Compiles and extracts embedded plugin assets (`index.js`, `webkit.js`, `main.lua`) to inject a "Get Manifest" button directly into the official Steam store interface. |
@@ -191,7 +191,7 @@ All backend operations run asynchronously or via `tauri::async_runtime::spawn_bl
 | **`anticheat.rs`** | Anti-Cheat Auditor. Scans Windows services and filesystem for 12 anti-cheat solutions (EAC, BattlEye, Vanguard, FACEIT, EA AntiCheat, PunkBuster, XIGNCODE3, GameGuard, ACE, TrueProtect/MoMo, Denuvo AC, EQU8). Backs up service registry keys and driver binaries before removal. |
 | **`vbs.rs`** | Windows VBS (Virtualization-Based Security), HVCI, and Driver Signature Enforcement auditor. Inspects registry settings under `HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard`. Modifies Windows Test Mode via `bcdedit /set testsigning on/off`. Creates rollback snapshots in `cgs-vbs-snapshot.json`. |
 | **`files.rs`** | Crack Vault cloud sync and downloader. Fetches catalog from GitHub Gist. Runs 6-part parallel chunk downloads with cancellation tokens. Implements **1-click crack auto-installation**: inspects archive directory structure, determines root directory vs nested game folders, extracts files (ZIP or RAR with password support), creates backups in `.backup_orig`, and optionally deletes the archive. |
-| **`updates.rs`** | In-app update checker. Queries GitHub Releases API for `Sparki1337/eclipse-studio`. Compares semver versions, returns release notes, and links to Portable EXE or NSIS Setup. |
+| **`updates.rs`** | In-app 1-click auto-updater. Queries GitHub Releases API for `Sparki1337/eclipse-studio`. Compares semver versions, returns release notes, downloads Portable EXE directly to app directory with live speed/progress events (`download_app_update`), launches new binary with automatic legacy cleanup (`launch_app_update`), and powers localized collapsible changelog in UI. |
 | **`models.rs`** | Shared Rust data structures (`PlatformInfo`, `GameInfo`, etc.) with `Serialize` / `Deserialize`. |
 
 ### 3.2 Frontend Files (`ui/`)

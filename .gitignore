@@ -3,7 +3,7 @@ target/
 src-tauri/target/
 node_modules/
 dist/
-build/
+/build/
 *.log
 *.tmp
 __pycache__/
