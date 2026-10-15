@@ -553,11 +553,87 @@ body { font-size: 16px; }
 .toast { min-width: 290px; max-width: 400px; padding: 14px 16px; font-size: 11px; }
 
 /* Стили модального окна автообновления */
-.app-update-modal { width: min(490px, calc(100vw - 44px)); text-align: center; }
+.app-update-modal { width: min(500px, calc(100vw - 44px)); text-align: center; }
+.app-update-changelog {
+  width: 100%;
+  margin: 14px 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  overflow: hidden;
+  text-align: left;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.app-update-changelog.hidden { display: none; }
+.app-update-changelog:hover {
+  border-color: rgba(var(--accent-rgb), 0.3);
+}
+.app-update-changelog-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  list-style: none;
+  background: rgba(255, 255, 255, 0.02);
+  transition: color 0.18s ease;
+}
+.app-update-changelog-summary::-webkit-details-marker {
+  display: none;
+}
+.app-update-changelog-summary:hover {
+  color: var(--accent);
+}
+.app-update-changelog-chevron {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+.app-update-changelog-summary:hover .app-update-changelog-chevron {
+  color: var(--accent);
+}
+.app-update-changelog[open] .app-update-changelog-chevron {
+  transform: rotate(180deg);
+}
+.app-update-changelog-body {
+  padding: 12px 14px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--muted);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: pre-line;
+  font-family: inherit;
+  user-select: text;
+}
+.app-update-changelog-body::-webkit-scrollbar {
+  width: 5px;
+}
+.app-update-changelog-body::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent-rgb), 0.35);
+  border-radius: 3px;
+}
+.app-update-footnote {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 4px 0 16px;
+  text-align: center;
+}
+.app-update-footnote.hidden { display: none; }
 .app-update-progress-wrap { margin: 18px 0 12px; width: 100%; }
 .app-update-progress-wrap.hidden { display: none; }
 .app-update-progress-bar { width: 100%; height: 9px; background: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden; position: relative; border: 1px solid rgba(255, 255, 255, 0.06); }
-.app-update-progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), #2ed573); box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.65); border-radius: 6px; transition: width 0.18s ease-out; }
+.app-update-progress-fill { height: 100%; width: 0%; background: var(--accent); box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.65); border-radius: 6px; transition: width 0.18s ease-out; }
 .app-update-progress-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 10.5px; color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; }
 #update-install-button { font-size: 11px; height: 34px; padding: 0 16px; }
 

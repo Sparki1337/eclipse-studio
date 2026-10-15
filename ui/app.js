@@ -2218,14 +2218,158 @@
   let appUpdateUnlisten = null;
   let isUpdatingApp = false;
 
+  // Извлечение полного списка изменений (changelog) на выбранном языке (RU / EN)
+  function extractChangelog(notesRaw, lang = "ru") {
+    if (!notesRaw || typeof notesRaw !== "string") return "";
+    const clean = notesRaw.trim();
+    if (!clean) return "";
+
+    let enPart = "";
+    let ruPart = "";
+
+    // Поиск заголовка русской секции (## Русский / ## Russian / ## RU)
+    const ruHeaderIndex = clean.search(/(?:^|\n)##?\s*(?:Русский|Russian|RU)\b/i);
+    const hrIndex = clean.indexOf("---");
+
+    if (ruHeaderIndex !== -1) {
+      enPart = clean.slice(0, ruHeaderIndex).replace(/---[\s\r\n]*$/, "").trim();
+      ruPart = clean.slice(ruHeaderIndex).replace(/^[^\n]*\n+/, "").trim();
+    } else if (hrIndex !== -1) {
+      enPart = clean.slice(0, hrIndex).trim();
+      ruPart = clean.slice(hrIndex + 3).trim();
+    } else {
+      enPart = clean;
+      ruPart = clean;
+    }
+
+    let target = (lang === "en" ? enPart : ruPart) || clean;
+
+    // Отсекаем технические блоки проверки антивирусов и контрольных сумм
+    target = target.split(/(?:###?\s*(?:Antivirus\s*Verification|Проверка\s*безопасности|Security\s*Verification))/i)[0].trim();
+
+    // Удаляем верхний дублирующий H1-заголовок релиза (# Eclipse Studio ...)
+    target = target.replace(/^#\s*Eclipse\s*Studio[^\n]*\n+/i, "").trim();
+
+    // Убираем возможный остаточный префикс заголовка языка
+    target = target.replace(/^(?:##?\s*(?:Русский|Russian|RU|English|EN)[^\n]*\n+)+/i, "").trim();
+
+    // Форматируем подзаголовки ### в аккуратный текст
+    target = target.replace(/^###?\s*(.+)$/gm, "$1:");
+
+    // Преобразуем markdown-буллеты (* **Пункт**: описание) в читаемый список (• Пункт: описание)
+    target = target.replace(/^[\*\-]\s+\*\*([^\*]+)\*\*:\s*/gm, "• $1: ");
+    target = target.replace(/^[\*\-]\s+/gm, "• ");
+
+    // Снимаем оставшиеся markdown-выделения жирным шрифтом
+    target = target.replace(/\*\*([^\*]+)\*\*/g, "$1");
+
+    return target.trim();
+  }
+
+  let activeUpdatePrompt = null;
+
+  function closeAppUpdateModal() {
+    const backdrop = $("#app-update-backdrop");
+    backdrop.classList.add("closing");
+    setTimeout(() => {
+      backdrop.classList.add("hidden");
+      backdrop.classList.remove("closing");
+    }, 190);
+  }
+
+  // Отрисовка данных в окне обновления на актуальном языке интерфейса
+  function renderAppUpdateModal(update) {
+    const isEn = window.cgsI18n?.language === "en";
+    const title = $("#app-update-title");
+    const message = $("#app-update-message");
+    const symbol = $("#app-update-symbol");
+    const changelog = $("#app-update-changelog");
+    const changelogToggleText = $("#app-update-changelog-toggle-text");
+    const changelogBody = $("#app-update-changelog-body");
+    const footnote = $("#app-update-footnote");
+    const confirmBtn = $("#app-update-confirm");
+    const cancelBtn = $("#app-update-cancel");
+    const progressWrap = $("#app-update-progress-wrap");
+
+    symbol.textContent = "↑";
+    title.textContent = isEn 
+      ? `Version ${update.latestVersion} available` 
+      : `Доступна версия ${update.latestVersion}`;
+    message.textContent = isEn 
+      ? "A new version of Eclipse Studio is available." 
+      : "Опубликована новая версия программы Eclipse Studio.";
+
+    // Извлекаем changelog строго на выбранном пользователем языке
+    const changelogText = extractChangelog(update.notes, isEn ? "en" : "ru");
+    if (changelogText) {
+      changelog.classList.remove("hidden");
+      changelogToggleText.textContent = isEn 
+        ? `Changelog (v${update.latestVersion})` 
+        : `Список изменений (v${update.latestVersion})`;
+      changelogBody.textContent = changelogText;
+    } else {
+      changelog.classList.add("hidden");
+    }
+
+    footnote.classList.remove("hidden");
+    footnote.textContent = isEn 
+      ? "The new version will be automatically downloaded directly into this folder, and the old version will be removed upon restart." 
+      : "Новая версия будет автоматически скачана прямо в эту папку, а старая версия удалится при перезапуске.";
+
+    progressWrap.classList.add("hidden");
+
+    confirmBtn.classList.remove("hidden");
+    confirmBtn.textContent = update.portableUrl 
+      ? (isEn ? "Update now" : "Обновить сейчас") 
+      : (isEn ? "Download from website" : "Скачать с сайта");
+
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.textContent = isEn ? "Postpone (10 launches)" : "Отложить (на 10 запусков)";
+  }
+
+  // Отображение диалога обновления со свёрнутым списком изменений
+  function promptAppUpdate(update) {
+    activeUpdatePrompt = update;
+    const backdrop = $("#app-update-backdrop");
+    const changelog = $("#app-update-changelog");
+    if (changelog) changelog.open = false; // Список изменений по умолчанию свёрнут
+
+    renderAppUpdateModal(update);
+    backdrop.classList.remove("hidden", "closing");
+
+    const confirmBtn = $("#app-update-confirm");
+    const cancelBtn = $("#app-update-cancel");
+
+    confirmBtn.onclick = async () => {
+      clearPostponeUpdate();
+      if (update.portableUrl) {
+        await startAppUpdate(update);
+      } else {
+        const preferredUrl = update.installerUrl || update.releaseUrl;
+        await call("open_external", { url: preferredUrl });
+        closeAppUpdateModal();
+      }
+    };
+
+    cancelBtn.onclick = () => {
+      postponeStartupUpdate(update.latestVersion);
+      closeAppUpdateModal();
+      const isEn = window.cgsI18n?.language === "en";
+      toast(isEn ? "Update reminder postponed for 10 launches" : "Напоминание об обновлении отложено на 10 запусков");
+    };
+  }
+
   async function startAppUpdate(updateInfo) {
     if (isUpdatingApp) return;
     isUpdatingApp = true;
 
+    const isEn = window.cgsI18n?.language === "en";
     const backdrop = $("#app-update-backdrop");
     const title = $("#app-update-title");
     const message = $("#app-update-message");
     const symbol = $("#app-update-symbol");
+    const changelog = $("#app-update-changelog");
+    const footnote = $("#app-update-footnote");
     const progressWrap = $("#app-update-progress-wrap");
     const progressFill = $("#app-update-progress-fill");
     const bytesText = $("#app-update-progress-bytes");
@@ -2233,14 +2377,21 @@
     const confirmBtn = $("#app-update-confirm");
     const cancelBtn = $("#app-update-cancel");
 
-    // Подготовка отображения диалога загрузки
+    // Переводим окно в режим скачивания: скрываем changelog и сноску, открываем прогресс-бар
+    changelog?.classList.add("hidden");
+    footnote?.classList.add("hidden");
     backdrop.classList.remove("hidden", "closing");
-    title.textContent = `Загрузка Eclipse Studio v${updateInfo.latestVersion}`;
-    message.textContent = "Скачивание нового файла в папку программы…";
+
+    title.textContent = isEn 
+      ? `Downloading Eclipse Studio v${updateInfo.latestVersion}` 
+      : `Загрузка Eclipse Studio v${updateInfo.latestVersion}`;
+    message.textContent = isEn 
+      ? "Downloading new binary into application folder…" 
+      : "Скачивание нового файла в папку программы…";
     symbol.textContent = "↓";
     progressWrap.classList.remove("hidden");
     progressFill.style.width = "0%";
-    bytesText.textContent = "Подключение к серверу…";
+    bytesText.textContent = isEn ? "Connecting to server…" : "Подключение к серверу…";
     speedText.textContent = "";
     confirmBtn.classList.add("hidden");
     cancelBtn.classList.add("hidden");
@@ -2258,11 +2409,17 @@
           const speedMb = (payload.speedBytesPerSec / (1024 * 1024)).toFixed(1);
 
           if (payload.totalBytes > 0) {
-            bytesText.textContent = `${dlMb} МБ / ${totalMb} МБ (${pct}%)`;
+            bytesText.textContent = isEn 
+              ? `${dlMb} MB / ${totalMb} MB (${pct}%)` 
+              : `${dlMb} МБ / ${totalMb} МБ (${pct}%)`;
           } else {
-            bytesText.textContent = `${dlMb} МБ скачано`;
+            bytesText.textContent = isEn 
+              ? `${dlMb} MB downloaded` 
+              : `${dlMb} МБ скачано`;
           }
-          speedText.textContent = payload.completed ? "Завершено" : `${speedMb} МБ/с`;
+          speedText.textContent = payload.completed 
+            ? (isEn ? "Completed" : "Завершено") 
+            : (isEn ? `${speedMb} MB/s` : `${speedMb} МБ/с`);
         });
       }
 
@@ -2273,21 +2430,23 @@
       });
 
       // Успешно загружено
-      title.textContent = "Обновление готово к установке!";
-      message.textContent = `Версия v${result.version} успешно скачана. Перезапустить приложение сейчас? При запуске старая версия будет автоматически заменена.`;
+      title.textContent = isEn ? "Update ready to install!" : "Обновление готово к установке!";
+      message.textContent = isEn 
+        ? `Version v${result.version} successfully downloaded. Restart application now? On startup, the old version will be replaced automatically.` 
+        : `Версия v${result.version} успешно скачана. Перезапустить приложение сейчас? При запуске старая версия будет автоматически заменена.`;
       symbol.textContent = "✓";
       progressFill.style.width = "100%";
-      bytesText.textContent = "100% — загрузка завершена";
+      bytesText.textContent = isEn ? "100% — download completed" : "100% — загрузка завершена";
       speedText.textContent = "";
 
-      confirmBtn.textContent = "Перезапустить сейчас";
+      confirmBtn.textContent = isEn ? "Restart now" : "Перезапустить сейчас";
       confirmBtn.classList.remove("hidden");
-      cancelBtn.textContent = "Позже";
+      cancelBtn.textContent = isEn ? "Later" : "Позже";
       cancelBtn.classList.remove("hidden");
 
       confirmBtn.onclick = async () => {
         try {
-          setBusy(confirmBtn, true, "Перезапуск…");
+          setBusy(confirmBtn, true, isEn ? "Restarting…" : "Перезапуск…");
           await call("launch_app_update", { filePath: result.filePath });
         } catch (error) {
           toast(errorText(error), "error");
@@ -2296,29 +2455,19 @@
       };
 
       cancelBtn.onclick = () => {
-        backdrop.classList.add("closing");
-        setTimeout(() => {
-          backdrop.classList.add("hidden");
-          backdrop.classList.remove("closing");
-        }, 190);
-        toast(`Обновление v${result.version} готово в папке программы`);
+        closeAppUpdateModal();
+        toast(isEn ? `Update v${result.version} is ready in application folder` : `Обновление v${result.version} готово в папке программы`);
       };
 
     } catch (error) {
-      title.textContent = "Ошибка загрузки обновления";
+      title.textContent = isEn ? "Update download failed" : "Ошибка загрузки обновления";
       message.textContent = errorText(error);
       symbol.textContent = "!";
       progressWrap.classList.add("hidden");
       confirmBtn.classList.add("hidden");
-      cancelBtn.textContent = "Закрыть";
+      cancelBtn.textContent = isEn ? "Close" : "Закрыть";
       cancelBtn.classList.remove("hidden");
-      cancelBtn.onclick = () => {
-        backdrop.classList.add("closing");
-        setTimeout(() => {
-          backdrop.classList.add("hidden");
-          backdrop.classList.remove("closing");
-        }, 190);
-      };
+      cancelBtn.onclick = () => closeAppUpdateModal();
       toast(errorText(error), "error");
     } finally {
       isUpdatingApp = false;
@@ -2385,31 +2534,33 @@
 
   async function checkForUpdates(interactive = false) {
     if (state.updates.checking) return;
+    const isEn = window.cgsI18n?.language === "en";
+
     if (!invoke) {
       if (interactive) {
-        toast("Режим разработки (без Tauri backend). Для проверки окна используйте кнопку «Тест окна обновления».");
+        toast(isEn ? "Development mode (no Tauri backend). Use DevTools or Mock to test update dialog." : "Режим разработки (без Tauri backend).");
       }
       return;
     }
     state.updates.checking = true;
     const button = $("#check-update-button");
     const status = $("#update-status");
-    setBusy(button, true, "Проверяем…");
+    setBusy(button, true, isEn ? "Checking…" : "Проверяем…");
     status.classList.remove("available", "error");
-    status.textContent = "Подключение к GitHub…";
+    status.textContent = isEn ? "Connecting to GitHub…" : "Подключение к GitHub…";
 
     try {
       const update = await call("check_for_update");
       $("#update-current-version").textContent = update.currentVersion;
       if (!update.available) {
         renderUpdateDownloads();
-        status.textContent = `Установлена актуальная версия ${update.currentVersion}`;
-        if (interactive) toast("У вас установлена последняя версия");
+        status.textContent = isEn ? `Latest version ${update.currentVersion} is installed` : `Установлена актуальная версия ${update.currentVersion}`;
+        if (interactive) toast(isEn ? "You have the latest version installed" : "У вас установлена последняя версия");
         return;
       }
 
       renderUpdateDownloads(update);
-      status.textContent = `Доступна версия ${update.latestVersion}`;
+      status.textContent = isEn ? `Version ${update.latestVersion} available` : `Доступна версия ${update.latestVersion}`;
       status.classList.add("available");
       if (!interactive) {
         if (!shouldPromptStartupUpdate(update.latestVersion)) {
@@ -2419,26 +2570,8 @@
       }
       state.updates.promptedVersion = update.latestVersion;
 
-      const notes = String(update.notes || "").trim();
-      const shortNotes = notes.length > 700 ? `${notes.slice(0, 700).trim()}…` : notes;
-      const downloadLabel = update.portableUrl ? "Обновить сейчас" : "Скачать с сайта";
-      const accepted = await showModal(
-        `Доступна версия ${update.latestVersion}`,
-        `${shortNotes || "Опубликована новая версия Eclipse Studio."}\n\nНовая версия будет автоматически скачана прямо в эту папку, а старая версия удалится при перезапуске.`,
-        { confirm: true, confirmText: downloadLabel, cancelText: "Отложить (на 10 запусков)", symbol: "↑" },
-      );
-      if (accepted) {
-        clearPostponeUpdate();
-        if (update.portableUrl) {
-          await startAppUpdate(update);
-        } else {
-          const preferredUrl = update.installerUrl || update.releaseUrl;
-          await call("open_external", { url: preferredUrl });
-        }
-      } else {
-        postponeStartupUpdate(update.latestVersion);
-        toast("Напоминание об обновлении отложено на 10 запусков");
-      }
+      // Открываем модальное окно с выбором и свёрнутым changelog на текущем языке
+      promptAppUpdate(update);
     } catch (error) {
       const message = errorText(error);
       status.textContent = message;
@@ -2452,6 +2585,13 @@
   }
 
   function bindEvents() {
+    // Мгновенное обновление окна обновления при смене языка интерфейса
+    window.addEventListener("cgs:language-changed", () => {
+      if (activeUpdatePrompt && !$("#app-update-backdrop").classList.contains("hidden") && !isUpdatingApp) {
+        renderAppUpdateModal(activeUpdatePrompt);
+      }
+    });
+
     document.addEventListener("contextmenu", (event) => event.preventDefault(), { capture: true });
     document.addEventListener("auxclick", (event) => {
       if (event.button === 2) event.preventDefault();
@@ -2786,7 +2926,7 @@
     $("#hubcap-key").value = state.lua.hubcapKey;
     updateHubcapKeyStatus();
     renderLoaderInfo();
-    log("Eclipse Studio 7.0.1 инициализирован", "system");
+    log("Eclipse Studio 7.0.2 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный вызов отображения окна, если заставка была отключена в параметрах

@@ -241,7 +241,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>7.0.1</span>
+        <span class="titlebar-version" data-tauri-drag-region>7.0.2</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -332,7 +332,7 @@
         <div class="home-hero premium-panel">
           <div class="home-glow"></div>
           <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 7.0.1</span>
+            <span class="hero-kicker">ECLIPSE STUDIO 7.0.2</span>
             <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
             <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
           </div>
@@ -1715,7 +1715,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">7.0.1</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">7.0.2</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -1744,7 +1744,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия</span><b>7.0.1</b></div>
+                  <div class="about-row"><span>Версия</span><b>7.0.2</b></div>
                   <div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div>
                   <div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · Eclipse Manifest · Гипервизор · Кряки · Утилиты</b></div>
                 </div>
@@ -1765,6 +1765,16 @@
       <div class="modal-symbol" id="app-update-symbol">↑</div>
       <h3 id="app-update-title">Обновление Eclipse Studio</h3>
       <p id="app-update-message">Доступна новая версия программы.</p>
+      <details class="app-update-changelog hidden" id="app-update-changelog">
+        <summary class="app-update-changelog-summary">
+          <span id="app-update-changelog-toggle-text">Список изменений</span>
+          <span class="app-update-changelog-chevron">
+            <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+          </span>
+        </summary>
+        <div class="app-update-changelog-body" id="app-update-changelog-body"></div>
+      </details>
+      <p class="app-update-footnote hidden" id="app-update-footnote"></p>
       <div class="app-update-progress-wrap hidden" id="app-update-progress-wrap">
         <div class="app-update-progress-bar">
           <div class="app-update-progress-fill" id="app-update-progress-fill"></div>

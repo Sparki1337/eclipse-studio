@@ -48,10 +48,10 @@ const pinnedFiles = [
   },
   {
     name: "Eclipse Studio",
-    build: "Build 7.0.1",
+    build: "Build 7.0.2",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.1/Eclipse-Studio-v7.0.1.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.2/Eclipse-Studio-v7.0.2.exe",
   },
 ];
 

@@ -31,7 +31,7 @@
     },
     files_cancel_download: () => true,
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "7.0.1", latest_version: "7.0.1", currentVersion: "7.0.1", latestVersion: "7.0.1" }),
+    check_for_update: () => ({ available: false, current_version: "7.0.2", latest_version: "7.0.2", currentVersion: "7.0.2", latestVersion: "7.0.2" }),
     download_app_update: async (args) => {
       const ver = args?.version || "6.6.8";
       const name = `Eclipse-Studio-v${ver}.exe`;

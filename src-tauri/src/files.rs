@@ -242,7 +242,7 @@ fn download_file(
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(900))
             .pool_max_idle_per_host(PARALLEL_DOWNLOAD_PARTS as usize)
-            .user_agent("EclipseStudio/7.0.1")
+            .user_agent("EclipseStudio/7.0.2")
             .build()
             .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
         let head = client
@@ -699,7 +699,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/7.0.1")
+        .user_agent("EclipseStudio/7.0.2")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =

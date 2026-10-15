@@ -47,10 +47,10 @@ const pinnedFiles = [
   },
   {
     name: "Eclipse Studio",
-    build: "Build 7.0.1",
+    build: "Build 7.0.2",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.1/Eclipse-Studio-v7.0.1.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.2/Eclipse-Studio-v7.0.2.exe",
   },
 ];
 
@@ -205,12 +205,12 @@ function generateMockScript() {
 
     check_for_update: () => ({
       available: false,
-      currentVersion: "7.0.1",
-      latestVersion: "7.0.1",
-      title: "Eclipse Studio 7.0.1",
+      currentVersion: "7.0.2",
+      latestVersion: "7.0.2",
+      title: "Eclipse Studio 7.0.2",
       notes: "Актуальная версия",
       releaseUrl: "https://github.com/Sparki1337/eclipse-studio/releases",
-      portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.1/Eclipse-Studio-v7.0.1.exe",
+      portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.2/Eclipse-Studio-v7.0.2.exe",
       installerUrl: null,
     }),
     download_app_update: async (args) => {
