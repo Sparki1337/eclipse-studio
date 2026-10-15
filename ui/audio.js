@@ -1123,7 +1123,7 @@
       "input[type='checkbox'], input[type='radio'], " +
       ".nav-item, .module-card, [data-open-view], [data-view], " +
       ".theme-option, [data-theme-option], .accent-chip, [data-accent-option], " +
-      ".switch, .tab-btn, .svc-option, .personalization-segment button, " +
+      ".switch, .tab-btn, .svc-option, .loader-option, .personalization-segment button, " +
       ".window-button, .sidebar-mode-btn, .channel-card, " +
       ".save-location, .dlc-library-game, .dlc-item, .dlc-unlock-all, " +
       ".hv-game-card, .file-card, .utility-card, .crack-card, " +

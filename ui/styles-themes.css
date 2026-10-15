@@ -181,17 +181,22 @@ html[data-theme="light"] .font-size-picker button.active,
 html[data-theme="light"] .language-picker button.active { color: #050811 !important; background: #ffffff !important; box-shadow: 0 1px 4px rgba(0,0,0,.14) !important; font-weight: 850; }
 html[data-theme="light"] .font-size-slider b { color: #050811 !important; font-weight: 800; }
 
-html[data-theme="light"] .svc-option { background: #ffffff !important; border-color: rgba(0,0,0,.1) !important; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
-html[data-theme="light"] .svc-option.active { background: rgba(var(--accent-rgb), .12) !important; border-color: rgba(var(--accent-rgb), .5) !important; }
+html[data-theme="light"] .svc-option,
+html[data-theme="light"] .loader-option { background: #ffffff !important; border-color: rgba(0,0,0,.1) !important; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+html[data-theme="light"] .svc-option.active,
+html[data-theme="light"] .loader-option.active { background: rgba(var(--accent-rgb), .12) !important; border-color: rgba(var(--accent-rgb), .5) !important; }
 html[data-theme="light"] .download-path { background: #f1f5f9 !important; border-color: rgba(0,0,0,.12) !important; }
 html[data-theme="light"] .download-path code { color: #050811 !important; font-weight: 600; }
 
 html[data-theme="light"] .ghost-button,
 html[data-theme="light"] .secondary-button,
+html[data-theme="light"] .manifest-loader-apply-btn,
 html[data-theme="light"] .svc-link { background: #ffffff !important; color: #050811 !important; border-color: rgba(0,0,0,.14) !important; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
 html[data-theme="light"] .ghost-button:hover:not(:disabled),
 html[data-theme="light"] .secondary-button:hover:not(:disabled),
+html[data-theme="light"] .manifest-loader-apply-btn:hover:not(:disabled),
 html[data-theme="light"] .svc-link:hover:not(:disabled) { background: #f8fafc !important; color: #000000 !important; border-color: rgba(var(--accent-rgb), .4) !important; }
+html[data-theme="light"] .loader-src-tag { background: rgba(0, 0, 0, 0.06) !important; color: #475569 !important; }
 
 html[data-theme="light"] .metric-card { background: #ffffff; border-color: rgba(0,0,0,.08); box-shadow: 0 2px 8px rgba(0,0,0,.04); }
 html[data-theme="light"] .utility-card { background: #ffffff; border-color: rgba(0,0,0,.08); box-shadow: 0 2px 6px rgba(0,0,0,.03); }

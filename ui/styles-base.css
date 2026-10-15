@@ -685,6 +685,32 @@ body { font-size: 16px; }
 .millennium-plugin-actions .secondary-button { margin-left: 0; }
 .millennium-plugin-actions .install-button:disabled { opacity: .42; cursor: not-allowed; transform: none; filter: none; }
 .millennium-plugin-actions .uninstall-button { height: 45px; }
+
+/* Загрузчик манифестов OpenSteamTool */
+.manifest-loader-panel { display: flex; flex-direction: column; gap: 14px; padding: 20px 24px; border-color: rgba(var(--accent-rgb), .12); background: linear-gradient(110deg, rgba(var(--accent-rgb), .035), rgba(13,16,24,.9) 52%); }
+.manifest-loader-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.manifest-loader-copy { flex: 1; min-width: 220px; }
+.manifest-loader-copy h3 { margin: 6px 0 0; font-size: 13px; }
+.manifest-loader-copy p { margin: 5px 0 0; color: #697482; font-size: 9.5px; line-height: 1.5; }
+.manifest-loader-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.manifest-loader-badge { padding: 4px 8px; border: 1px solid rgba(255,255,255,.08); border-radius: 7px; color: #87919e; background: rgba(255,255,255,.035); font-size: 8.5px; font-weight: 750; white-space: nowrap; }
+.manifest-loader-badge.ready { color: var(--accent); border-color: rgba(var(--accent-rgb), .2); background: rgba(var(--accent-rgb), .08); }
+.manifest-loader-badge.warning { color: #ffc777; border-color: rgba(255,199,119,.2); background: rgba(255,199,119,.07); }
+.manifest-loader-badge.error { color: #ff7994; border-color: rgba(255,121,148,.2); background: rgba(255,121,148,.07); }
+.manifest-loader-apply-btn { display: inline-flex; align-items: center; gap: 5px; height: 25px; padding: 0 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; background: rgba(255,255,255,.04); color: #cbd5e1; font-size: 9px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 150ms ease; }
+.manifest-loader-apply-btn:hover { color: var(--accent); background: rgba(var(--accent-rgb), .1); border-color: rgba(var(--accent-rgb), .35); transform: translateY(-1px); }
+.manifest-loader-apply-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
+.loader-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 2px; }
+.loader-option { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 14px; background: rgba(255, 255, 255, 0.02); cursor: pointer; transition: all 150ms ease; user-select: none; }
+.loader-option:hover { border-color: rgba(var(--accent-rgb), 0.3); background: rgba(255, 255, 255, 0.035); transform: translateY(-1px); }
+.loader-option.active { border-color: rgba(var(--accent-rgb), 0.55); background: rgba(var(--accent-rgb), 0.06); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.08); }
+.loader-option strong { font-size: 13px; font-weight: 750; color: var(--text); letter-spacing: -0.01em; }
+.loader-option small { font-size: 9.5px; color: #727e8d; line-height: 1.45; }
+.loader-src-tag { font-size: 8px; font-weight: 700; padding: 2px 7px; border-radius: 5px; background: rgba(255, 255, 255, 0.06); color: #94a3b8; white-space: nowrap; flex-shrink: 0; }
+.loader-src-tag.success { background: rgba(var(--accent-rgb), 0.12); color: var(--accent); }
+.loader-src-tag.danger { background: rgba(255, 121, 148, 0.12); color: #ff7994; }
+.settings-loader-desc { margin: 0 0 10px 0; color: #94a3b8; font-size: 11px; line-height: 1.5; }
+
 .lua-autoupdate { display: flex; align-items: center; gap: 9px; margin-left: auto; }
 .lua-autoupdate small { color: #8993a1; font-size: 9.5px; white-space: nowrap; }
 .lua-heading-tools { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-left: auto; }

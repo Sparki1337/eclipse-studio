@@ -47,10 +47,10 @@ const pinnedFiles = [
   },
   {
     name: "Eclipse Studio",
-    build: "Build 7.0.0",
+    build: "Build 7.0.1",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.0/Eclipse-Studio-v7.0.0.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.1/Eclipse-Studio-v7.0.1.exe",
   },
 ];
 
@@ -139,6 +139,20 @@ function generateMockScript() {
     }),
     luatools_names: () => ({ "1174180": "Red Dead Redemption 2" }),
     luatools_headers: () => ({ "1174180": "https://cdn.cloudflare.steamstatic.com/steam/apps/1174180/header.jpg" }),
+    luatools_get_loader_info: () => ({
+      loaderSource: "v1",
+      v1Name: "Версия 1 (Основная)",
+      v1Desc: "Основная стабильная сборка OpenSteamTool (1.57 МБ)",
+      v2Name: "Версия 2 (Альтернативная)",
+      v2Desc: "Альтернативная встроенная сборка OpenSteamTool (1.75 МБ). Включайте, если не работает основная версия.",
+      activeInSteam: "v1",
+      activeInSteamLabel: "Версия 1 (Основная)",
+      steamDetected: true,
+    }),
+    luatools_set_loader_source: () => ({ success: true, message: "Загрузчик применен" }),
+    luatools_apply_loader: () => ({ success: true, message: "Загрузчик успешно обновлен в Steam" }),
+    luatools_is_steam_running: () => false,
+    luatools_close_steam: () => ({ success: true, message: "Steam успешно завершён" }),
     game_artwork_store_url: (args) => (args?.appid ? "https://cdn.cloudflare.steamstatic.com/steam/apps/" + args.appid + "/header.jpg" : null),
     millennium_plugin_status: () => ({
       status: "ready",
@@ -191,12 +205,12 @@ function generateMockScript() {
 
     check_for_update: () => ({
       available: false,
-      currentVersion: "7.0.0",
-      latestVersion: "7.0.0",
-      title: "Eclipse Studio 7.0.0",
+      currentVersion: "7.0.1",
+      latestVersion: "7.0.1",
+      title: "Eclipse Studio 7.0.1",
       notes: "Актуальная версия",
       releaseUrl: "https://github.com/Sparki1337/eclipse-studio/releases",
-      portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.0/Eclipse-Studio-v7.0.0.exe",
+      portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.1/Eclipse-Studio-v7.0.1.exe",
       installerUrl: null,
     }),
     download_app_update: async (args) => {

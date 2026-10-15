@@ -48,10 +48,10 @@ const pinnedFiles = [
   },
   {
     name: "Eclipse Studio",
-    build: "Build 6.6.7",
+    build: "Build 7.0.1",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v6.6.7/Eclipse-Studio-v6.6.7.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.1/Eclipse-Studio-v7.0.1.exe",
   },
 ];
 
@@ -138,6 +138,20 @@ function generateMockScript() {
       ],
     }),
     luatools_names: () => ({ "1174180": "Red Dead Redemption 2" }),
+    luatools_get_loader_info: () => ({
+      loaderSource: "v1",
+      v1Name: "Версия 1 (Основная)",
+      v1Desc: "Основная стабильная сборка OpenSteamTool (1.57 МБ)",
+      v2Name: "Версия 2 (Альтернативная)",
+      v2Desc: "Альтернативная встроенная сборка OpenSteamTool (1.75 МБ). Включайте, если не работает основная версия.",
+      activeInSteam: "v1",
+      activeInSteamLabel: "Версия 1 (Основная)",
+      steamDetected: true,
+    }),
+    luatools_set_loader_source: () => ({ success: true, message: "Загрузчик применен" }),
+    luatools_apply_loader: () => ({ success: true, message: "Загрузчик успешно обновлен в Steam" }),
+    luatools_is_steam_running: () => false,
+    luatools_close_steam: () => ({ success: true, message: "Steam успешно завершён" }),
     millennium_plugin_status: () => ({
       status: "ready",
       pluginVersion: "0.5.0",

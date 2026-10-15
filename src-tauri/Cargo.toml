@@ -1,6 +1,6 @@
 [package]
 name = "eclipse-studio"
-version = "7.0.0"
+version = "7.0.1"
 description = "Eclipse Studio desktop application"
 authors = ["Sparki"]
 edition = "2021"

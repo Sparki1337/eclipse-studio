@@ -241,7 +241,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>7.0.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>7.0.1</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -332,7 +332,7 @@
         <div class="home-hero premium-panel">
           <div class="home-glow"></div>
           <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 7.0.0</span>
+            <span class="hero-kicker">ECLIPSE STUDIO 7.0.1</span>
             <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
             <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
           </div>
@@ -618,6 +618,45 @@
               <button class="install-button hidden" id="millennium-migrate-button"><span>Заменить CrocLua</span></button>
               <button class="install-button hidden" id="millennium-install-button" disabled><span>Проверка…</span></button>
               <button class="uninstall-button hidden" id="millennium-remove-button">Удалить</button>
+            </div>
+          </section>
+
+          <!-- Выбор версии загрузчика манифестов в Steam (OpenSteamTool) -->
+          <section class="premium-panel manifest-loader-panel">
+            <div class="manifest-loader-head">
+              <div class="millennium-plugin-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" style="width:24px;height:24px;color:var(--accent)"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/></svg>
+              </div>
+              <div class="manifest-loader-copy">
+                <div class="millennium-plugin-heading">
+                  <span class="coming-label">ЗАГРУЗЧИК МАНИФЕСТОВ STEAM</span>
+                  <span class="manifest-loader-badge checking" id="manifest-loader-active-badge">Проверка…</span>
+                </div>
+                <h3>Версия OpenSteamTool</h3>
+                <p>Выберите версию загрузчика для Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.</p>
+              </div>
+              <div class="manifest-loader-actions">
+                <button type="button" class="manifest-loader-apply-btn" id="manifest-loader-apply-btn" title="Установить выбранную версию в Steam">
+                  <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2.5 8.5l3.5 3.5 7.5-7.5"/></svg>
+                  <span>Применить в Steam</span>
+                </button>
+              </div>
+            </div>
+            <div class="loader-options">
+              <div class="loader-option active" data-loader-source="v1" role="button" tabindex="0">
+                <div class="svc-option-header">
+                  <strong>Версия 1 (Основная)</strong>
+                  <span class="loader-src-tag">Вшита · 1.57 МБ</span>
+                </div>
+                <small>Основная стабильная версия OpenSteamTool из релизной сборки программы</small>
+              </div>
+              <div class="loader-option" data-loader-source="v2" role="button" tabindex="0">
+                <div class="svc-option-header">
+                  <strong>Версия 2 (Альтернативная)</strong>
+                  <span class="loader-src-tag">Вшита · 1.75 МБ</span>
+                </div>
+                <small>Используйте, если не работает основная версия или возникают проблемы с запуском</small>
+              </div>
             </div>
           </section>
 
@@ -1490,6 +1529,54 @@
               <h2>Модули и API</h2>
               <p>Настройки внешних сервисов и параметров интеграции</p>
 
+              <!-- Выбор версии загрузчика манифестов в настройках программы -->
+              <details class="settings-collapsible" id="collapse-manifest-loader" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M10 2v3m0 10v3M3 10h3m10 0h3M4.9 4.9l2.1 2.1m6 6 2.1 2.1M4.9 15.1l2.1-2.1m6-6 2.1-2.1"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Загрузчик манифестов Steam</strong>
+                      <small>Выбор версии OpenSteamTool: основная (1.57 МБ) или альтернативная (если не работает основная)</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="manifest-loader-head">
+                    <div class="manifest-loader-copy">
+                      <p class="settings-loader-desc">Выберите, какую встроенную версию OpenSteamTool использовать при интеграции манифестов в клиент Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.</p>
+                    </div>
+                    <div class="manifest-loader-actions">
+                      <span class="manifest-loader-badge checking" id="settings-loader-active-badge">Проверка…</span>
+                      <button type="button" class="manifest-loader-apply-btn" id="settings-loader-apply-btn" title="Установить выбранную версию в Steam">
+                        <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2.5 8.5l3.5 3.5 7.5-7.5"/></svg>
+                        <span>Применить в Steam</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="loader-options">
+                    <div class="loader-option active" data-loader-source="v1" role="button" tabindex="0">
+                      <div class="svc-option-header">
+                        <strong>Версия 1 (Основная)</strong>
+                        <span class="loader-src-tag">Вшита · 1.57 МБ</span>
+                      </div>
+                      <small>Основная стабильная версия OpenSteamTool из релизной сборки программы</small>
+                    </div>
+                    <div class="loader-option" data-loader-source="v2" role="button" tabindex="0">
+                      <div class="svc-option-header">
+                        <strong>Версия 2 (Альтернативная)</strong>
+                        <span class="loader-src-tag">Вшита · 1.75 МБ</span>
+                      </div>
+                      <small>Используйте, если не работает основная версия или возникают проблемы с запуском</small>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
               <details class="settings-collapsible" id="collapse-modules-manifests" open>
                 <summary class="settings-collapsible-summary">
                   <div class="settings-collapsible-header">
@@ -1628,7 +1715,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">7.0.0</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">7.0.1</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -1657,7 +1744,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия</span><b>7.0.0</b></div>
+                  <div class="about-row"><span>Версия</span><b>7.0.1</b></div>
                   <div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div>
                   <div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · Eclipse Manifest · Гипервизор · Кряки · Утилиты</b></div>
                 </div>

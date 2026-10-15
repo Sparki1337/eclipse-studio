@@ -31,7 +31,7 @@
     },
     files_cancel_download: () => true,
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "7.0.0", latest_version: "7.0.0", currentVersion: "7.0.0", latestVersion: "7.0.0" }),
+    check_for_update: () => ({ available: false, current_version: "7.0.1", latest_version: "7.0.1", currentVersion: "7.0.1", latestVersion: "7.0.1" }),
     download_app_update: async (args) => {
       const ver = args?.version || "6.6.8";
       const name = `Eclipse-Studio-v${ver}.exe`;
@@ -44,6 +44,20 @@
     luatools_status: () => ({ games: [], steamPath: "C:\\Program Files (x86)\\Steam" }),
     luatools_names: () => ({}),
     luatools_headers: () => ({}),
+    luatools_get_loader_info: () => ({
+      loaderSource: "v1",
+      v1Name: "Версия 1 (Основная)",
+      v1Desc: "Основная стабильная сборка OpenSteamTool (1.57 МБ)",
+      v2Name: "Версия 2 (Альтернативная)",
+      v2Desc: "Альтернативная встроенная сборка OpenSteamTool (1.75 МБ). Включайте, если не работает основная версия.",
+      activeInSteam: "v1",
+      activeInSteamLabel: "Версия 1 (Основная)",
+      steamDetected: true,
+    }),
+    luatools_set_loader_source: () => ({ success: true, message: "Загрузчик применен" }),
+    luatools_apply_loader: () => ({ success: true, message: "Загрузчик успешно обновлен в Steam" }),
+    luatools_is_steam_running: () => false,
+    luatools_close_steam: () => ({ success: true, message: "Steam успешно завершён" }),
     game_artwork_store_url: () => null,
     millennium_plugin_status: () => ({ installed: false, millenniumInstalled: false }),
     hubcap_usage: () => ({ used: 3, limit: 25, remaining: 22 }),

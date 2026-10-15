@@ -99,6 +99,10 @@
       },
       millenniumPrompted: false,
       crocluaPrompted: false,
+      // Источник загрузчика манифестов: "v1" (базовый) или "v2" (с десктопа)
+      loaderSource: (localStorage.getItem("manifestLoaderSource") === "v2" || localStorage.getItem("manifestLoaderSource") === "desktop") ? "v2" : "v1",
+      // Подробные сведения о файлах загрузчика OpenSteamTool и статусе в Steam
+      loaderInfo: null,
     },
     updates: {
       checking: false,
@@ -204,7 +208,7 @@
     $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === name));
     $("#page-eyebrow").textContent = viewMeta[name][0];
     $("#page-title").textContent = viewMeta[name][1];
-    if (name === "lua") luaRefresh();
+    if (name === "lua" || name === "settings") luaRefresh();
     window.dispatchEvent(new CustomEvent("cgs:view-changed", { detail: name }));
     const mainArea = $(".main-area");
     if (mainArea) mainArea.scrollTop = 0;
@@ -1171,6 +1175,7 @@
         : "Steam не найден — укажите папку вручную";
     }
     renderMillenniumStatus();
+    renderLoaderInfo();
     renderLuaGames();
   }
 
@@ -1223,6 +1228,145 @@
         : info.status === "update_available"
           ? "Обновить плагин"
           : "Установить плагин";
+    }
+  }
+
+  // Нормализация источника загрузчика манифестов ("v1" или "v2")
+  function normalizeLoaderSource(raw) {
+    return (raw === "v2" || raw === "desktop") ? "v2" : "v1";
+  }
+
+  // Отображение состояния загрузчика OpenSteamTool (вкладка манифестов и настройки)
+  function renderLoaderInfo() {
+    const info = state.lua.loaderInfo;
+    const currentSource = normalizeLoaderSource(state.lua.loaderSource);
+
+    // Обновляем выделение карточек (в view-lua и в view-settings)
+    $$(".loader-option").forEach((card) => {
+      card.classList.toggle("active", normalizeLoaderSource(card.dataset.loaderSource) === currentSource);
+    });
+
+    // Текст и оформление текущего статуса загрузчика в Steam
+    const defaultLabel = currentSource === "v2" ? "Версия 2 (Альтернативная)" : "Версия 1 (Основная)";
+    const activeLabel = info?.activeInSteamLabel || defaultLabel;
+    const activeKind = info?.activeInSteam || currentSource;
+
+    const manifestBadge = $("#manifest-loader-active-badge");
+    const settingsBadge = $("#settings-loader-active-badge");
+
+    [manifestBadge, settingsBadge].forEach((badge) => {
+      if (!badge) return;
+      badge.textContent = `В Steam: ${activeLabel}`;
+      badge.className = "manifest-loader-badge";
+      if (activeKind === "v1" || activeKind === "v2" || activeKind === "bundled" || activeKind === "desktop") {
+        badge.classList.add("ready");
+      } else if (activeKind === "custom" || activeKind === "mismatch") {
+        badge.classList.add("warning");
+      } else if (activeKind === "none") {
+        badge.classList.add("error");
+      } else {
+        badge.classList.add("checking");
+      }
+    });
+  }
+
+  // Проверка запущенного процесса Steam с предложением завершить его
+  async function ensureSteamClosedForLoader() {
+    try {
+      const isRunning = await call("luatools_is_steam_running");
+      if (!isRunning) return true;
+
+      const shouldClose = await showModal(
+        "Steam запущен",
+        "Клиент Steam в данный момент запущен и блокирует файлы загрузчика OpenSteamTool.\n\nЗавершить процесс Steam сейчас, чтобы применить выбранную версию?",
+        { confirm: true, confirmText: "Завершить Steam", cancelText: "Отмена", symbol: "⚠" }
+      );
+      if (!shouldClose) return false;
+
+      toast("Завершаем процесс Steam…");
+      const closeResult = await call("luatools_close_steam", { steamPath: state.lua.steamPath || null });
+      if (closeResult && !closeResult.success) {
+        toast(closeResult.message || "Не удалось завершить Steam", "error");
+        return false;
+      }
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  // Переключение источника загрузчика манифестов
+  async function applyLoaderSource(source) {
+    const valid = normalizeLoaderSource(source);
+
+    // Если Steam запущен, предлагаем его завершить перед перезаписью файлов
+    const canProceed = await ensureSteamClosedForLoader();
+    if (!canProceed) {
+      renderLoaderInfo();
+      return;
+    }
+
+    state.lua.loaderSource = valid;
+    localStorage.setItem("manifestLoaderSource", valid);
+    renderLoaderInfo();
+
+    try {
+      const result = await call("luatools_set_loader_source", {
+        source: valid,
+        steamPath: state.lua.steamPath || null,
+      });
+
+      if (result && !result.success) {
+        toast(result.message || "Ошибка применения загрузчика", "error");
+      } else {
+        const verName = valid === "v2" ? "Версия 2 (Альтернативная)" : "Версия 1 (Основная)";
+        toast(result?.message || `Выбрана ${verName}`, "success");
+        await luaRefresh();
+
+        // Предлагаем запустить Steam для применения изменений
+        const shouldRestart = await showModal(
+          "Версия загрузчика обновлена",
+          `В Steam установлена ${verName} OpenSteamTool.\n\nЗапустить клиент Steam сейчас?`,
+          { confirm: true, confirmText: "Запустить Steam", cancelText: "Позже", symbol: "✓" }
+        );
+        if (shouldRestart) {
+          const restartResult = await call("luatools_restart_steam", { steamPath: state.lua.steamPath || null });
+          consumeResult(restartResult);
+        }
+      }
+    } catch (error) {
+      toast(errorText(error), "error");
+    }
+  }
+
+  // Принудительная установка выбранной версии загрузчика в Steam
+  async function applyLoaderToSteam(triggerButton) {
+    // Если Steam запущен, предлагаем его завершить перед перезаписью файлов
+    const canProceed = await ensureSteamClosedForLoader();
+    if (!canProceed) return;
+
+    if (triggerButton) setBusy(triggerButton, true, "Применяем…");
+    try {
+      const result = await call("luatools_apply_loader", {
+        steamPath: state.lua.steamPath || null,
+      });
+      if (consumeResult(result)) {
+        await luaRefresh();
+        const shouldRestart = await showModal(
+          "Загрузчик обновлен в Steam",
+          `${result.message}\n\nЧтобы применить изменения, требуется запустить клиент Steam. Запустить сейчас?`,
+          { confirm: true, confirmText: "Запустить Steam", cancelText: "Позже", symbol: "✓" }
+        );
+        if (shouldRestart) {
+          const restartResult = await call("luatools_restart_steam", { steamPath: state.lua.steamPath || null });
+          consumeResult(restartResult);
+        }
+      }
+    } catch (error) {
+      toast(errorText(error), "error");
+    } finally {
+      if (triggerButton) setBusy(triggerButton, false);
+      renderLoaderInfo();
     }
   }
 
@@ -1339,9 +1483,10 @@
 
   async function luaRefresh() {
     try {
-      const [status, millennium] = await Promise.all([
+      const [status, millennium, loaderInfo] = await Promise.all([
         call("luatools_status", { steamPath: state.lua.steamPath || null }),
         call("millennium_plugin_status", { steamPath: state.lua.steamPath || null }),
+        call("luatools_get_loader_info", { steamPath: state.lua.steamPath || null }).catch(() => null),
       ]);
       state.lua.steamPath = status.steamPath || state.lua.steamPath || "";
       state.lua.luaFolder = status.luaFolder || "";
@@ -1350,9 +1495,14 @@
       state.lua.loaderIssue = status.loaderIssue || "";
       state.lua.games = status.games || [];
       state.lua.millennium = millennium || state.lua.millennium;
+      if (loaderInfo) {
+        state.lua.loaderInfo = loaderInfo;
+        state.lua.loaderSource = loaderInfo.loaderSource || state.lua.loaderSource;
+      }
       state.lua.loaded = true;
       if (state.lua.steamPath) localStorage.setItem("luaSteamPath", state.lua.steamPath);
       renderLuaStatus();
+      renderLoaderInfo();
       luaLoadNames();
       if (millennium?.status === "millennium_missing" && !state.lua.millenniumPrompted) {
         state.lua.millenniumPrompted = true;
@@ -2539,6 +2689,21 @@
         }
       });
     });
+
+    // Выбор версии загрузчика манифестов в Steam (OpenSteamTool)
+    $$(".loader-option").forEach((button) => {
+      button.addEventListener("click", () => applyLoaderSource(button.dataset.loaderSource));
+      button.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          applyLoaderSource(button.dataset.loaderSource);
+        }
+      });
+    });
+
+    // Кнопки принудительного применения загрузчика в Steam
+    $("#manifest-loader-apply-btn")?.addEventListener("click", (e) => applyLoaderToSteam(e.currentTarget));
+    $("#settings-loader-apply-btn")?.addEventListener("click", (e) => applyLoaderToSteam(e.currentTarget));
     $("#hubcap-key").addEventListener("input", (event) => {
       state.lua.hubcapKey = event.currentTarget.value.trim();
       localStorage.setItem("hubcapKey", state.lua.hubcapKey);
@@ -2620,7 +2785,8 @@
     applyManifestService(state.lua.service);
     $("#hubcap-key").value = state.lua.hubcapKey;
     updateHubcapKeyStatus();
-    log("Eclipse Studio 7.0.0 инициализирован", "system");
+    renderLoaderInfo();
+    log("Eclipse Studio 7.0.1 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный вызов отображения окна, если заставка была отключена в параметрах

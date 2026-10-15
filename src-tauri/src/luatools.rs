@@ -1,5 +1,5 @@
 use crate::models::OperationResult;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -175,34 +175,189 @@ fn legacy_stplugin_dir(steam: &Path) -> PathBuf {
         .fold(steam.to_path_buf(), |acc, part| acc.join(part))
 }
 
-fn ensure_opensteamtool_installed(steam: &Path) {
-    let files = [
-        (
-            "OpenSteamTool.dll",
-            include_bytes!("assets/OpenSteamTool.dll").as_slice(),
-        ),
-        ("dwmapi.dll", include_bytes!("assets/dwmapi.dll").as_slice()),
-        (
-            "opensteamtool.toml",
-            include_bytes!("assets/opensteamtool.toml").as_slice(),
-        ),
-        (
-            "xinput1_4.dll",
-            include_bytes!("assets/xinput1_4.dll").as_slice(),
-        ),
-    ];
+// Настройки источника загрузчика для манифестов
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LuatoolsSettings {
+    // Выбранная версия загрузчика: "v1" (базовая встроенная) или "v2" (встроенная с десктопа)
+    pub loader_source: String,
+    // Пользовательский путь к загрузчику, если задан
+    pub custom_loader_path: Option<String>,
+}
 
-    for (name, data) in files {
-        let dest = steam.join(name);
-        if !dest.exists() {
-            let _ = fs::write(&dest, data);
-        } else if name.ends_with(".dll") {
-            let needs_update = fs::read(&dest).map(|current| current != data).unwrap_or(false);
-            if needs_update {
-                let _ = fs::write(&dest, data);
+impl Default for LuatoolsSettings {
+    fn default() -> Self {
+        Self {
+            loader_source: "v1".into(),
+            custom_loader_path: None,
+        }
+    }
+}
+
+// Путь к файлу настроек luatools
+fn settings_path(app: &AppHandle) -> Option<PathBuf> {
+    let dir = app.path().app_local_data_dir().ok()?;
+    let _ = fs::create_dir_all(&dir);
+    Some(dir.join("luatools-settings.json"))
+}
+
+// Загрузка настроек luatools
+fn load_settings(app: &AppHandle) -> LuatoolsSettings {
+    if let Some(path) = settings_path(app) {
+        if let Ok(data) = fs::read(path) {
+            if let Ok(settings) = serde_json::from_slice::<LuatoolsSettings>(&data) {
+                return settings;
             }
         }
     }
+    LuatoolsSettings::default()
+}
+
+// Сохранение настроек luatools
+fn save_settings(app: &AppHandle, settings: &LuatoolsSettings) {
+    if let Some(path) = settings_path(app) {
+        if let Ok(data) = serde_json::to_vec_pretty(settings) {
+            let _ = fs::write(path, data);
+        }
+    }
+}
+
+// Встроенные файлы OpenSteamTool: Версия 1 (Основная сборка 1.57 МБ)
+const EMBEDDED_OST_V1_FILES: &[(&str, &[u8])] = &[
+    (
+        "OpenSteamTool.dll",
+        include_bytes!("assets/OpenSteamTool.dll"),
+    ),
+    ("dwmapi.dll", include_bytes!("assets/dwmapi.dll")),
+    (
+        "opensteamtool.toml",
+        include_bytes!("assets/opensteamtool.toml"),
+    ),
+    (
+        "xinput1_4.dll",
+        include_bytes!("assets/xinput1_4.dll"),
+    ),
+];
+
+// Встроенные файлы OpenSteamTool: Версия 2 (Альтернативная сборка 1.75 МБ)
+const EMBEDDED_OST_V2_FILES: &[(&str, &[u8])] = &[
+    (
+        "OpenSteamTool.dll",
+        include_bytes!("assets/ost_desktop/OpenSteamTool.dll"),
+    ),
+    ("dwmapi.dll", include_bytes!("assets/ost_desktop/dwmapi.dll")),
+    (
+        "opensteamtool.toml",
+        include_bytes!("assets/ost_desktop/opensteamtool.toml"),
+    ),
+    (
+        "xinput1_4.dll",
+        include_bytes!("assets/ost_desktop/xinput1_4.dll"),
+    ),
+];
+
+// Определение активной версии OpenSteamTool в папке Steam
+pub fn detect_active_loader_in_steam(steam: &Path) -> (String, String) {
+    let steam_ost = steam.join("OpenSteamTool.dll");
+    if !steam_ost.is_file() {
+        return ("none".into(), "Загрузчик не установлен".into());
+    }
+
+    let Ok(steam_bytes) = fs::read(&steam_ost) else {
+        return ("unknown".into(), "Ошибка чтения файлов Steam".into());
+    };
+
+    // Сверяем с версией 1 (основная сборка)
+    let v1_bytes = include_bytes!("assets/OpenSteamTool.dll");
+    if steam_bytes == v1_bytes {
+        return ("v1".into(), "Версия 1 (Основная)".into());
+    }
+
+    // Сверяем с версией 2 (альтернативная сборка)
+    let v2_bytes = include_bytes!("assets/ost_desktop/OpenSteamTool.dll");
+    if steam_bytes == v2_bytes {
+        return ("v2".into(), "Версия 2 (Альтернативная)".into());
+    }
+
+    ("custom".into(), "Сторонняя версия".into())
+}
+
+// Вспомогательная функция записи файла с обработкой ошибок
+fn write_file_with_check(dst: &Path, data: &[u8]) -> std::io::Result<()> {
+    if dst.is_file() {
+        if let Ok(d) = fs::read(dst) {
+            if d == data {
+                return Ok(());
+            }
+        }
+    }
+    fs::write(dst, data)
+}
+
+// Форматирование ошибки записи в папку Steam с подсказкой о запущенном Steam
+fn format_steam_write_error(file_name: &str, error: std::io::Error) -> String {
+    let is_locked = error.raw_os_error() == Some(32) // ERROR_SHARING_VIOLATION
+        || error.raw_os_error() == Some(5)          // ERROR_ACCESS_DENIED
+        || error.kind() == std::io::ErrorKind::PermissionDenied;
+
+    if is_locked && process_is_running("steam.exe") {
+        format!(
+            "Не удалось записать {file_name}: Steam запущен и блокирует файлы. Пожалуйста, закройте Steam или нажмите «Перезапустить Steam»"
+        )
+    } else {
+        format!("Не удалось записать {file_name}: {error}")
+    }
+}
+
+// Установка или обновление файлов OpenSteamTool в папке Steam
+pub fn apply_opensteamtool_loader(
+    _app: &AppHandle,
+    steam: &Path,
+    source: &str,
+) -> Result<String, String> {
+    if !steam.is_dir() {
+        return Err("Папка Steam не найдена — укажите её вручную".into());
+    }
+
+    let is_v2 = source == "v2" || source == "desktop";
+    let (files, version_name) = if is_v2 {
+        (EMBEDDED_OST_V2_FILES, "Версия 2 (Альтернативная)")
+    } else {
+        (EMBEDDED_OST_V1_FILES, "Версия 1 (Основная)")
+    };
+
+    let mut updated = Vec::new();
+    for &(name, data) in files {
+        let dest = steam.join(name);
+        let needs_write = if !dest.exists() {
+            true
+        } else if name.ends_with(".dll") {
+            fs::read(&dest).map(|current| current != data).unwrap_or(true)
+        } else {
+            false
+        };
+
+        if needs_write {
+            write_file_with_check(&dest, data)
+                .map_err(|e| format_steam_write_error(name, e))?;
+            updated.push(name);
+        }
+    }
+
+    if updated.is_empty() {
+        Ok(format!("В Steam уже установлена актуальная {version_name} OpenSteamTool"))
+    } else {
+        Ok(format!(
+            "В Steam успешно установлена {version_name} OpenSteamTool ({})",
+            updated.join(", ")
+        ))
+    }
+}
+
+// Гарантированная установка или обновление OpenSteamTool в Steam согласно выбранному источнику
+fn ensure_opensteamtool_installed(app: &AppHandle, steam: &Path) {
+    let settings = load_settings(app);
+    let _ = apply_opensteamtool_loader(app, steam, &settings.loader_source);
 }
 
 // Парсинг путей к lua из opensteamtool.toml
@@ -844,7 +999,7 @@ pub(crate) fn install_zip_bytes(
             added_appids: vec![],
         };
     };
-    ensure_opensteamtool_installed(&steam);
+    ensure_opensteamtool_installed(app, &steam);
     let (_, _, loader_issue) = loader_state(&steam);
     if let Some(issue) = loader_issue {
         return LuaInstallResult {
@@ -948,7 +1103,7 @@ fn luatools_install_blocking(
             added_appids: vec![],
         };
     };
-    ensure_opensteamtool_installed(&steam);
+    ensure_opensteamtool_installed(&app, &steam);
     let (_, _, loader_issue) = loader_state(&steam);
     if let Some(issue) = loader_issue {
         return LuaInstallResult {
@@ -1130,18 +1285,36 @@ fn luatools_restart_steam_blocking(steam_path: Option<String>) -> OperationResul
         return OperationResult::error("steam.exe не найден в папке Steam", vec![]);
     }
 
-    // Штатное завершение Steam
-    let _ = hidden_command(steam_exe.to_string_lossy().as_ref())
-        .arg("-shutdown")
-        .output();
-    for _ in 0..20 {
-        if !process_is_running("steam.exe") {
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(250));
-    }
+    // Завершаем запущенные процессы Steam
+    let _ = close_steam_process(Some(&steam_exe));
+    std::thread::sleep(std::time::Duration::from_millis(600));
 
-    // Принудительное завершение зависших процессов Steam
+    match hidden_command(steam_exe.to_string_lossy().as_ref()).spawn() {
+        Ok(_) => OperationResult::ok("Steam перезапускается…", vec![]),
+        Err(error) => {
+            OperationResult::error(format!("Не удалось запустить Steam: {error}"), vec![])
+        }
+    }
+}
+
+// Завершение работы процессов Steam (штатно, затем принудительно)
+pub fn close_steam_process(steam_exe: Option<&Path>) -> bool {
+    if !process_is_running("steam.exe") {
+        return true;
+    }
+    if let Some(exe) = steam_exe {
+        if exe.is_file() {
+            let _ = hidden_command(exe.to_string_lossy().as_ref())
+                .arg("-shutdown")
+                .output();
+            for _ in 0..15 {
+                if !process_is_running("steam.exe") {
+                    return true;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+    }
     if process_is_running("steam.exe") {
         let _ = hidden_command("taskkill.exe")
             .args(["/F", "/T", "/IM", "steam.exe"])
@@ -1152,13 +1325,30 @@ fn luatools_restart_steam_blocking(steam_path: Option<String>) -> OperationResul
             .args(["/F", "/T", "/IM", "steamwebhelper.exe"])
             .output();
     }
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    match hidden_command(steam_exe.to_string_lossy().as_ref()).spawn() {
-        Ok(_) => OperationResult::ok("Steam перезапускается…", vec![]),
-        Err(error) => {
-            OperationResult::error(format!("Не удалось запустить Steam: {error}"), vec![])
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    !process_is_running("steam.exe")
+}
+
+// Проверка, запущен ли клиент Steam в данный момент
+#[tauri::command]
+pub fn luatools_is_steam_running() -> bool {
+    process_is_running("steam.exe")
+}
+
+// Завершение работы клиента Steam
+#[tauri::command]
+pub async fn luatools_close_steam(steam_path: Option<String>) -> OperationResult {
+    tauri::async_runtime::spawn_blocking(move || {
+        let steam_exe = resolve_steam_path(steam_path).map(|p| p.join("steam.exe"));
+        if close_steam_process(steam_exe.as_deref()) {
+            OperationResult::ok("Steam успешно завершён", vec![])
+        } else {
+            OperationResult::error("Не удалось завершить процесс Steam", vec![])
         }
-    }
+    })
+    .await
+    .map_err(|error| OperationResult::error(format!("Завершение прервано: {error}"), vec![]))
+    .unwrap_or_else(|err| err)
 }
 
 fn process_is_running(image_name: &str) -> bool {
@@ -1377,6 +1567,101 @@ pub async fn luatools_headers(appids: Vec<u64>) -> BTreeMap<String, String> {
         .unwrap_or_default()
 }
 
+// Сведения о состоянии и доступных версиях загрузчика манифестов Steam
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManifestLoaderInfo {
+    // Выбранный источник загрузчика ("v1" или "v2")
+    pub loader_source: String,
+    // Название версии 1
+    pub v1_name: String,
+    // Описание версии 1
+    pub v1_desc: String,
+    // Название версии 2
+    pub v2_name: String,
+    // Описание версии 2
+    pub v2_desc: String,
+    // Активная версия в папке Steam ("v1", "v2", "custom", "none")
+    pub active_in_steam: String,
+    // Человекочитаемая подпись текущей версии в Steam
+    pub active_in_steam_label: String,
+    // Обнаружена ли папка Steam
+    pub steam_detected: bool,
+}
+
+// Получение информации о текущем и доступных загрузчиках OpenSteamTool
+#[tauri::command]
+pub fn luatools_get_loader_info(app: AppHandle, steam_path: Option<String>) -> ManifestLoaderInfo {
+    let settings = load_settings(&app);
+
+    let (active_in_steam, active_in_steam_label, steam_detected) =
+        if let Some(steam) = resolve_steam_path(steam_path) {
+            let (status, label) = detect_active_loader_in_steam(&steam);
+            (status, label, true)
+        } else {
+            ("none".into(), "Steam не найден".into(), false)
+        };
+
+    let source = if settings.loader_source == "v2" || settings.loader_source == "desktop" {
+        "v2".into()
+    } else {
+        "v1".into()
+    };
+
+    ManifestLoaderInfo {
+        loader_source: source,
+        v1_name: "Версия 1 (Основная)".into(),
+        v1_desc: "Основная стабильная сборка OpenSteamTool (1.57 МБ)".into(),
+        v2_name: "Версия 2 (Альтернативная)".into(),
+        v2_desc: "Альтернативная встроенная сборка OpenSteamTool (1.75 МБ). Включайте, если не работает основная версия.".into(),
+        active_in_steam,
+        active_in_steam_label,
+        steam_detected,
+    }
+}
+
+// Переключение выбранного источника загрузчика (встроенный v1 или встроенный v2)
+#[tauri::command]
+pub fn luatools_set_loader_source(
+    app: AppHandle,
+    source: String,
+    steam_path: Option<String>,
+) -> OperationResult {
+    let mut settings = load_settings(&app);
+    let valid_source = if source == "v2" || source == "desktop" { "v2" } else { "v1" };
+    settings.loader_source = valid_source.into();
+    save_settings(&app, &settings);
+
+    let Some(steam) = resolve_steam_path(steam_path) else {
+        return OperationResult::ok(
+            format!(
+                "Настройка сохранена ({}). Папка Steam не найдена — применится при обнаружении Steam.",
+                if valid_source == "v2" { "Версия 2 (Альтернативная)" } else { "Версия 1 (Основная)" }
+            ),
+            vec![],
+        );
+    };
+
+    match apply_opensteamtool_loader(&app, &steam, valid_source) {
+        Ok(msg) => OperationResult::ok(msg, vec![]),
+        Err(err) => OperationResult::error(err, vec![]),
+    }
+}
+
+// Принудительное применение текущего загрузчика в папку Steam
+#[tauri::command]
+pub fn luatools_apply_loader(app: AppHandle, steam_path: Option<String>) -> OperationResult {
+    let settings = load_settings(&app);
+    let Some(steam) = resolve_steam_path(steam_path) else {
+        return OperationResult::error("Папка Steam не найдена — укажите её вручную", vec![]);
+    };
+
+    match apply_opensteamtool_loader(&app, &steam, &settings.loader_source) {
+        Ok(msg) => OperationResult::ok(msg, vec![]),
+        Err(err) => OperationResult::error(err, vec![]),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1580,4 +1865,32 @@ paths = ["ignore"]
 
         fs::remove_dir_all(dir).unwrap();
     }
+
+    #[test]
+    fn detects_bundled_and_desktop_loader_files() {
+        let temp_steam = std::env::temp_dir().join(format!("cgs-loader-test-{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_steam);
+
+        // Без файлов в Steam
+        let (status, _) = detect_active_loader_in_steam(&temp_steam);
+        assert_eq!(status, "none");
+
+        // Записываем версию 1 (базовая)
+        fs::write(temp_steam.join("OpenSteamTool.dll"), include_bytes!("assets/OpenSteamTool.dll")).unwrap();
+        let (status_v1, _) = detect_active_loader_in_steam(&temp_steam);
+        assert_eq!(status_v1, "v1");
+
+        // Записываем версию 2 (с десктопа)
+        fs::write(temp_steam.join("OpenSteamTool.dll"), include_bytes!("assets/ost_desktop/OpenSteamTool.dll")).unwrap();
+        let (status_v2, _) = detect_active_loader_in_steam(&temp_steam);
+        assert_eq!(status_v2, "v2");
+
+        // Записываем сторонний файл
+        fs::write(temp_steam.join("OpenSteamTool.dll"), b"custom-dll-bytes-for-unit-test").unwrap();
+        let (status_custom, _) = detect_active_loader_in_steam(&temp_steam);
+        assert_eq!(status_custom, "custom");
+
+        let _ = fs::remove_dir_all(temp_steam);
+    }
 }
+
