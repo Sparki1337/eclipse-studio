@@ -222,42 +222,17 @@ fn save_settings(app: &AppHandle, settings: &LuatoolsSettings) {
     }
 }
 
-// Встроенные файлы OpenSteamTool: Версия 1 (Основная сборка 1.57 МБ)
-const EMBEDDED_OST_V1_FILES: &[(&str, &[u8])] = &[
-    (
-        "OpenSteamTool.dll",
-        include_bytes!("assets/OpenSteamTool.dll"),
-    ),
-    ("dwmapi.dll", include_bytes!("assets/dwmapi.dll")),
-    (
-        "opensteamtool.toml",
-        include_bytes!("assets/opensteamtool.toml"),
-    ),
-    (
-        "xinput1_4.dll",
-        include_bytes!("assets/xinput1_4.dll"),
-    ),
-];
 
-// Встроенные файлы OpenSteamTool: Версия 2 (Альтернативная сборка 1.75 МБ)
-const EMBEDDED_OST_V2_FILES: &[(&str, &[u8])] = &[
-    (
-        "OpenSteamTool.dll",
-        include_bytes!("assets/ost_desktop/OpenSteamTool.dll"),
-    ),
-    ("dwmapi.dll", include_bytes!("assets/ost_desktop/dwmapi.dll")),
-    (
-        "opensteamtool.toml",
-        include_bytes!("assets/ost_desktop/opensteamtool.toml"),
-    ),
-    (
-        "xinput1_4.dll",
-        include_bytes!("assets/ost_desktop/xinput1_4.dll"),
-    ),
-];
 
-// Определение активной версии OpenSteamTool в папке Steam
+// Определение активной версии OpenSteamTool в папке Steam с учётом Schema 2
 pub fn detect_active_loader_in_steam(steam: &Path) -> (String, String) {
+    if let Ok(Some(selection)) = crate::lua_loader::read_selection(steam) {
+        if selection.variant == "compatibility" || selection.variant == "v2" {
+            return ("v2".into(), "Версия 2 (Альтернативная)".into());
+        } else if selection.variant == "standard" || selection.variant == "v1" {
+            return ("v1".into(), "Версия 1 (Основная)".into());
+        }
+    }
     let steam_ost = steam.join("OpenSteamTool.dll");
     if !steam_ost.is_file() {
         return ("none".into(), "Загрузчик не установлен".into());
@@ -267,46 +242,127 @@ pub fn detect_active_loader_in_steam(steam: &Path) -> (String, String) {
         return ("unknown".into(), "Ошибка чтения файлов Steam".into());
     };
 
+    // Сверяем с версией 2 (альтернативная сборка)
+    let v2_bytes = include_bytes!("assets/ost_desktop/OpenSteamTool.dll");
+    if steam_bytes == v2_bytes || steam.join("bin/dwmapi.dll").is_file() {
+        return ("v2".into(), "Версия 2 (Альтернативная)".into());
+    }
+
     // Сверяем с версией 1 (основная сборка)
     let v1_bytes = include_bytes!("assets/OpenSteamTool.dll");
     if steam_bytes == v1_bytes {
         return ("v1".into(), "Версия 1 (Основная)".into());
     }
 
-    // Сверяем с версией 2 (альтернативная сборка)
-    let v2_bytes = include_bytes!("assets/ost_desktop/OpenSteamTool.dll");
-    if steam_bytes == v2_bytes {
-        return ("v2".into(), "Версия 2 (Альтернативная)".into());
-    }
-
     ("custom".into(), "Сторонняя версия".into())
 }
 
-// Вспомогательная функция записи файла с обработкой ошибок
-fn write_file_with_check(dst: &Path, data: &[u8]) -> std::io::Result<()> {
-    if dst.is_file() {
-        if let Ok(d) = fs::read(dst) {
-            if d == data {
-                return Ok(());
-            }
-        }
+// Настройка рабочей папки [lua] paths = ["config/lua"] в opensteamtool.toml
+pub(crate) fn configure_lua_folder(existing: &str) -> Result<String, String> {
+    let source = if existing.trim().is_empty() {
+        include_str!("assets/opensteamtool.toml")
+    } else {
+        existing
+    };
+    let mut config = source.parse::<toml_edit::DocumentMut>()
+        .map_err(|error| format!("Не удалось обновить opensteamtool.toml: {error}. Существующий конфиг сохранён без изменений."))?;
+    if config.get("lua").is_some_and(|item| !item.is_table() && !item.is_inline_table()) {
+        return Err("В opensteamtool.toml секция lua имеет неверный формат. Файлы не изменены.".into());
     }
-    fs::write(dst, data)
+    let mut paths = toml_edit::Array::new();
+    paths.push("config/lua");
+    config["lua"]["paths"] = toml_edit::value(paths);
+    Ok(config.to_string())
 }
 
-// Форматирование ошибки записи в папку Steam с подсказкой о запущенном Steam
-fn format_steam_write_error(file_name: &str, error: std::io::Error) -> String {
-    let is_locked = error.raw_os_error() == Some(32) // ERROR_SHARING_VIOLATION
-        || error.raw_os_error() == Some(5)          // ERROR_ACCESS_DENIED
-        || error.kind() == std::io::ErrorKind::PermissionDenied;
+// Атомарная запись файла во временный файл с последующим переименованием
+fn atomic_loader_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let parent = path.parent().ok_or("Нет папки назначения загрузчика")?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    temporary.write_all(bytes).and_then(|_| temporary.as_file().sync_all()).map_err(|e| e.to_string())?;
+    temporary.persist(path).map_err(|e| e.error.to_string())?;
+    Ok(())
+}
 
-    if is_locked && process_is_running("steam.exe") {
-        format!(
-            "Не удалось записать {file_name}: Steam запущен и блокирует файлы. Пожалуйста, закройте Steam или нажмите «Перезапустить Steam»"
-        )
-    } else {
-        format!("Не удалось записать {file_name}: {error}")
+// Транзакционное применение изменений в файлах загрузчика с бэкапом и откатом
+pub(crate) fn install_loader_changes(steam: &Path, files: &[(&str, Option<&[u8]>)]) -> Result<(), String> {
+    let read = |path: &Path| -> Result<Option<Vec<u8>>, String> {
+        crate::lua_loader::read_optional(path)
+    };
+    let mut changes = Vec::new();
+    for &(name, desired) in files {
+        let relative = Path::new(name);
+        if relative.is_absolute() || relative.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
+            return Err("Недопустимый путь загрузчика".into());
+        }
+        let destination = steam.join(relative);
+        let mut parent = steam.to_path_buf();
+        let parts: Vec<_> = relative.components().collect();
+        for part in &parts[..parts.len().saturating_sub(1)] {
+            parent.push(part.as_os_str());
+            crate::lua_loader::reject_link(&parent)?;
+            if desired.is_some() {
+                fs::create_dir_all(&parent).map_err(|e| e.to_string())?;
+            }
+        }
+        let previous = read(&destination)?;
+        if previous.as_deref() == desired {
+            continue;
+        }
+        changes.push((name, desired, previous));
     }
+    if changes.is_empty() {
+        return Ok(());
+    }
+    let backup = steam.join("config/cgs-luatools-backups").join(uuid::Uuid::new_v4().to_string());
+    for (name, _, previous) in &changes {
+        if let Some(bytes) = previous {
+            let output = backup.join(name);
+            if let Some(parent) = output.parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            fs::write(output, bytes).map_err(|e| format!("Не удалось сохранить резервную копию: {e}. DLL не изменены."))?;
+        }
+    }
+    for (index, (name, desired, previous)) in changes.iter().enumerate() {
+        let destination = steam.join(name);
+        let operation = match read(&destination) {
+            Ok(current) if &current == previous => {
+                if let Some(bytes) = desired {
+                    atomic_loader_write(&destination, bytes)
+                } else {
+                    fs::remove_file(&destination).map_err(|e| e.to_string())
+                }
+            }
+            Ok(_) => Err("Файл изменился во время обновления".into()),
+            Err(error) => Err(error),
+        };
+        if let Err(error) = operation {
+            let mut failures = Vec::new();
+            for (old_name, installed, original) in changes[..index].iter().rev() {
+                let path = steam.join(old_name);
+                if !read(&path).is_ok_and(|current| current.as_deref() == *installed) {
+                    failures.push(format!("{old_name}: файл изменён извне"));
+                    continue;
+                }
+                let rollback = if let Some(bytes) = original {
+                    atomic_loader_write(&path, bytes)
+                } else {
+                    fs::remove_file(&path).map_err(|e| e.to_string())
+                };
+                if let Err(error) = rollback {
+                    failures.push(format!("{old_name}: {error}"));
+                }
+            }
+            return Err(format!(
+                "Не удалось обновить {name}: {error}. Закройте Steam и повторите. Откат: {}. Резервная копия: {}",
+                if failures.is_empty() { "изменения отменены".into() } else { failures.join("; ") },
+                backup.display()
+            ));
+        }
+    }
+    Ok(())
 }
 
 // Установка или обновление файлов OpenSteamTool в папке Steam
@@ -320,44 +376,49 @@ pub fn apply_opensteamtool_loader(
     }
 
     let is_v2 = source == "v2" || source == "desktop";
-    let (files, version_name) = if is_v2 {
-        (EMBEDDED_OST_V2_FILES, "Версия 2 (Альтернативная)")
+    let variant = if is_v2 { "compatibility" } else { "standard" };
+    let result = crate::lua_loader::update_embedded(steam, Some(variant));
+    if result.success {
+        Ok(result.message)
     } else {
-        (EMBEDDED_OST_V1_FILES, "Версия 1 (Основная)")
-    };
-
-    let mut updated = Vec::new();
-    for &(name, data) in files {
-        let dest = steam.join(name);
-        let needs_write = if !dest.exists() {
-            true
-        } else if name.ends_with(".dll") {
-            fs::read(&dest).map(|current| current != data).unwrap_or(true)
-        } else {
-            false
-        };
-
-        if needs_write {
-            write_file_with_check(&dest, data)
-                .map_err(|e| format_steam_write_error(name, e))?;
-            updated.push(name);
-        }
-    }
-
-    if updated.is_empty() {
-        Ok(format!("В Steam уже установлена актуальная {version_name} OpenSteamTool"))
-    } else {
-        Ok(format!(
-            "В Steam успешно установлена {version_name} OpenSteamTool ({})",
-            updated.join(", ")
-        ))
+        Err(result.message)
     }
 }
 
+// Обновление библиотек загрузчика с проверкой запущенного Steam
+#[tauri::command]
+pub async fn luatools_update_loader(
+    steam_path: Option<String>,
+    variant: Option<String>,
+) -> OperationResult {
+    #[cfg(windows)]
+    if process_is_running("steam.exe") {
+        return OperationResult::error(
+            "Steam запущен и блокирует файлы библиотек. Закройте Steam перед обновлением DLL.",
+            vec!["Завершите Steam через трей или воспользуйтесь кнопкой безопасного закрытия в Eclipse Studio".into()],
+        );
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let steam = match steam_path.filter(|s| !s.trim().is_empty()) {
+            Some(s) => PathBuf::from(s.trim()),
+            None => match resolve_steam_path(None) {
+                Some(p) => p,
+                None => return OperationResult::error("Папка Steam не найдена", vec![]),
+            },
+        };
+        let variant = match variant {
+            Some(v) => v,
+            None => crate::lua_loader::selected_variant(&steam).unwrap_or_else(|_| "standard".into()),
+        };
+        crate::loader_github::update(&steam, &variant)
+    })
+    .await
+    .unwrap_or_else(|e| OperationResult::error(format!("Ошибка фонового потока: {e}"), vec![]))
+}
+
 // Гарантированная установка или обновление OpenSteamTool в Steam согласно выбранному источнику
-fn ensure_opensteamtool_installed(app: &AppHandle, steam: &Path) {
-    let settings = load_settings(app);
-    let _ = apply_opensteamtool_loader(app, steam, &settings.loader_source);
+fn ensure_opensteamtool_installed(_app: &AppHandle, steam: &Path) {
+    let _ = crate::lua_loader::ensure(steam);
 }
 
 // Парсинг путей к lua из opensteamtool.toml
@@ -444,7 +505,7 @@ fn opensteamtool_lua_dirs(steam: &Path) -> Vec<PathBuf> {
 }
 
 // Рабочая папка Lua для текущего загрузчика
-fn stplugin_dir(steam: &Path) -> PathBuf {
+pub(crate) fn stplugin_dir(steam: &Path) -> PathBuf {
     let preferred = default_lua_dir(steam);
     let ost_dirs = opensteamtool_lua_dirs(steam);
     if ost_dirs.iter().any(|d| d == &preferred) || preferred.is_dir() {
@@ -452,16 +513,17 @@ fn stplugin_dir(steam: &Path) -> PathBuf {
     }
     ost_dirs.into_iter().next().unwrap_or(preferred)
 }
-
 fn loader_state(steam: &Path) -> (String, Option<String>, Option<String>) {
     if steam.join("OpenSteamTool.dll").is_file() {
-        let proxy_present =
-            steam.join("dwmapi.dll").is_file() || steam.join("xinput1_4.dll").is_file();
+        let proxy_present = steam.join("dwmapi.dll").is_file()
+            || steam.join("bin/dwmapi.dll").is_file()
+            || steam.join("version.dll").is_file()
+            || steam.join("xinput1_4.dll").is_file();
         if !proxy_present {
             return (
                 "misconfigured".into(),
                 Some("OpenSteamTool".into()),
-                Some("OpenSteamTool установлен не полностью: не найден загрузчик dwmapi.dll или xinput1_4.dll".into()),
+                Some("OpenSteamTool установлен не полностью: не найден загрузчик dwmapi.dll, version.dll или xinput1_4.dll".into()),
             );
         }
         if !steam.join("opensteamtool.toml").is_file() {
@@ -494,7 +556,7 @@ fn loader_state(steam: &Path) -> (String, Option<String>, Option<String>) {
 }
 
 // Миграция Lua-скриптов в рабочую папку OpenSteamTool
-fn migrate_legacy_lua(steam: &Path, target: &Path) -> usize {
+pub(crate) fn migrate_legacy_lua(steam: &Path, target: &Path) -> usize {
     let legacy = legacy_stplugin_dir(steam);
     if legacy == target || !legacy.is_dir() {
         return 0;

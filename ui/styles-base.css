@@ -637,6 +637,159 @@ body { font-size: 16px; }
 .app-update-progress-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 10.5px; color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; }
 #update-install-button { font-size: 11px; height: 34px; padding: 0 16px; }
 
+/* Шаг 2 модального окна обновления при одновременном обновлении */
+.app-update-step2 {
+  margin: 14px 0 6px;
+  text-align: left;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.app-update-step2.hidden { display: none; }
+.app-update-step2-desc {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+.app-update-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.loader-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 11px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  user-select: none;
+}
+.loader-choice:hover {
+  border-color: rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.03);
+}
+.loader-choice.active, .loader-choice:has(input:checked) {
+  border-color: rgba(var(--accent-rgb), 0.55);
+  background: rgba(var(--accent-rgb), 0.07);
+  box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.06);
+}
+.loader-choice input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.loader-choice span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.loader-choice strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.loader-choice small {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* Модальное окно обновления библиотек OpenSteamTool */
+.loader-update-modal {
+  width: min(520px, calc(100vw - 44px));
+  text-align: center;
+}
+.loader-modal-bundle-card {
+  margin: 14px 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+  text-align: left;
+}
+.loader-modal-bundle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.loader-modal-bundle-header strong {
+  color: var(--text);
+}
+.loader-bundle-badge {
+  font-size: 9px;
+  font-weight: 750;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.loader-bundle-badge[data-status="update"] {
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+}
+.loader-bundle-badge[data-status="synced"] {
+  background: rgba(140, 150, 167, 0.15);
+  color: var(--muted);
+  border: 1px solid rgba(140, 150, 167, 0.3);
+}
+.loader-file-list {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.loader-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 11px;
+}
+.loader-file-name {
+  font-family: "Cascadia Code", Consolas, monospace;
+  color: var(--text);
+  font-weight: 600;
+}
+.loader-file-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+}
+.loader-file-state .file-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.loader-file-state .file-badge.badge-new {
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent);
+}
+.loader-file-state .file-badge.badge-match {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+}
+.loader-file-size {
+  color: var(--muted-2);
+  font-family: "Cascadia Code", Consolas, monospace;
+}
+
 /* Social links */
 .social-links { display: flex; flex-direction: column; gap: 8px; }
 .social-links .channel-card { width: 100%; }
@@ -762,6 +915,73 @@ body { font-size: 16px; }
 .millennium-plugin-actions .install-button:disabled { opacity: .42; cursor: not-allowed; transform: none; filter: none; }
 .millennium-plugin-actions .uninstall-button { height: 45px; }
 
+/* Неоновый баннер доступности обновлений библиотек OpenSteamTool */
+.loader-update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.12) 0%, rgba(var(--accent-rgb), 0.03) 100%);
+  box-shadow: 0 4px 24px rgba(var(--accent-rgb), 0.08), inset 0 0 12px rgba(var(--accent-rgb), 0.04);
+  animation: bannerFadeIn 0.25s ease-out;
+}
+.loader-update-banner.hidden { display: none; }
+@keyframes bannerFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.loader-update-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--accent-rgb), 0.15);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.loader-update-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.loader-update-copy {
+  flex: 1;
+  min-width: 0;
+}
+.loader-update-copy strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.loader-update-copy p {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.loader-update-action {
+  flex-shrink: 0;
+  height: 34px;
+  padding: 0 16px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+
 /* Загрузчик манифестов OpenSteamTool */
 .manifest-loader-panel { display: flex; flex-direction: column; gap: 14px; padding: 20px 24px; border-color: rgba(var(--accent-rgb), .12); background: linear-gradient(110deg, rgba(var(--accent-rgb), .035), rgba(13,16,24,.9) 52%); }
 .manifest-loader-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
@@ -769,13 +989,90 @@ body { font-size: 16px; }
 .manifest-loader-copy h3 { margin: 6px 0 0; font-size: 13px; }
 .manifest-loader-copy p { margin: 5px 0 0; color: #697482; font-size: 9.5px; line-height: 1.5; }
 .manifest-loader-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.manifest-loader-badge { padding: 4px 8px; border: 1px solid rgba(255,255,255,.08); border-radius: 7px; color: #87919e; background: rgba(255,255,255,.035); font-size: 8.5px; font-weight: 750; white-space: nowrap; }
-.manifest-loader-badge.ready { color: var(--accent); border-color: rgba(var(--accent-rgb), .2); background: rgba(var(--accent-rgb), .08); }
-.manifest-loader-badge.warning { color: #ffc777; border-color: rgba(255,199,119,.2); background: rgba(255,199,119,.07); }
-.manifest-loader-badge.error { color: #ff7994; border-color: rgba(255,121,148,.2); background: rgba(255,121,148,.07); }
-.manifest-loader-apply-btn { display: inline-flex; align-items: center; gap: 5px; height: 25px; padding: 0 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 7px; background: rgba(255,255,255,.04); color: #cbd5e1; font-size: 9px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 150ms ease; }
-.manifest-loader-apply-btn:hover { color: var(--accent); background: rgba(var(--accent-rgb), .1); border-color: rgba(var(--accent-rgb), .35); transform: translateY(-1px); }
-.manifest-loader-apply-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
+.manifest-loader-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 8px;
+  color: #87919e;
+  background: rgba(255, 255, 255, .035);
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.manifest-loader-badge.ready { color: var(--accent); border-color: rgba(var(--accent-rgb), .25); background: rgba(var(--accent-rgb), .08); }
+.manifest-loader-badge.warning { color: #ffc777; border-color: rgba(255, 199, 119, .25); background: rgba(255, 199, 119, .07); }
+.manifest-loader-badge.error { color: #ff7994; border-color: rgba(255, 121, 148, .25); background: rgba(255, 121, 148, .07); }
+.manifest-loader-badge.checking { color: #87919e; border-color: rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .035); }
+
+.manifest-loader-sync-btn,
+.manifest-loader-apply-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 160ms ease;
+  box-sizing: border-box;
+  margin: 0;
+  user-select: none;
+}
+.manifest-loader-sync-btn {
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+}
+.manifest-loader-sync-btn:hover:not(:disabled) {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.09);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  box-shadow: 0 2px 10px rgba(var(--accent-rgb), 0.1);
+  transform: translateY(-1px);
+}
+.manifest-loader-apply-btn {
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent);
+}
+.manifest-loader-apply-btn:hover:not(:disabled) {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.22);
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.22);
+  transform: translateY(-1px);
+}
+.manifest-loader-sync-btn:disabled,
+.manifest-loader-apply-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+.manifest-loader-sync-btn svg,
+.manifest-loader-apply-btn svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  display: block;
+}
+.manifest-loader-sync-btn span,
+.manifest-loader-apply-btn span {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
 .loader-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 2px; }
 .loader-option { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 14px; background: rgba(255, 255, 255, 0.02); cursor: pointer; transition: all 150ms ease; user-select: none; }
 .loader-option:hover { border-color: rgba(var(--accent-rgb), 0.3); background: rgba(255, 255, 255, 0.035); transform: translateY(-1px); }
@@ -785,7 +1082,53 @@ body { font-size: 16px; }
 .loader-src-tag { font-size: 8px; font-weight: 700; padding: 2px 7px; border-radius: 5px; background: rgba(255, 255, 255, 0.06); color: #94a3b8; white-space: nowrap; flex-shrink: 0; }
 .loader-src-tag.success { background: rgba(var(--accent-rgb), 0.12); color: var(--accent); }
 .loader-src-tag.danger { background: rgba(255, 121, 148, 0.12); color: #ff7994; }
-.settings-loader-desc { margin: 0 0 10px 0; color: #94a3b8; font-size: 11px; line-height: 1.5; }
+/* Настройки загрузчика манифестов: вертикальный список кнопок справа и просторный блок описания слева */
+.settings-loader-desc {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.settings-collapsible-content .manifest-loader-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: nowrap;
+  margin-bottom: 12px;
+}
+.settings-collapsible-content .manifest-loader-copy {
+  flex: 1;
+  min-width: 0;
+}
+.settings-collapsible-content .manifest-loader-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 210px;
+}
+.settings-collapsible-content .manifest-loader-actions .manifest-loader-sync-btn,
+.settings-collapsible-content .manifest-loader-actions .manifest-loader-apply-btn {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+@media (max-width: 768px) {
+  .settings-collapsible-content .manifest-loader-head {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .settings-collapsible-content .manifest-loader-actions {
+    width: 100%;
+    flex-direction: row;
+  }
+  .settings-collapsible-content .manifest-loader-actions .manifest-loader-sync-btn,
+  .settings-collapsible-content .manifest-loader-actions .manifest-loader-apply-btn {
+    flex: 1;
+  }
+}
 
 .lua-autoupdate { display: flex; align-items: center; gap: 9px; margin-left: auto; }
 .lua-autoupdate small { color: #8993a1; font-size: 9.5px; white-space: nowrap; }

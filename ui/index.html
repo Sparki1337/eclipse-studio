@@ -241,7 +241,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>7.0.2</span>
+        <span class="titlebar-version" data-tauri-drag-region>7.0.3</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -332,7 +332,7 @@
         <div class="home-hero premium-panel">
           <div class="home-glow"></div>
           <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 7.0.2</span>
+            <span class="hero-kicker">ECLIPSE STUDIO 7.0.3</span>
             <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
             <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
           </div>
@@ -621,6 +621,18 @@
             </div>
           </section>
 
+          <!-- Баннер обновления библиотек OpenSteamTool из облака -->
+          <div class="loader-update-banner windows-only hidden" id="loader-update-banner" role="status" aria-live="polite">
+            <span class="loader-update-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M5 16v4h14v-4"/></svg><i></i>
+            </span>
+            <div class="loader-update-copy">
+              <strong id="loader-update-title">Доступно обновление DLL загрузчика</strong>
+              <p id="loader-update-message">На GitHub доступны обновлённые библиотеки OpenSteamTool для вашей сборки Steam.</p>
+            </div>
+            <button type="button" class="primary-button loader-update-action" id="loader-update-action">Обновить DLL</button>
+          </div>
+
           <!-- Выбор версии загрузчика манифестов в Steam (OpenSteamTool) -->
           <section class="premium-panel manifest-loader-panel">
             <div class="manifest-loader-head">
@@ -636,6 +648,10 @@
                 <p>Выберите версию загрузчика для Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.</p>
               </div>
               <div class="manifest-loader-actions">
+                <button type="button" class="manifest-loader-sync-btn" id="manifest-loader-sync-btn" title="Проверить и синхронизировать DLL с GitHub">
+                  <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M1.5 8a6.5 6.5 0 1 1 1.9 4.6M1.5 12.5V8h4.5"/></svg>
+                  <span>Синхронизация</span>
+                </button>
                 <button type="button" class="manifest-loader-apply-btn" id="manifest-loader-apply-btn" title="Установить выбранную версию в Steam">
                   <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2.5 8.5l3.5 3.5 7.5-7.5"/></svg>
                   <span>Применить в Steam</span>
@@ -1551,7 +1567,10 @@
                       <p class="settings-loader-desc">Выберите, какую встроенную версию OpenSteamTool использовать при интеграции манифестов в клиент Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.</p>
                     </div>
                     <div class="manifest-loader-actions">
-                      <span class="manifest-loader-badge checking" id="settings-loader-active-badge">Проверка…</span>
+                      <button type="button" class="manifest-loader-sync-btn" id="settings-loader-sync-btn" title="Синхронизировать файлы загрузчика с облаком GitHub">
+                        <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M1.5 8a6.5 6.5 0 1 1 1.9 4.6M1.5 12.5V8h4.5"/></svg>
+                        <span>Синхронизация</span>
+                      </button>
                       <button type="button" class="manifest-loader-apply-btn" id="settings-loader-apply-btn" title="Установить выбранную версию в Steam">
                         <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2.5 8.5l3.5 3.5 7.5-7.5"/></svg>
                         <span>Применить в Steam</span>
@@ -1715,7 +1734,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">7.0.2</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">7.0.3</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -1744,7 +1763,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия</span><b>7.0.2</b></div>
+                  <div class="about-row"><span>Версия</span><b>7.0.3</b></div>
                   <div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div>
                   <div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · Eclipse Manifest · Гипервизор · Кряки · Утилиты</b></div>
                 </div>
@@ -1784,9 +1803,53 @@
           <span id="app-update-progress-speed">0 МБ/с</span>
         </div>
       </div>
+      <!-- Шаг 2 при одновременном обновлении программы и библиотек OpenSteamTool -->
+      <div class="app-update-step2 hidden" id="app-update-step2">
+        <p class="app-update-step2-desc">Также обнаружено обновление библиотек OpenSteamTool для Steam. Выберите параметры установки:</p>
+        <div class="app-update-options">
+          <label class="loader-choice active" id="app-update-choice-both">
+            <input type="radio" name="app-update-scope" value="both" checked />
+            <span>
+              <strong>Обновить программу и библиотеки Steam (Рекомендуется)</strong>
+              <small>Установить Eclipse Studio и обновить файлы OpenSteamTool в Steam</small>
+            </span>
+          </label>
+          <label class="loader-choice" id="app-update-choice-app-only">
+            <input type="radio" name="app-update-scope" value="app_only" />
+            <span>
+              <strong>Установить только программу</strong>
+              <small>Обновить исполняемый файл Eclipse Studio без изменения библиотек в Steam</small>
+            </span>
+          </label>
+        </div>
+      </div>
+
       <div class="modal-actions" id="app-update-actions">
         <button class="secondary-button" id="app-update-cancel">Отложить</button>
         <button class="install-button" id="app-update-confirm">Обновить сейчас</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно обновления библиотек OpenSteamTool -->
+  <div class="modal-backdrop hidden" id="loader-update-backdrop">
+    <div class="modal premium-panel loader-update-modal">
+      <div class="modal-symbol">⚡</div>
+      <h3 id="loader-modal-title">Обновление библиотек OpenSteamTool</h3>
+      <p id="loader-modal-message">На GitHub обнаружены обновлённые библиотеки OpenSteamTool для Steam. Желаете установить их сейчас?</p>
+      
+      <div class="loader-modal-bundle-card" id="loader-modal-bundle-card">
+        <div class="loader-modal-bundle-header">
+          <span>Выбранный комплект: <strong id="loader-modal-bundle-name">Версия 1 (Основная)</strong></span>
+          <span class="loader-bundle-badge" data-status="update" id="loader-modal-bundle-badge">Обновление</span>
+        </div>
+        <div class="loader-file-list" id="loader-modal-file-list"></div>
+      </div>
+
+      <div class="modal-actions" id="loader-modal-actions">
+        <button class="ghost-button" id="loader-modal-cancel">Закрыть</button>
+        <button class="secondary-button" id="loader-modal-snooze">Отложить (на 5 запусков)</button>
+        <button class="install-button" id="loader-modal-confirm">Обновить сейчас</button>
       </div>
     </div>
   </div>

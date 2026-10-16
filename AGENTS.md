@@ -40,7 +40,7 @@
 | **UI Customization** | Fixed scale and layout (max 125% zoom, fixed sidebar) | **Compact mode toggle**, **font scaling (85% – 140%)**, and **resizable draggable sidebar (180px–380px)** |
 | **Icons & Visuals** | Mixed emojis and low-res raster icons | **Crisp Lucide SVG vector icon system** with 60 FPS CSS micro-animations |
 | **Application Startup** | Static white/blank window while checking environment | **Hardware-accelerated Canvas splash screen** with animated logo, status steps, and click-to-skip |
-| **Updates & Manifests** | External browser tabs and single fixed loader DLL | **In-app 1-Click Auto-Updater** (live theme-colored progress bar, collapsible bilingual RU/EN changelog, safe restart), **Dual OpenSteamTool loader (v1/v2)** with active Steam detection & safe termination (v7.0.2) |
+| **Updates & Manifests** | External browser tabs and single fixed loader DLL | **In-app 1-Click Auto-Updater** (live theme-colored progress bar, collapsible bilingual RU/EN changelog, safe restart), **Dual OpenSteamTool loader (v1/v2)**, **GitHub cloud DLL sync & Schema 2 transactional layout**, active Steam detection & safe termination (v7.0.3) |
 | **Audio FX & Menus** | Browser default select menus, no sound effects | **Custom Audio Profile designer** with 1-click preview and **theme-adaptive custom dropdown menus** |
 | **Download Storage** | Hardcoded download destination | **Configurable folder** with quick Explorer access and 1-click default reset |
 | **CSS Architecture** | Monolithic `styles.css` (2700+ lines) | **Modular CSS files** (`styles-base.css`, `styles-modules.css`, `styles-themes.css`, `styles-appearance.css`, `hypervisor-artwork.css`) |
@@ -57,7 +57,7 @@
 
 ### 2.2 Output Directory for Portable Builds & Tools
 - **Mandatory Output Path:** `C:\Users\Sparki\Desktop\Programms\Hypervisor`
-- **Mandatory Artifact Filename:** `Eclipse-Studio-vX.X.X.exe` (strictly portable build; e.g. `Eclipse-Studio-v7.0.2.exe`).
+- **Mandatory Artifact Filename:** `Eclipse-Studio-vX.X.X.exe` (strictly portable build; e.g. `Eclipse-Studio-v7.0.3.exe`).
 - **Configuration File:** `build_config.json` at repo root (`"output_dir": "C:\\Users\\Sparki\\Desktop\\Programms\\Hypervisor"`, `"last_build_type": "portable"`).
 - **Purpose:** This folder is Sparki's dedicated hub for all portable builds, releases, and tools. When building, the model must **NEVER** save binaries elsewhere and must **NEVER** build installer bundles.
 

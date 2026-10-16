@@ -94,7 +94,7 @@
         pluginInstalled: false,
         pluginCurrent: false,
         pluginVersion: "",
-        bundledVersion: "0.5.0",
+        bundledVersion: "0.5.2",
         pluginPath: "",
       },
       millenniumPrompted: false,
@@ -103,6 +103,9 @@
       loaderSource: (localStorage.getItem("manifestLoaderSource") === "v2" || localStorage.getItem("manifestLoaderSource") === "desktop") ? "v2" : "v1",
       // Подробные сведения о файлах загрузчика OpenSteamTool и статусе в Steam
       loaderInfo: null,
+      // Сведения о доступности обновлений библиотек OpenSteamTool с GitHub
+      loaderUpdate: null,
+      loaderChecking: false,
     },
     updates: {
       checking: false,
@@ -1370,6 +1373,265 @@
     }
   }
 
+  const LOADER_POSTPONE_LAUNCH_COUNT = 5;
+
+  // Проверка: нужно ли показывать напоминание об обновлении DLL загрузчика при запуске
+  function shouldPromptLoaderStartupUpdate() {
+    try {
+      const launchesLeftStr = localStorage.getItem("cgs-postpone-loader-launches");
+      if (!launchesLeftStr) return true;
+      const launchesLeft = Number(launchesLeftStr) || 0;
+      if (launchesLeft > 0) {
+        localStorage.setItem("cgs-postpone-loader-launches", String(launchesLeft - 1));
+        return false;
+      }
+      localStorage.removeItem("cgs-postpone-loader-launches");
+      return true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  // Отложить напоминание об обновлении DLL загрузчика на 5 запусков
+  function postponeLoaderUpdate() {
+    try {
+      localStorage.setItem("cgs-postpone-loader-launches", String(LOADER_POSTPONE_LAUNCH_COUNT));
+    } catch (_) {}
+  }
+
+  // Сбросить отсрочку напоминания об обновлении DLL загрузчика
+  function clearLoaderPostpone() {
+    try {
+      localStorage.removeItem("cgs-postpone-loader-launches");
+    } catch (_) {}
+  }
+
+  // Закрытие модального окна обновления библиотек загрузчика
+  function closeLoaderUpdateModal() {
+    const backdrop = $("#loader-update-backdrop");
+    if (!backdrop) return;
+    backdrop.classList.add("closing");
+    setTimeout(() => {
+      backdrop.classList.add("hidden");
+      backdrop.classList.remove("closing");
+    }, 190);
+  }
+
+  // Отображение модального окна обновления библиотек OpenSteamTool
+  function promptLoaderUpdateModal(updateInfo) {
+    if (!updateInfo) return;
+    const isEn = window.cgsI18n?.language === "en";
+    const backdrop = $("#loader-update-backdrop");
+    const bundleNameEl = $("#loader-modal-bundle-name");
+    const badgeEl = $("#loader-modal-bundle-badge");
+    const fileListEl = $("#loader-modal-file-list");
+    const cancelBtn = $("#loader-modal-cancel");
+    const snoozeBtn = $("#loader-modal-snooze");
+    const confirmBtn = $("#loader-modal-confirm");
+
+    if (!backdrop || !fileListEl) return;
+
+    // Определяем имя комплекта по выбранному варианту
+    const selectedVariant = updateInfo.selectedVariant || state.lua.loaderSource || "standard";
+    const isV2 = selectedVariant === "compatibility" || selectedVariant === "v2" || selectedVariant === "desktop";
+    if (bundleNameEl) {
+      bundleNameEl.textContent = isV2
+        ? (isEn ? "Версия 2 (Альтернативная)" : "Версия 2 (Альтернативная)")
+        : (isEn ? "Версия 1 (Основная)" : "Версия 1 (Основная)");
+    }
+
+    // Отображение статуса комплекта
+    if (badgeEl) {
+      const isUpToDate = !updateInfo.updateAvailable;
+      badgeEl.dataset.status = isUpToDate ? "synced" : "update";
+      badgeEl.textContent = isUpToDate
+        ? (isEn ? "Актуально" : "Актуально")
+        : (isEn ? "Обновление" : "Обновление");
+    }
+
+    // Очистка и наполнение списка файлов комплекта
+    fileListEl.innerHTML = "";
+    const activeVariant = updateInfo.variants?.find((v) => v.variant === selectedVariant)
+      || updateInfo.variants?.find((v) => v.updateAvailable)
+      || updateInfo.variants?.[0];
+
+    const files = activeVariant?.files || [];
+    if (files.length === 0) {
+      const emptyItem = document.createElement("div");
+      emptyItem.className = "loader-file-item";
+      emptyItem.textContent = isEn ? "No files detected" : "Файлы не обнаружены";
+      fileListEl.appendChild(emptyItem);
+    } else {
+      files.forEach((file) => {
+        const item = document.createElement("div");
+        item.className = "loader-file-item";
+
+        const nameSpan = document.createElement("span");
+        nameSpan.className = "loader-file-name";
+        nameSpan.textContent = file.path;
+
+        const stateWrap = document.createElement("div");
+        stateWrap.className = "loader-file-state";
+
+        if (file.bytes > 0) {
+          const sizeSpan = document.createElement("span");
+          sizeSpan.className = "loader-file-size";
+          sizeSpan.textContent = (file.bytes / 1024 / 1024).toFixed(2) + " МБ";
+          stateWrap.appendChild(sizeSpan);
+        }
+
+        const badge = document.createElement("span");
+        badge.className = "file-badge";
+        const isModified = file.status === "new" || file.status === "update" || file.status === "mismatch";
+        if (isModified) {
+          badge.classList.add("badge-new");
+          badge.textContent = file.status === "new"
+            ? (isEn ? "Новый" : "Новый")
+            : (isEn ? "Обновлён" : "Обновлён");
+        } else {
+          badge.classList.add("badge-match");
+          badge.textContent = isEn ? "Совпадает" : "Совпадает";
+        }
+        stateWrap.appendChild(badge);
+
+        item.appendChild(nameSpan);
+        item.appendChild(stateWrap);
+        fileListEl.appendChild(item);
+      });
+    }
+
+    backdrop.classList.remove("hidden", "closing");
+
+    if (cancelBtn) {
+      cancelBtn.onclick = () => closeLoaderUpdateModal();
+    }
+
+    if (snoozeBtn) {
+      snoozeBtn.onclick = () => {
+        postponeLoaderUpdate();
+        closeLoaderUpdateModal();
+        toast(isEn ? "Library update postponed for 5 launches" : "Обновление библиотек отложено на 5 запусков");
+      };
+    }
+
+    if (confirmBtn) {
+      confirmBtn.onclick = async () => {
+        setBusy(confirmBtn, true, isEn ? "Updating…" : "Обновление…");
+        try {
+          const ok = await performLoaderUpdate(selectedVariant);
+          if (ok) {
+            closeLoaderUpdateModal();
+          }
+        } finally {
+          setBusy(confirmBtn, false);
+        }
+      };
+    }
+  }
+
+  // Выполнение обновления библиотек OpenSteamTool с проверкой запущенного Steam
+  async function performLoaderUpdate(variant) {
+    const isEn = window.cgsI18n?.language === "en";
+
+    // 1. Проверяем, запущен ли Steam
+    const canProceed = await ensureSteamClosedForLoader();
+    if (!canProceed) return false;
+
+    toast(isEn ? "Updating OpenSteamTool libraries…" : "Обновление библиотек OpenSteamTool…");
+    try {
+      const result = await call("luatools_update_loader", {
+        steamPath: state.lua.steamPath || null,
+        variant: variant || state.lua.loaderSource || null,
+      });
+
+      if (result && !result.success) {
+        toast(result.message || (isEn ? "Failed to update libraries" : "Не удалось обновить библиотеки"), "error");
+        return false;
+      }
+
+      // Сбрасываем счетчик отсрочки и скрываем баннер
+      clearLoaderPostpone();
+      $("#loader-update-banner")?.classList.add("hidden");
+      if (state.lua.loaderUpdate) {
+        state.lua.loaderUpdate.updateAvailable = false;
+      }
+
+      toast(result?.message || (isEn ? "OpenSteamTool libraries updated successfully" : "Библиотеки OpenSteamTool успешно обновлены"), "success");
+      await luaRefresh();
+
+      // Предлагаем запустить Steam
+      const shouldRestart = await showModal(
+        isEn ? "Libraries updated" : "Библиотеки обновлены",
+        isEn
+          ? "OpenSteamTool libraries were successfully updated in Steam.\n\nLaunch Steam client now?"
+          : "Библиотеки OpenSteamTool успешно обновлены в Steam.\n\nЗапустить клиент Steam сейчас?",
+        {
+          confirm: true,
+          confirmText: isEn ? "Launch Steam" : "Запустить Steam",
+          cancelText: isEn ? "Later" : "Позже",
+          symbol: "✓",
+        }
+      );
+      if (shouldRestart) {
+        const restartResult = await call("luatools_restart_steam", { steamPath: state.lua.steamPath || null });
+        consumeResult(restartResult);
+      }
+      return true;
+    } catch (error) {
+      toast(errorText(error), "error");
+      return false;
+    }
+  }
+
+  // Проверка обновлений библиотек OpenSteamTool с GitHub
+  async function checkLoaderDllUpdates(interactive = false, force = false) {
+    if (state.lua.loaderChecking) return null;
+    state.lua.loaderChecking = true;
+    const isEn = window.cgsI18n?.language === "en";
+
+    const syncBtn = $("#manifest-loader-sync-btn");
+    const settingsSyncBtn = $("#settings-loader-sync-btn");
+    if (interactive) {
+      if (syncBtn) setBusy(syncBtn, true, isEn ? "Checking…" : "Проверка…");
+      if (settingsSyncBtn) setBusy(settingsSyncBtn, true, isEn ? "Checking…" : "Проверка…");
+    }
+
+    try {
+      const updateInfo = await call("luatools_check_loader_updates", {
+        steamPath: state.lua.steamPath || null,
+        force,
+      });
+      state.lua.loaderUpdate = updateInfo;
+
+      // Управляем отображением неонового баннера в LuaTools
+      const banner = $("#loader-update-banner");
+      if (banner) {
+        banner.classList.toggle("hidden", !updateInfo?.updateAvailable);
+      }
+
+      if (interactive) {
+        if (updateInfo?.updateAvailable) {
+          promptLoaderUpdateModal(updateInfo);
+        } else {
+          toast(isEn ? "You already have the latest libraries installed" : "У вас уже установлены актуальные библиотеки", "info");
+        }
+      }
+
+      return updateInfo;
+    } catch (error) {
+      const msg = errorText(error);
+      log(`Проверка обновлений библиотек OpenSteamTool: ${msg}`, "warn");
+      if (interactive) {
+        toast(`${isEn ? "Failed to check library updates" : "Не удалось проверить обновления библиотек"}: ${msg}`, "error");
+      }
+      return null;
+    } finally {
+      state.lua.loaderChecking = false;
+      if (syncBtn) setBusy(syncBtn, false);
+      if (settingsSyncBtn) setBusy(settingsSyncBtn, false);
+    }
+  }
+
   async function downloadMillenniumInstaller() {
     const button = $("#millennium-site-button");
     setBusy(button, true, "Устанавливаем…");
@@ -2274,6 +2536,8 @@
     setTimeout(() => {
       backdrop.classList.add("hidden");
       backdrop.classList.remove("closing");
+      // Сбрасываем отображение шага 2 комбинированного обновления
+      $("#app-update-step2")?.classList.add("hidden");
     }, 190);
   }
 
@@ -2327,36 +2591,102 @@
     cancelBtn.textContent = isEn ? "Postpone (10 launches)" : "Отложить (на 10 запусков)";
   }
 
-  // Отображение диалога обновления со свёрнутым списком изменений
-  function promptAppUpdate(update) {
-    activeUpdatePrompt = update;
+  // Отображение диалога обновления со свёрнутым списком изменений и поддержкой комбинированного режима
+  function promptAppUpdate(update, loaderUpdate = null) {
+    activeUpdatePrompt = { update, loaderUpdate };
+    const isEn = window.cgsI18n?.language === "en";
     const backdrop = $("#app-update-backdrop");
     const changelog = $("#app-update-changelog");
+    const step2 = $("#app-update-step2");
     if (changelog) changelog.open = false; // Список изменений по умолчанию свёрнут
+    if (step2) step2.classList.add("hidden");
 
     renderAppUpdateModal(update);
     backdrop.classList.remove("hidden", "closing");
 
     const confirmBtn = $("#app-update-confirm");
     const cancelBtn = $("#app-update-cancel");
+    const hasLoaderUpdate = Boolean(loaderUpdate?.updateAvailable);
 
-    confirmBtn.onclick = async () => {
-      clearPostponeUpdate();
-      if (update.portableUrl) {
-        await startAppUpdate(update);
-      } else {
-        const preferredUrl = update.installerUrl || update.releaseUrl;
-        await call("open_external", { url: preferredUrl });
+    if (hasLoaderUpdate) {
+      // Комбинированный режим: если есть обновление программы и DLL — на шаге 1 показываем кнопку "Далее"
+      confirmBtn.textContent = isEn ? "Next →" : "Далее →";
+      cancelBtn.textContent = isEn ? "Postpone (10 launches)" : "Отложить (на 10 запусков)";
+
+      confirmBtn.onclick = () => {
+        // Переход на шаг 2: выбор параметров обновления программы и библиотек Steam
+        changelog?.classList.add("hidden");
+        $("#app-update-footnote")?.classList.add("hidden");
+        step2?.classList.remove("hidden");
+
+        confirmBtn.textContent = update.portableUrl
+          ? (isEn ? "Update now" : "Обновить сейчас")
+          : (isEn ? "Download from website" : "Скачать с сайта");
+        cancelBtn.textContent = isEn ? "Back" : "Назад";
+
+        cancelBtn.onclick = () => {
+          // Возврат к шагу 1 (просмотр списка изменений программы)
+          promptAppUpdate(update, loaderUpdate);
+        };
+
+        confirmBtn.onclick = async () => {
+          const scope = $("input[name='app-update-scope']:checked")?.value || "both";
+          clearPostponeUpdate();
+          clearLoaderPostpone();
+
+          if (scope === "both") {
+            const closed = await ensureSteamClosedForLoader();
+            if (!closed) return;
+
+            try {
+              const res = await call("luatools_update_loader", {
+                steamPath: state.lua.steamPath || null,
+                variant: state.lua.loaderSource || null,
+              });
+              if (res?.success) {
+                toast(isEn ? "OpenSteamTool libraries updated successfully" : "Библиотеки OpenSteamTool успешно обновлены", "success");
+                $("#loader-update-banner")?.classList.add("hidden");
+                if (state.lua.loaderUpdate) state.lua.loaderUpdate.updateAvailable = false;
+              }
+            } catch (err) {
+              log(`Ошибка обновления DLL в комбинированном режиме: ${err}`, "warn");
+            }
+          }
+
+          if (update.portableUrl) {
+            await startAppUpdate(update);
+          } else {
+            const preferredUrl = update.installerUrl || update.releaseUrl;
+            await call("open_external", { url: preferredUrl });
+            closeAppUpdateModal();
+          }
+        };
+      };
+
+      cancelBtn.onclick = () => {
+        postponeStartupUpdate(update.latestVersion);
         closeAppUpdateModal();
-      }
-    };
+        toast(isEn ? "Update reminder postponed for 10 launches" : "Напоминание об обновлении отложено на 10 запусков");
+      };
+    } else {
+      // Обычный режим обновления только приложения
+      confirmBtn.onclick = async () => {
+        clearPostponeUpdate();
+        if (update.portableUrl) {
+          await startAppUpdate(update);
+        } else {
+          const preferredUrl = update.installerUrl || update.releaseUrl;
+          await call("open_external", { url: preferredUrl });
+          closeAppUpdateModal();
+        }
+      };
 
-    cancelBtn.onclick = () => {
-      postponeStartupUpdate(update.latestVersion);
-      closeAppUpdateModal();
-      const isEn = window.cgsI18n?.language === "en";
-      toast(isEn ? "Update reminder postponed for 10 launches" : "Напоминание об обновлении отложено на 10 запусков");
-    };
+      cancelBtn.onclick = () => {
+        postponeStartupUpdate(update.latestVersion);
+        closeAppUpdateModal();
+        toast(isEn ? "Update reminder postponed for 10 launches" : "Напоминание об обновлении отложено на 10 запусков");
+      };
+    }
   }
 
   async function startAppUpdate(updateInfo) {
@@ -2538,7 +2868,7 @@
 
     if (!invoke) {
       if (interactive) {
-        toast(isEn ? "Development mode (no Tauri backend). Use DevTools or Mock to test update dialog." : "Режим разработки (без Tauri backend).");
+        toast(isEn ? "Development mode (no Tauri backend)." : "Режим разработки (без Tauri backend).");
       }
       return;
     }
@@ -2550,12 +2880,32 @@
     status.textContent = isEn ? "Connecting to GitHub…" : "Подключение к GitHub…";
 
     try {
-      const update = await call("check_for_update");
+      // При фоновой проверке на старте запускаем параллельную проверку обновлений программы и библиотек OpenSteamTool
+      const [update, loaderUpdate] = await Promise.all([
+        call("check_for_update"),
+        !interactive
+          ? call("luatools_check_loader_updates", { steamPath: state.lua.steamPath || null, force: false }).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+
+      if (loaderUpdate) {
+        state.lua.loaderUpdate = loaderUpdate;
+        const banner = $("#loader-update-banner");
+        if (banner) {
+          banner.classList.toggle("hidden", !loaderUpdate.updateAvailable);
+        }
+      }
+
       $("#update-current-version").textContent = update.currentVersion;
       if (!update.available) {
         renderUpdateDownloads();
         status.textContent = isEn ? `Latest version ${update.currentVersion} is installed` : `Установлена актуальная версия ${update.currentVersion}`;
         if (interactive) toast(isEn ? "You have the latest version installed" : "У вас установлена последняя версия");
+
+        // Если обновления приложения нет, но есть фоновое обновление библиотек OpenSteamTool при запуске
+        if (!interactive && loaderUpdate?.updateAvailable && shouldPromptLoaderStartupUpdate()) {
+          promptLoaderUpdateModal(loaderUpdate);
+        }
         return;
       }
 
@@ -2564,14 +2914,18 @@
       status.classList.add("available");
       if (!interactive) {
         if (!shouldPromptStartupUpdate(update.latestVersion)) {
+          // Если обновление приложения отложено, проверяем показ обновления библиотек
+          if (loaderUpdate?.updateAvailable && shouldPromptLoaderStartupUpdate()) {
+            promptLoaderUpdateModal(loaderUpdate);
+          }
           return;
         }
         if (state.updates.promptedVersion === update.latestVersion) return;
       }
       state.updates.promptedVersion = update.latestVersion;
 
-      // Открываем модальное окно с выбором и свёрнутым changelog на текущем языке
-      promptAppUpdate(update);
+      // Открываем модальное окно с выбором и свёрнутым changelog (с поддержкой комбинированного режима)
+      promptAppUpdate(update, loaderUpdate);
     } catch (error) {
       const message = errorText(error);
       status.textContent = message;
@@ -2783,6 +3137,8 @@
       }
     });
 
+    const loaderModalBackdrop = $("#loader-update-backdrop");
+
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         if (appUpdateModal && !appUpdateModal.classList.contains("hidden") && !isUpdatingApp) {
@@ -2791,6 +3147,8 @@
             appUpdateModal.classList.add("hidden");
             appUpdateModal.classList.remove("closing");
           }, 190);
+        } else if (loaderModalBackdrop && !loaderModalBackdrop.classList.contains("hidden")) {
+          closeLoaderUpdateModal();
         } else if (telegramModal && !telegramModal.classList.contains("hidden")) {
           closeTelegramHub();
         } else if (luaDetail && !luaDetail.classList.contains("hidden")) {
@@ -2844,6 +3202,33 @@
     // Кнопки принудительного применения загрузчика в Steam
     $("#manifest-loader-apply-btn")?.addEventListener("click", (e) => applyLoaderToSteam(e.currentTarget));
     $("#settings-loader-apply-btn")?.addEventListener("click", (e) => applyLoaderToSteam(e.currentTarget));
+
+    // Кнопки синхронизации файлов загрузчика OpenSteamTool с GitHub
+    $("#manifest-loader-sync-btn")?.addEventListener("click", () => checkLoaderDllUpdates(true, true));
+    $("#settings-loader-sync-btn")?.addEventListener("click", () => checkLoaderDllUpdates(true, true));
+    $("#loader-update-action")?.addEventListener("click", () => {
+      if (state.lua.loaderUpdate?.updateAvailable) {
+        promptLoaderUpdateModal(state.lua.loaderUpdate);
+      } else {
+        checkLoaderDllUpdates(true, true);
+      }
+    });
+
+    // Обработчики модального окна обновления библиотек загрузчика
+    $("#loader-modal-cancel")?.addEventListener("click", closeLoaderUpdateModal);
+    loaderModalBackdrop?.addEventListener("click", (event) => {
+      if (event.target === loaderModalBackdrop) closeLoaderUpdateModal();
+    });
+
+    // Переключение радиокнопок параметров в комбинированном обновлении
+    $$("input[name='app-update-scope']").forEach((radio) => {
+      radio.addEventListener("change", () => {
+        $$(".loader-choice").forEach((choice) => {
+          const input = choice.querySelector("input[name='app-update-scope']");
+          choice.classList.toggle("active", Boolean(input?.checked));
+        });
+      });
+    });
     $("#hubcap-key").addEventListener("input", (event) => {
       state.lua.hubcapKey = event.currentTarget.value.trim();
       localStorage.setItem("hubcapKey", state.lua.hubcapKey);
@@ -2926,7 +3311,7 @@
     $("#hubcap-key").value = state.lua.hubcapKey;
     updateHubcapKeyStatus();
     renderLoaderInfo();
-    log("Eclipse Studio 7.0.2 инициализирован", "system");
+    log("Eclipse Studio 7.0.3 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный вызов отображения окна, если заставка была отключена в параметрах

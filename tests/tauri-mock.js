@@ -31,7 +31,7 @@
     },
     files_cancel_download: () => true,
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "7.0.2", latest_version: "7.0.2", currentVersion: "7.0.2", latestVersion: "7.0.2" }),
+    check_for_update: () => ({ available: false, current_version: "7.0.3", latest_version: "7.0.3", currentVersion: "7.0.3", latestVersion: "7.0.3" }),
     download_app_update: async (args) => {
       const ver = args?.version || "6.6.8";
       const name = `Eclipse-Studio-v${ver}.exe`;
@@ -58,6 +58,49 @@
     luatools_apply_loader: () => ({ success: true, message: "Загрузчик успешно обновлен в Steam" }),
     luatools_is_steam_running: () => false,
     luatools_close_steam: () => ({ success: true, message: "Steam успешно завершён" }),
+    luatools_loader_info: () => ({
+      loaderSource: "standard",
+      selected: "standard",
+      installed: "standard",
+      variants: [
+        {
+          variant: "standard",
+          name: "Версия 1 (Основная)",
+          desc: "Основная сборка OpenSteamTool",
+          installed: true,
+          files: [{ path: "dwmapi.dll", bytes: 1640000, exists: true }]
+        },
+        {
+          variant: "compatibility",
+          name: "Версия 2 (Альтернативная)",
+          desc: "Совместимая сборка OpenSteamTool",
+          installed: false,
+          files: [{ path: "bin/dwmapi.dll", bytes: 1830000, exists: false }]
+        }
+      ]
+    }),
+    luatools_check_loader_updates: () => ({
+      commit: "abcdef1",
+      selectedVariant: "standard",
+      updateAvailable: false,
+      variants: [
+        {
+          variant: "standard",
+          available: true,
+          updateAvailable: false,
+          status: "synced",
+          files: [{ path: "dwmapi.dll", bytes: 1640000, status: "match" }]
+        },
+        {
+          variant: "compatibility",
+          available: true,
+          updateAvailable: false,
+          status: "synced",
+          files: [{ path: "bin/dwmapi.dll", bytes: 1830000, status: "match" }]
+        }
+      ]
+    }),
+    luatools_update_loader: () => ({ success: true, message: "Библиотеки OpenSteamTool успешно обновлены" }),
     game_artwork_store_url: () => null,
     millennium_plugin_status: () => ({ installed: false, millenniumInstalled: false }),
     hubcap_usage: () => ({ used: 3, limit: 25, remaining: 22 }),

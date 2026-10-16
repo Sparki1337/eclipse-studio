@@ -61,10 +61,10 @@ async function run() {
     assert(missing.length === 0, "Не зарегистрированы: " + missing.join(", "));
   });
 
-  await test("Запуск без ошибок JS, версия 7.0.2", async () => {
+  await test("Запуск без ошибок JS, версия 7.0.3", async () => {
     const { page, context, errors } = await open();
     const version = await page.textContent(".titlebar-version");
-    assert(version.trim() === "7.0.2", "версия " + version);
+    assert(version.trim() === "7.0.3", "версия " + version);
     assert(errors.length === 0, errors.join("\n"));
     await context.close();
   });

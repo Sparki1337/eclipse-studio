@@ -196,10 +196,12 @@ html[data-theme="light"] .download-path code { color: #050811 !important; font-w
 html[data-theme="light"] .ghost-button,
 html[data-theme="light"] .secondary-button,
 html[data-theme="light"] .manifest-loader-apply-btn,
+html[data-theme="light"] .manifest-loader-sync-btn,
 html[data-theme="light"] .svc-link { background: #ffffff !important; color: #050811 !important; border-color: rgba(0,0,0,.14) !important; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
 html[data-theme="light"] .ghost-button:hover:not(:disabled),
 html[data-theme="light"] .secondary-button:hover:not(:disabled),
 html[data-theme="light"] .manifest-loader-apply-btn:hover:not(:disabled),
+html[data-theme="light"] .manifest-loader-sync-btn:hover:not(:disabled),
 html[data-theme="light"] .svc-link:hover:not(:disabled) { background: #f8fafc !important; color: #000000 !important; border-color: rgba(var(--accent-rgb), .4) !important; }
 html[data-theme="light"] .loader-src-tag { background: rgba(0, 0, 0, 0.06) !important; color: #475569 !important; }
 

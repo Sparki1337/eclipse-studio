@@ -69,7 +69,7 @@ CreamAPI/
 python bump_version.py
 
 # Или передача версии аргументом:
-python bump_version.py 7.0.2
+python bump_version.py 7.0.3
 ```
 Скрипт автоматически:
 * Обновляет `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `package.json` и `package-lock.json`.
@@ -167,7 +167,7 @@ src-tauri/target/release/eclipse-studio.exe
 ---
 
 <div align="center">
-  <sub>Eclipse Studio v7.0.2 • Инструкция по сборке</sub>
+  <sub>Eclipse Studio v7.0.3 • Инструкция по сборке</sub>
 </div>
 
 ## Тесты интерфейса

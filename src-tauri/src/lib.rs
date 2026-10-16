@@ -7,6 +7,8 @@ mod files;
 mod game_artwork;
 mod hubcap;
 mod hypervisor;
+mod loader_github;
+mod lua_loader;
 mod luatools;
 mod millennium;
 mod models;
@@ -318,8 +320,11 @@ pub fn run() {
             luatools::luatools_get_loader_info,
             luatools::luatools_set_loader_source,
             luatools::luatools_apply_loader,
+            luatools::luatools_update_loader,
             luatools::luatools_is_steam_running,
             luatools::luatools_close_steam,
+            loader_github::luatools_check_loader_updates,
+            lua_loader::luatools_loader_info,
             millennium::millennium_plugin_status,
             millennium::millennium_install_plugin,
             millennium::millennium_remove_plugin,
