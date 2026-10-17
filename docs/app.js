@@ -409,7 +409,7 @@
       'compare.diffNew3': '<strong>14 тем + OLED и зум 140%:</strong> глубокие палитры без синевы, 12 неоновых акцентов и гибкий ресайз сайдбара',
       'compare.diffNew4': '<strong>Векторный SVG-сет Lucide:</strong> безупречная чёткость на любых экранах и плавные микроанимации 60 FPS',
       'compare.diffNew5': '<strong>Аппаратная заставка:</strong> Canvas-анимация с логотипом, пошаговый статус загрузки и пропуск по клику',
-      'compare.diffNew6': '<strong>Встроенный 1-клик апдейтер:</strong> прямое скачивание в рабочую папку, бесшовный перезапуск и автоочистка старых версий',
+      'compare.diffNew6': '<strong>Встроенный 1-клик апдейтер:</strong> прямое скачивание в рабочую папку, бесшовный перезапуск, цветной прогресс-бар и сворачиваемый чейнджлог',
       'compare.diffNew7': '<strong>Гибкая настройка путей:</strong> выбор любой папки загрузок со сбросом по умолчанию в 1 клик',
       'compare.diffNew8': '<strong>Кастомные звуки и стильные меню:</strong> конструктор своих звуковых профилей и адаптивные выпадающие меню',
       'dl.kicker': 'Загрузка',
@@ -513,7 +513,7 @@
       'compare.diffNew3': '<strong>14 themes + OLED & 140% zoom:</strong> pure black OLED palette, 12 neon accents, and resizable sidebar (180–380px)',
       'compare.diffNew4': '<strong>Vector Lucide SVG icons:</strong> razor-sharp rendering on any screen with hardware 60 FPS micro-animations',
       'compare.diffNew5': '<strong>Hardware Canvas splash:</strong> animated logo intro, subsystem initialization log, and instant click-to-skip',
-      'compare.diffNew6': '<strong>In-app 1-Click Auto-Updater:</strong> direct download to app folder, seamless restart, and auto-cleanup of legacy binaries',
+      'compare.diffNew6': '<strong>In-app 1-Click Auto-Updater:</strong> direct download to app folder, seamless restart, theme-colored progress bar, and collapsible changelog',
       'compare.diffNew7': '<strong>Flexible path management:</strong> select any download directory with 1-click reset to defaults',
       'compare.diffNew8': '<strong>Custom Audio & Native Menus:</strong> custom audio profile designer, one-click preview, and adaptive select menus',
       'dl.kicker': 'Download',
@@ -566,13 +566,13 @@
       { title: 'Online Fix', fullTitle: 'Universal Online Fix', p: 'Сетевой кооператив и лобби Spacewar.', desc: 'Анализ исполняемых файлов, эмуляторы Steam, лобби Spacewar и фиксы Epic Online Services.' },
       { title: 'Сохранения', fullTitle: 'Менеджер сохранений', p: 'Поиск, бэкап и восстановление прогресса.', desc: 'Поиск прогресса по 15+ путям Windows, архивация в ZIP/RAR и побайтовое восстановление.' },
       { title: 'DLC Unlocker', fullTitle: 'DLC Unlocker', p: 'Выборочно — через SmokeAPI и CreamAPI.', desc: 'Выборочная разблокировка дополнений Steam через SmokeAPI и CreamAPI.' },
-      { title: 'Eclipse Manifest', fullTitle: 'Eclipse Manifest и манифесты', p: 'Игры в библиотеке Steam через манифесты.', desc: 'Добавление игр в библиотеку Steam через Ryuu и HubCap с поддержкой Millennium.' },
+      { title: 'Eclipse Manifest', fullTitle: 'Eclipse Manifest и манифесты', p: 'Манифесты Steam, плагин Millennium и OpenSteamTool v1/v2.', desc: 'Добавление игр в библиотеку Steam через Ryuu и HubCap, плагин Millennium v0.5.2, две версии OpenSteamTool и синхронизация.' },
       { title: 'Гипервизор', fullTitle: 'Гипервизор: запуск игр', p: 'Библиотека и запуск игр от DenuvOwO\\ARTIFACT через профили KVC / DRV.', desc: 'Изолированный запуск игр с драйверными профилями KVC и DRV.' },
       { title: 'Античиты', fullTitle: 'Гипервизор: античиты', p: 'Поиск и удаление античитов.', desc: 'Аудит служб, драйверов и остаточных файлов 12 популярных античитов.' },
       { title: 'VBS & HVCI', fullTitle: 'Гипервизор: VBS и HVCI', p: 'Настройка гипервизора.', desc: 'Управление Virtualization-based Security, изоляцией ядра, DSE и тестовым режимом.' },
       { title: 'Crack Vault', fullTitle: 'Crack Vault', p: 'Каталог с кряками игр от DenuvOwO\\ARTIFACT.', desc: 'Каталог актуальных релизов с паролями и 6-поточным загрузчиком.' },
       { title: 'Утилиты', fullTitle: 'Утилиты', p: 'CirnoDownloader, Sigma, Zapret2.', desc: 'Хаб внешних инструментов: CirnoDownloader, Sigma, Zapret2 и инструкции по настройке.' },
-      { title: 'Настройки', fullTitle: 'Настройки', p: 'Темы, акценты, масштаб и язык.', desc: '9 тем, 12 акцентов, масштабирование шрифта и мультиязычность.' },
+      { title: 'Настройки', fullTitle: 'Настройки', p: 'Темы, акценты, масштаб и язык.', desc: '14 тем, 12 акцентов, масштабирование шрифта и мультиязычность.' },
       { title: 'Telegram Hub', fullTitle: 'Telegram Hub', p: 'Каналы проекта и поддержка.', desc: 'Все официальные сообщества, канал обновлений и поддержка в одном окне.' },
     ],
     en: [
@@ -580,13 +580,13 @@
       { title: 'Online Fix', fullTitle: 'Universal Online Fix', p: 'Online co-op and Spacewar lobbies.', desc: 'Executable analysis, Steam emulators, Spacewar lobbies, and Epic Online Services fixes.' },
       { title: 'Save Manager', fullTitle: 'Save Game Manager', p: 'Discovery, backup, and restore of progress.', desc: 'Progress discovery across 15+ Windows paths, ZIP/RAR archiving, and byte-accurate recovery.' },
       { title: 'DLC Unlocker', fullTitle: 'DLC Unlocker', p: 'Selective unlock via SmokeAPI & CreamAPI.', desc: 'Selective Steam DLC unlocking powered by SmokeAPI and CreamAPI.' },
-      { title: 'Eclipse Manifest', fullTitle: 'Eclipse Manifest & Manifests', p: 'Steam library games via manifests.', desc: 'Add games to Steam library via Ryuu and HubCap with Millennium support.' },
+      { title: 'Eclipse Manifest', fullTitle: 'Eclipse Manifest & Manifests', p: 'Steam manifests, Millennium plugin and OpenSteamTool v1/v2.', desc: 'Add games to Steam library via Ryuu and HubCap, Millennium v0.5.2 support, dual OpenSteamTool loaders, and cloud sync.' },
       { title: 'Hypervisor', fullTitle: 'Hypervisor: Game Launch', p: 'Launch DenuvOwO\\ARTIFACT games via KVC / DRV.', desc: 'Isolated game execution using specialized KVC and DRV driver profiles.' },
       { title: 'Anticheats', fullTitle: 'Hypervisor: Anticheats', p: 'Scan and remove anticheat services.', desc: 'Audit services, drivers, and residual files from 12 popular anticheat systems.' },
       { title: 'VBS & HVCI', fullTitle: 'Hypervisor: VBS & HVCI', p: 'Hypervisor & security configuration.', desc: 'Manage Virtualization-based Security, core isolation, DSE, and test mode.' },
       { title: 'Crack Vault', fullTitle: 'Crack Vault', p: 'Game cracks by DenuvOwO\\ARTIFACT.', desc: 'Catalog of current releases with passwords and multi-threaded downloader.' },
       { title: 'Utilities', fullTitle: 'Utilities', p: 'CirnoDownloader, Sigma, Zapret2.', desc: 'External tool hub: CirnoDownloader, Sigma, Zapret2 and setup guides.' },
-      { title: 'Settings', fullTitle: 'Settings', p: 'Themes, accents, zoom, and language.', desc: '9 themes, 12 accents, typography scaling, and multilingual support.' },
+      { title: 'Settings', fullTitle: 'Settings', p: 'Themes, accents, zoom, and language.', desc: '14 themes, 12 accents, typography scaling, and multilingual support.' },
       { title: 'Telegram Hub', fullTitle: 'Telegram Hub', p: 'Project channels and community support.', desc: 'All official communities, updates channel, and support in one window.' },
     ]
   };
@@ -836,7 +836,10 @@
       .catch(() => {
         syncState.fail++;
         const fallback = [
-          { tag: 'v7.0.0', rawDate: '2026-10-15T12:00:00Z', rawBytes: 46800000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/latest', fallbackSize: '44.6 МБ' },
+          { tag: 'v7.0.3', rawDate: '2026-10-16T11:37:46Z', rawBytes: 47100000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/latest', fallbackSize: '44.9 МБ' },
+          { tag: 'v7.0.2', rawDate: '2026-10-15T20:29:00Z', rawBytes: 46900000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v7.0.2', fallbackSize: '44.7 МБ' },
+          { tag: 'v7.0.1', rawDate: '2026-10-15T15:35:00Z', rawBytes: 46850000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v7.0.1', fallbackSize: '44.7 МБ' },
+          { tag: 'v7.0.0', rawDate: '2026-10-15T12:00:00Z', rawBytes: 46800000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v7.0.0', fallbackSize: '44.6 МБ' },
           { tag: 'v6.6.7', rawDate: '2026-10-14T18:00:00Z', rawBytes: 46500000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.6.7', fallbackSize: '44.3 МБ' },
           { tag: 'v6.3.0', rawDate: '2026-10-13T18:00:00Z', rawBytes: 44983910, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.3.0', fallbackSize: '42.9 МБ' },
           { tag: 'v6.2.0', rawDate: '2026-10-12T12:00:00Z', rawBytes: 44774195, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v6.2.0', fallbackSize: '42.7 МБ' },
@@ -1070,7 +1073,7 @@
 
     fetch(GIST_URL, { cache: 'no-store' })
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .catch(() => fetch(`${FALLBACK_URL}?v=6.6.7`, { cache: 'no-store' }).then((r) => r.json()))
+      .catch(() => fetch(`${FALLBACK_URL}?v=7.0.3`, { cache: 'no-store' }).then((r) => r.json()))
       .then((data) => {
         const cracks = Array.isArray(data) ? data : (data?.cracks || []);
         allGames = cracks.filter((c) => c && c.name && c.url);

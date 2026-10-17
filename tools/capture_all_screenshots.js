@@ -51,10 +51,10 @@ const pinnedFiles = [
   },
   {
     name: "Eclipse Studio",
-    build: "Build 6.6.7",
+    build: "Build 7.0.3",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v6.6.7/Eclipse-Studio-v6.6.7.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.3/Eclipse-Studio-v7.0.3.exe",
   },
 ];
 
@@ -276,10 +276,32 @@ async function main() {
       luatools_apply_loader: () => ({ success: true, message: "Загрузчик успешно обновлен в Steam" }),
       luatools_is_steam_running: () => false,
       luatools_close_steam: () => ({ success: true, message: "Steam успешно завершён" }),
+      luatools_check_loader_updates: () => ({
+        commit: "a8a5b90",
+        selectedVariant: "standard",
+        updateAvailable: false,
+        variants: [
+          {
+            variant: "standard",
+            available: true,
+            updateAvailable: false,
+            status: "synced",
+            files: [{ path: "dwmapi.dll", bytes: 1640000, status: "match" }]
+          },
+          {
+            variant: "compatibility",
+            available: true,
+            updateAvailable: false,
+            status: "synced",
+            files: [{ path: "bin/dwmapi.dll", bytes: 1830000, status: "match" }]
+          }
+        ]
+      }),
+      luatools_update_loader: () => ({ success: true, message: "Библиотеки OpenSteamTool успешно синхронизированы" }),
       millennium_plugin_status: () => ({
         status: "ready",
-        pluginVersion: "0.5.0",
-        bundledVersion: "0.5.0",
+        pluginVersion: "0.5.2",
+        bundledVersion: "0.5.2",
         installed: true,
         millenniumInstalled: true,
       }),

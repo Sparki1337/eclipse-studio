@@ -35,6 +35,9 @@ TAURI_MOCK_JS = ROOT_DIR / "tests" / "tauri-mock.js"
 UI_TEST_JS = ROOT_DIR / "tests" / "ui.test.js"
 README_MD = ROOT_DIR / "README.md"
 BUILD_MD = ROOT_DIR / "BUILD.md"
+DOCS_INDEX_HTML = ROOT_DIR / "docs" / "index.html"
+DOCS_APP_JS = ROOT_DIR / "docs" / "app.js"
+CAPTURE_SCREENSHOTS_JS = ROOT_DIR / "tools" / "capture_all_screenshots.js"
 
 
 def get_current_version() -> str:
@@ -247,6 +250,99 @@ def update_docs(old_ver: str, new_ver: str) -> bool:
     return success
 
 
+def update_website(old_ver: str, new_ver: str) -> bool:
+    # Обновление версий на веб-сайте docs/index.html и docs/app.js
+    success = True
+    if DOCS_INDEX_HTML.exists():
+        try:
+            content = DOCS_INDEX_HTML.read_text(encoding="utf-8")
+            # Обновление ссылок на стили и скрипты
+            content = re.sub(
+                r'(style\.css\?v=)[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?',
+                rf'\g<1>{new_ver}',
+                content,
+            )
+            content = re.sub(
+                r'(app\.js\?v=)[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?',
+                rf'\g<1>{new_ver}',
+                content,
+            )
+            # Обновление бейджей версий в шапке, герое, карточке релиза и футере
+            content = re.sub(
+                r'(<span class="brand-ver" data-version>v)[^<]+(</span>)',
+                rf'\g<1>{new_ver}\g<2>',
+                content,
+            )
+            content = re.sub(
+                r'(<span class="mono" data-version>v)[^<]+(</span>)',
+                rf'\g<1>{new_ver}\g<2>',
+                content,
+            )
+            content = re.sub(
+                r'(<span data-version>v)[^<]+(</span>)',
+                rf'\g<1>{new_ver}\g<2>',
+                content,
+            )
+            content = re.sub(
+                r'(<span class="badge mono" id="eclipseVersion"[^>]*>v)[^<]+(</span>)',
+                rf'\g<1>{new_ver}\g<2>',
+                content,
+            )
+            content = re.sub(
+                r'(<strong>Eclipse Studio <span data-version>v)[^<]+(</span></strong>)',
+                rf'\g<1>{new_ver}\g<2>',
+                content,
+            )
+            DOCS_INDEX_HTML.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"[!] Ошибка при обновлении docs/index.html: {e}")
+            success = False
+
+    if DOCS_APP_JS.exists():
+        try:
+            content = DOCS_APP_JS.read_text(encoding="utf-8")
+            # Обновление кэш-бастера к cracks.json
+            content = re.sub(
+                r'(\$\{FALLBACK_URL\}\?v=)[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?',
+                rf'\g<1>{new_ver}',
+                content,
+            )
+            DOCS_APP_JS.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"[!] Ошибка при обновлении docs/app.js: {e}")
+            success = False
+
+    return success
+
+
+def update_capture_tool(old_ver: str, new_ver: str) -> bool:
+    # Обновление версии закрепленного релиза в tools/capture_all_screenshots.js
+    if not CAPTURE_SCREENSHOTS_JS.exists():
+        return False
+    try:
+        content = CAPTURE_SCREENSHOTS_JS.read_text(encoding="utf-8")
+        content = re.sub(
+            r'build:\s*"Build\s+[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"',
+            f'build: "Build {new_ver}"',
+            content,
+        )
+        content = re.sub(
+            r'Eclipse-Studio-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.exe',
+            f'Eclipse-Studio-v{new_ver}.exe',
+            content,
+        )
+        content = re.sub(
+            r'/download/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?/',
+            f'/download/v{new_ver}/',
+            content,
+        )
+        CAPTURE_SCREENSHOTS_JS.write_text(content, encoding="utf-8")
+        return True
+    except Exception as e:
+        print(f"[!] Ошибка при обновлении capture_all_screenshots.js: {e}")
+        return False
+
+
 def sync_cargo_lock() -> None:
     # Синхронизация Cargo.lock через cargo check
     print("[*] Синхронизация Cargo.lock...")
@@ -317,6 +413,10 @@ def main() -> None:
         updated_files.append("tests/tauri-mock.js & ui.test.js")
     if update_docs(current_ver, new_ver):
         updated_files.append("README.md & BUILD.md")
+    if update_website(current_ver, new_ver):
+        updated_files.append("docs/index.html & docs/app.js")
+    if update_capture_tool(current_ver, new_ver):
+        updated_files.append("tools/capture_all_screenshots.js")
 
     # Синхронизация Cargo.lock
     sync_cargo_lock()
