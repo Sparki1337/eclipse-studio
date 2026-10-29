@@ -53,8 +53,8 @@ CreamAPI/
 ### 3. Встроенные библиотеки OpenSteamTool (Версия 1 и Версия 2)
 В каталогах `src-tauri/src/assets/` и `src-tauri/src/assets/ost_desktop/` находятся хуки загрузчиков манифестов (`OpenSteamTool.dll`, `dwmapi.dll`, `xinput1_4.dll`, `opensteamtool.toml`), вшиваемые в исполняемый файл приложения.
 
-### 4. Файлы гипервизора (Безопасность для GitHub)
-Бинарники гипервизора (`kvc.exe`, `drvloader.exe` и `.bat` файлы) намеренно **исключены из публичной сборки**, чтобы избежать ложных срабатываний антивирусов и блокировок репозитория со стороны GitHub. Код приложения адаптирован и компилируется без них автоматически.
+### 4. Автономный лаунчер Eclipse-HV
+В каталоге `tools/eclipse-hv/` находится исходный код автономного лаунчера Eclipse-HV на чистом Rust, компилируемый в `src-tauri/resources/hypervisor/Eclipse-HV.exe` для изолированного запуска игр с обходом DSE и поддержкой современных процессоров (AVX-512 / Zen 4 / Intel 12+).
 
 ---
 
@@ -167,7 +167,7 @@ src-tauri/target/release/eclipse-studio.exe
 ---
 
 <div align="center">
-  <sub>Eclipse Studio v7.0.3 • Инструкция по сборке</sub>
+  <sub>Eclipse Studio v8.0.0 • Инструкция по сборке</sub>
 </div>
 
 ## Тесты интерфейса

@@ -426,33 +426,16 @@
   }
 
   async function checkEclipseStudioRelease() {
+    if (!invoke) return null;
     try {
-      const response = await fetch("https://api.github.com/repos/Sparki1337/eclipse-studio/releases/latest", {
-        headers: { "Accept": "application/vnd.github+json" }
-      });
-      if (!response.ok) return null;
-      const release = await response.json();
-      if (!release || !release.tag_name) return null;
-      const assets = Array.isArray(release.assets) ? release.assets : [];
-      const match = (a, fn) => fn(String(a?.name || "").toLowerCase());
-      const reversed = [...assets].reverse();
-      const targetAsset = reversed.find((a) => match(a, (n) => n.includes("eclipse") && n.endsWith(".exe") && !n.includes("setup") && !n.includes("installer")))
-        || reversed.find((a) => match(a, (n) => n.includes("eclipse") && !n.includes("setup") && !n.includes("installer")))
-        || reversed.find((a) => match(a, (n) => n.endsWith(".exe") && !n.includes("setup") && !n.includes("installer")))
-        || reversed.find((a) => match(a, (n) => n.includes("eclipse")))
-        || reversed.find((a) => match(a, (n) => n.endsWith(".exe")))
-        || reversed[0];
-      const url = targetAsset?.browser_download_url || release.html_url;
+      const update = await invoke("app_check_update");
+      if (!update || !update.latestVersion) return null;
+      const tag = update.latestVersion;
+      const url = update.portableUrl || update.installerUrl || update.releaseUrl;
       if (!url || !url.startsWith("https://")) return null;
-      const tag = String(release.tag_name).trim();
-      const build = tag.toLowerCase().startsWith("build")
-        ? tag
-        : tag.startsWith("v") || tag.startsWith("V")
-          ? `Build ${tag.slice(1)}`
-          : `Build ${tag}`;
       return {
         name: "Eclipse Studio",
-        build: build,
+        build: `Build ${tag}`,
         url: url,
         password: "",
         pinned: true,

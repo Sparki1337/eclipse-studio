@@ -16,9 +16,6 @@ const ORIGIN: &str = "https://generator.ryuu.lol";
 // Базовый адрес реверс-прокси
 const PROXY_BASE: &str = "";
 
-// Ключ доступа к API генератора
-const AUTH_KEY: &str = "";
-
 const CATALOG_URL: &str = "https://generator.ryuu.lol/api/games";
 const DOWNLOAD_BASE: &str = "https://generator.ryuu.lol/api/download/";
 const CATALOG_TTL: Duration = Duration::from_secs(24 * 3600);
@@ -262,8 +259,8 @@ fn fresh_disk_catalog(app: &AppHandle) -> Option<Vec<u8>> {
     (age < CATALOG_TTL).then(|| fs::read(&path).ok()).flatten()
 }
 
-// Загрузка каталога в память
-fn ensure_catalog(app: &AppHandle) -> Result<(), String> {
+// Загрузка каталога в память с авторизацией по ключу
+fn ensure_catalog(app: &AppHandle, auth: Option<&str>) -> Result<(), String> {
     if catalog_loaded() {
         return Ok(());
     }
@@ -277,7 +274,7 @@ fn ensure_catalog(app: &AppHandle) -> Result<(), String> {
     let bytes = match fresh_disk_catalog(app) {
         Some(bytes) => bytes,
         None => {
-            let bytes = http_get(CATALOG_URL, None, false)
+            let bytes = http_get(CATALOG_URL, auth, false)
                 .map_err(|error| format!("Каталог игр недоступен: {error}"))?;
             if let Some(path) = catalog_path(app) {
                 let _ = fs::write(path, &bytes);
@@ -297,20 +294,32 @@ fn ensure_catalog(app: &AppHandle) -> Result<(), String> {
 
 // Поиск игр в каталоге
 #[tauri::command]
-pub async fn ryuu_search(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, String> {
-    tauri::async_runtime::spawn_blocking(move || ryuu_search_blocking(app, query))
+pub async fn ryuu_search(
+    app: AppHandle,
+    query: String,
+    api_key: String,
+) -> Result<Vec<RyuuGame>, String> {
+    tauri::async_runtime::spawn_blocking(move || ryuu_search_blocking(app, query, api_key))
         .await
         .map_err(|error| format!("Поиск прервался: {error}"))?
 }
 
-fn ryuu_search_blocking(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, String> {
+fn ryuu_search_blocking(
+    app: AppHandle,
+    query: String,
+    api_key: String,
+) -> Result<Vec<RyuuGame>, String> {
+    let key = api_key.trim();
+    if key.is_empty() {
+        return Err("Укажите API-ключ Ryuu в настройках".into());
+    }
     let query = query.trim().to_lowercase();
     if query.len() < 2 {
         return Ok(Vec::new());
     }
     let numeric = query.chars().all(|c| c.is_ascii_digit());
     // Поиск по числовому AppID при недоступности каталога
-    if let Err(error) = ensure_catalog(&app) {
+    if let Err(error) = ensure_catalog(&app, Some(key)) {
         if numeric {
             return Ok(vec![RyuuGame {
                 appid: query.clone(),
@@ -373,11 +382,12 @@ fn ryuu_search_blocking(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, 
 pub async fn ryuu_get(
     app: AppHandle,
     appid: String,
+    api_key: String,
     steam_path: Option<String>,
     auto_update: bool,
 ) -> LuaInstallResult {
     match tauri::async_runtime::spawn_blocking(move || {
-        ryuu_get_blocking(app, appid, steam_path, auto_update)
+        ryuu_get_blocking(app, appid, api_key, steam_path, auto_update)
     })
     .await
     {
@@ -394,9 +404,19 @@ pub async fn ryuu_get(
 fn ryuu_get_blocking(
     app: AppHandle,
     appid: String,
+    api_key: String,
     steam_path: Option<String>,
     auto_update: bool,
 ) -> LuaInstallResult {
+    let key = api_key.trim();
+    if key.is_empty() {
+        return LuaInstallResult {
+            success: false,
+            message: "Укажите API-ключ Ryuu в настройках".into(),
+            logs: vec![],
+            added_appids: vec![],
+        };
+    }
     let clean: String = appid.chars().filter(char::is_ascii_digit).collect();
     if clean.is_empty() {
         return LuaInstallResult {
@@ -407,8 +427,8 @@ fn ryuu_get_blocking(
         };
     }
 
-    // Загрузка zip-архива манифестов
-    let bytes = http_get(&format!("{DOWNLOAD_BASE}{clean}"), Some(AUTH_KEY), true);
+    // Загрузка zip-архива манифестов с авторизацией по ключу X-Auth-Key
+    let bytes = http_get(&format!("{DOWNLOAD_BASE}{clean}"), Some(key), true);
 
     match bytes {
         Ok(bytes) => luatools::install_zip_bytes(&app, &bytes, steam_path, auto_update),

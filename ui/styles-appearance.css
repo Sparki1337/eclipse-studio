@@ -1001,6 +1001,7 @@ html.compact .ac-scan-button,
 html.compact .ac-remove-all,
 html.compact .vbs-test-button,
 html.compact .vbs-scan-button,
+html.compact .vbs-enable-all-button,
 html.compact .vbs-enable-button,
 html.compact .vbs-disable-button {
   height: 34px !important;

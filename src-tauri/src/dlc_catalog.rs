@@ -92,7 +92,7 @@ fn scan(appid: u64, steam_path: Option<String>) -> Result<DlcCatalog, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(10))
         .connect_timeout(Duration::from_secs(4))
-        .user_agent("EclipseStudio/7.0.3")
+        .user_agent("EclipseStudio/8.0.0")
         .build()
         .map_err(|e| e.to_string())?;
     let urls = [

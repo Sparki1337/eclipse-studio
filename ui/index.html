@@ -241,7 +241,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>7.0.3</span>
+        <span class="titlebar-version" data-tauri-drag-region>8.0.0</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -332,7 +332,7 @@
         <div class="home-hero premium-panel">
           <div class="home-glow"></div>
           <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 7.0.3</span>
+            <span class="hero-kicker">ECLIPSE STUDIO 8.0.0</span>
             <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
             <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
           </div>
@@ -343,7 +343,7 @@
           <article class="metric-card module-card" data-open-view="saves"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span><div><small>Сохранения</small><strong>Менеджер сохранений</strong><p>Поиск и резервное копирование прогресса</p></div></article>
           <article class="metric-card module-card" data-open-view="dlc"><span class="metric-icon"><svg viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></span><div><small>DLC</small><strong>DLC Unlocker</strong><p>Выборочная разблокировка дополнений</p></div></article>
           <article class="metric-card module-card" data-open-view="lua"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></span><div><small>Манифесты</small><strong>Eclipse Manifest</strong><p>Игры в библиотеку Steam через манифесты</p></div></article>
-          <article class="metric-card module-card" data-open-view="hypervisor"><span class="metric-icon"><svg viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg></span><div><small>Виртуализация</small><strong>Гипервизор</strong><p>Библиотека и запуск игр через профили KVC или DRV</p></div></article>
+          <article class="metric-card module-card" data-open-view="hypervisor"><span class="metric-icon"><svg viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg></span><div><small>Виртуализация</small><strong>Гипервизор</strong><p>Библиотека и изолированный запуск игр с защитой ядра</p></div></article>
           <article class="metric-card module-card" data-open-view="files"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span><div><small>Релизы</small><strong>Кряки</strong><p>Актуальные кряки с билдом, паролем и загрузкой</p></div></article>
           <article class="metric-card module-card" data-open-view="utilities"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M2 11h20"/><path d="M10 11v2a2 2 0 0 0 4 0v-2"/></svg></span><div><small>Инструменты</small><strong>Утилиты</strong><p>Полезные программы и сетевые инструменты</p></div></article>
         </div>
@@ -656,6 +656,10 @@
                   <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2.5 8.5l3.5 3.5 7.5-7.5"/></svg>
                   <span>Применить в Steam</span>
                 </button>
+                <button type="button" class="manifest-loader-test-btn" id="manifest-loader-test-btn" title="Протестировать окно и процесс обновления библиотек OpenSteamTool">
+                  <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M11 2v4m0 0h4m-4 0 3.5-3.5M14 9.5a6 6 0 1 1-1.8-4.2"/></svg>
+                  <span>Тест обновления</span>
+                </button>
               </div>
             </div>
             <div class="loader-options">
@@ -734,7 +738,7 @@
           </button>
           <button data-hv-tab="vbs" role="tab" aria-selected="false">
             <svg class="hv-tab-icon" viewBox="0 0 24 24"><path d="M12 2 3.5 6v6c0 5.5 3.8 10 8.5 11.5 4.7-1.5 8.5-6 8.5-11.5V6L12 2z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/></svg>
-            <span>VBS</span>
+            <span>VBS 2.0</span>
           </button>
         </div>
         <div class="hv-tab-panel active" data-hv-tab-panel="hypervisor">
@@ -745,10 +749,10 @@
               </div>
               <div class="hv-hero-copy">
                 <h2>Гипервизор</h2>
-                <p>Изолированный запуск игр с профилями обхода KVC и DRV из единого окна.</p>
+                <p>Изолированный запуск игр с защитой ядра и обходом DSE из единого окна.</p>
                 <div class="hv-warning-inline">
                   <svg viewBox="0 0 16 16"><path d="m8 2 6.5 11.5H1.5L8 2z"/><path d="M8 6.5v3.5m0 2h.01"/></svg>
-                  <span>Профили работают с системными драйверами Windows. Сохраните важные данные перед запуском.</span>
+                  <span>Автономный запуск с защитой ядра Windows. Сохраните важные данные перед запуском.</span>
                 </div>
               </div>
               <div class="hv-hero-actions">
@@ -763,6 +767,39 @@
               </div>
             </section>
 
+            <section class="premium-panel hv-eclipse-card" id="hv-eclipse-card">
+              <div class="hv-eclipse-main">
+                <div class="hv-eclipse-badge-icon">
+                  <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                </div>
+                <div class="hv-eclipse-copy">
+                  <div class="hv-eclipse-title-row">
+                    <span class="hero-kicker">УНИВЕРСАЛЬНЫЙ АВТОНОМНЫЙ ЛАУНЧЕР</span>
+                    <button class="hv-info-circle-btn" id="hv-eclipse-instructions-btn" title="Инструкция по использованию Eclipse-HV" type="button">
+                      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      <span>Инструкция</span>
+                    </button>
+                  </div>
+                  <h3>Eclipse-HV.exe</h3>
+                  <p id="hv-eclipse-desc">Автономный исполняемый файл для папки с игрой. Обходит Driver Signature Enforcement в памяти даже с включённым Secure Boot, запускает игру и мгновенно восстанавливает DSE.</p>
+                  <div class="hv-eclipse-meta" id="hv-eclipse-meta">
+                    <span class="hv-eclipse-status-pill" id="hv-eclipse-status">Проверка статуса…</span>
+                    <span class="hv-eclipse-path" id="hv-eclipse-path">Папка игр: поиск…</span>
+                  </div>
+                </div>
+              </div>
+              <div class="hv-eclipse-actions">
+                <button class="secondary-button" id="hv-eclipse-check-btn" type="button">
+                  <svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg>
+                  <span>Проверить версию</span>
+                </button>
+                <button class="primary-button" id="hv-eclipse-download-btn" type="button">
+                  <svg viewBox="0 0 20 20"><path d="M10 3v10m-4-4 4 4 4-4M3 17h14"/></svg>
+                  <span id="hv-eclipse-dl-label">Загрузить актуальную версию</span>
+                </button>
+              </div>
+            </section>
+
             <section class="premium-panel hv-selected-panel">
               <div class="hv-selected-icon hv-cover hv-selected-cover" id="hv-selected-cover" aria-hidden="true"></div>
               <div class="hv-selected-copy">
@@ -770,7 +807,6 @@
                 <h3 id="hv-selected-title">Игра не выбрана</h3>
                 <p id="hv-selected-path">Выберите игру из списка ниже</p>
                 <div class="hv-chips-group">
-                  <span class="hv-chip"><small>ПРОФИЛЬ</small><b id="hv-selected-profile">—</b></span>
                   <span class="hv-chip"><small>СТАТУС</small><b id="hv-selected-state">Нет игры</b></span>
                   <span class="hv-chip"><small>ПРАВА</small><b id="hv-admin-status">Через UAC</b></span>
                   <span id="hv-ready-status" class="hidden">Нет игры</span>
@@ -778,11 +814,6 @@
               </div>
 
               <div class="hv-selected-actions">
-                <div class="hv-selected-profiles" id="hv-selected-profiles"></div>
-                <button class="ghost-button hv-check-button" id="hv-selected-verify" disabled>
-                  <svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg>
-                  <span>Проверить</span>
-                </button>
                 <button class="primary-button hv-launch-button" id="hv-launch-button" disabled>
                   <span class="hv-play">▶</span>
                   <span>Запустить</span>
@@ -894,12 +925,16 @@
                 <svg viewBox="0 0 24 24"><path d="M12 2 3.5 6v6c0 5.5 3.8 10 8.5 11.5 4.7-1.5 8.5-6 8.5-11.5V6L12 2z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/></svg>
               </div>
               <div class="vbs-hero-copy">
-                <span class="hero-kicker">WINDOWS SECURITY</span>
-                <h2>VBS</h2>
-                <p>Управление изоляцией ядра, целостностью кода (HVCI) и параметрами виртуализации Windows.</p>
+                <span class="hero-kicker">WINDOWS SECURITY · VBS 2.0</span>
+                <h2>VBS 2.0</h2>
+                <p>Управление изоляцией ядра, целостностью кода (HVCI), BitLocker, Meltdown mitigation и гипервизором Windows.</p>
               </div>
               <div class="vbs-hero-actions">
                 <button class="vbs-scan-button" id="vbs-scan-button"><svg viewBox="0 0 20 20" style="width:16px;height:16px"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg><span>Сканировать</span></button>
+                <button class="vbs-enable-all-button" id="vbs-enable-all-btn" title="Принудительно включить все механизмы защиты ядра Windows">
+                  <svg viewBox="0 0 24 24"><path d="M12 2 3.5 6v6c0 5.5 3.8 10 8.5 11.5 4.7-1.5 8.5-6 8.5-11.5V6L12 2z"/><path d="m9 12 2 2 4-4"/></svg>
+                  <span>Включить все защиты</span>
+                </button>
                 <button class="vbs-enable-button hidden" id="vbs-enable-button">
                   <svg viewBox="0 0 20 20"><path d="M10 2 3.5 5v4.5c0 4.5 2.8 8 6.5 9.5 3.7-1.5 6.5-5 6.5-9.5V5L10 2z"/><path d="M10 7v6m-3-3h6"/></svg>
                   <span>Включить визор</span>
@@ -909,6 +944,52 @@
                   <span id="vbs-disable-label">Выключить визор</span>
                 </button>
               </div>
+            </section>
+
+            <div class="vbs-grid-row">
+              <section class="premium-panel vbs-card" id="vbs-bitlocker-card">
+                <div>
+                  <span class="coming-label">БЕЗОПАСНОСТЬ BITLOCKER</span>
+                  <h3 id="vbs-bitlocker-label">BitLocker Safe Guard</h3>
+                  <p id="vbs-bitlocker-detail">Проверка статуса защиты диска C: перед перезагрузкой.</p>
+                </div>
+                <span class="vbs-badge" id="vbs-bitlocker-badge">ПРОВЕРКА</span>
+              </section>
+
+              <section class="premium-panel vbs-card" id="vbs-kva-card">
+                <div>
+                  <span class="coming-label">MELTDOWN MITIGATION</span>
+                  <h3 id="vbs-kva-label">KVA Shadow</h3>
+                  <p id="vbs-kva-detail">Оптимизация изоляции таблиц страниц ядра процессора.</p>
+                </div>
+                <span class="vbs-badge" id="vbs-kva-badge">ПРОВЕРКА</span>
+              </section>
+            </div>
+
+            <section class="premium-panel vbs-uefi-card hidden" id="vbs-uefi-card">
+              <div class="vbs-uefi-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 2 3.5 6v6c0 5.5 3.8 10 8.5 11.5 4.7-1.5 8.5-6 8.5-11.5V6L12 2z"/><path d="M12 8v5m0 3h.01"/></svg>
+              </div>
+              <div class="vbs-uefi-copy">
+                <span class="coming-label danger-label">UEFI LOCK ОБНАРУЖЕН</span>
+                <h3>Блокировка Device Guard в микрокоде UEFI</h3>
+                <p>Параметры изоляции ядра закреплены прошивкой материнской платы. Чтобы снять защиту, подготовьте модуль SecConfig.efi на системном EFI-разделе.</p>
+              </div>
+              <button class="vbs-uefi-button" id="vbs-uefi-optout-btn" type="button">
+                <svg viewBox="0 0 20 20"><path d="M10 2 3.5 5v4.5c0 4.5 2.8 8 6.5 9.5 3.7-1.5 6.5-5 6.5-9.5V5L10 2z"/><path d="m8.5 10 3 3 5-5"/></svg>
+                <span>Снять блокировку UEFI</span>
+              </button>
+            </section>
+
+            <section class="premium-panel vbs-conflicts-card hidden" id="vbs-conflicts-panel">
+              <div class="vbs-conflicts-header">
+                <div>
+                  <span class="coming-label warning-label">КОНФЛИКТУЮЩЕЕ ПО</span>
+                  <h3>Обнаружены несовместимые службы и утилиты</h3>
+                  <p>Следующие компоненты мешают запуску гипервизора или хукам вызовов:</p>
+                </div>
+              </div>
+              <div class="vbs-conflicts-list" id="vbs-conflicts-list"></div>
             </section>
 
             <section class="premium-panel vbs-test-notice">
@@ -935,11 +1016,42 @@
 
             <section class="premium-panel vbs-components-panel">
               <div class="vbs-components-header">
-                <div><span class="coming-label">КОМПОНЕНТЫ VBS</span><h3>Системная защита</h3><p>Отключаются только активные параметры. Исходное состояние сохраняется для отката.</p></div>
+                <div><span class="coming-label">КОМПОНЕНТЫ VBS 2.0</span><h3>Системная защита</h3><p>Отключаются только активные параметры. Исходное состояние сохраняется для отката.</p></div>
                 <span class="vbs-scan-time" id="vbs-scan-time">Сканирование ещё не выполнялось</span>
               </div>
               <div class="vbs-loading hidden" id="vbs-loading"><span></span><strong>Проверяем Windows</strong><p>Читаем Device Guard, Code Integrity, Secure Boot и параметры загрузки.</p></div>
               <div class="vbs-components" id="vbs-components"></div>
+            </section>
+
+            <section class="premium-panel vbs-troubleshoot-panel" id="vbs-troubleshoot-panel">
+              <div class="vbs-troubleshoot-header">
+                <span class="coming-label">СИСТЕМНАЯ ДИАГНОСТИКА</span>
+                <h3>Устранение неполадок Windows</h3>
+                <p>Инструменты для восстановления повреждённых подсистем WMI, системных файлов и хранилища компонентов Windows.</p>
+              </div>
+              <div class="vbs-troubleshoot-grid">
+                <button class="vbs-tool-button" id="vbs-fix-wmi" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                  <div>
+                    <strong>Восстановить WMI</strong>
+                    <small>Сброс и восстановление репозитория WMI при сбоях отчётов</small>
+                  </div>
+                </button>
+                <button class="vbs-tool-button" id="vbs-run-sfc" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                  <div>
+                    <strong>Проверка SFC</strong>
+                    <small>Запуск sfc /scannow для проверки системных файлов</small>
+                  </div>
+                </button>
+                <button class="vbs-tool-button" id="vbs-run-dism" type="button">
+                  <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                  <div>
+                    <strong>Восстановление DISM</strong>
+                    <small>Восстановление целостности хранилища компонентов Windows</small>
+                  </div>
+                </button>
+              </div>
             </section>
 
             <section class="premium-panel vbs-warning-panel hidden" id="vbs-warning-panel">
@@ -1575,6 +1687,10 @@
                         <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2.5 8.5l3.5 3.5 7.5-7.5"/></svg>
                         <span>Применить в Steam</span>
                       </button>
+                      <button type="button" class="manifest-loader-test-btn" id="settings-loader-test-btn" title="Протестировать окно и процесс обновления библиотек OpenSteamTool">
+                        <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M11 2v4m0 0h4m-4 0 3.5-3.5M14 9.5a6 6 0 1 1-1.8-4.2"/></svg>
+                        <span>Тест обновления</span>
+                      </button>
                     </div>
                   </div>
                   <div class="loader-options">
@@ -1620,7 +1736,7 @@
                           <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M6 3h7v7M13 3L7 9M11 8v5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>
                         </button>
                       </div>
-                      <small>Ключ уже встроен — ничего вводить не нужно</small>
+                      <small>Нужен свой API-ключ с их сайта</small>
                     </div>
                     <div class="svc-option" data-service="hubcap" role="button" tabindex="0">
                       <div class="svc-option-header">
@@ -1630,6 +1746,31 @@
                         </button>
                       </div>
                       <small>Нужен свой API-ключ с их сайта</small>
+                    </div>
+                  </div>
+
+                  <div class="svc-key" id="ryuu-key-block">
+                    <div class="svc-key-header">
+                      <label class="svc-key-label" for="ryuu-key">API-КЛЮЧ RYUU</label>
+                      <div class="svc-key-meta">
+                        <span class="hubcap-status-badge" id="ryuu-key-status">Ключ не указан</span>
+                        <button type="button" class="svc-key-link" id="ryuu-key-get" data-external-url="https://generator.ryuu.lol/api">
+                          <span>Получить ключ</span>
+                          <svg viewBox="0 0 14 14"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M4 10l6-6m0 0H5m5 0v5"/></svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="svc-input-box">
+                      <input id="ryuu-key" type="password" autocomplete="off" spellcheck="false" placeholder="Вставьте API-ключ Ryuu…" />
+                      <div class="svc-input-tools">
+                        <button type="button" class="svc-tool-btn" id="ryuu-key-paste" title="Вставить из буфера обмена" aria-label="Вставить из буфера">
+                          <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M5 2h6v2H5zM3 4h2v2h6V4h2a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/></svg>
+                        </button>
+                        <button type="button" class="svc-tool-btn" id="ryuu-key-visibility" title="Показать или скрыть ключ" aria-label="Показать ключ">
+                          <svg class="eye-show" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M1.5 8s2.5-4.5 6.5-4.5 6.5 4.5 6.5 4.5-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                          <svg class="eye-hide hidden" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M2 2l12 12M6.5 6.6a2 2 0 0 0 2.9 2.9m-4.2-4A7.2 7.2 0 0 0 1.5 8s2.5-4.5 6.5-4.5c1.6 0 3-.7 4.1-1.7m-1.7-4.1a6.6 6.6 0 0 0-2.4-.7c-4 0-6.5 4.5-6.5 4.5"/></svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -1734,9 +1875,10 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">7.0.3</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.0.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
+                    <button class="ghost-button" id="test-loader-update-button" title="Протестировать окно и процесс обновления библиотек OpenSteamTool">Тест обновления DLL</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
                   </div>
                   <div class="update-download-actions hidden" id="update-download-actions">
@@ -1763,7 +1905,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия</span><b>7.0.3</b></div>
+                  <div class="about-row"><span>Версия</span><b>8.0.0</b></div>
                   <div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div>
                   <div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · Eclipse Manifest · Гипервизор · Кряки · Утилиты</b></div>
                 </div>
@@ -1973,6 +2115,85 @@
       <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M3 8a5 5 0 1 1 1.5 3.5L3 13m0-4.5V13h4.5"/></svg>
       <span>Сбросить панель</span>
     </button>
+  </div>
+
+    <!-- Модальное окно: Инструкция по Eclipse-HV -->
+  <div class="modal-backdrop hidden" id="eclipse-hv-instructions-backdrop">
+    <div class="eclipse-hv-modal premium-panel">
+      <button class="modal-close-btn" id="eclipse-hv-instructions-close" aria-label="Закрыть" type="button">
+        <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+
+      <div class="eclipse-hv-modal-header">
+        <div class="eclipse-hv-modal-icon">
+          <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <div>
+          <h3>Инструкция по Eclipse-HV</h3>
+          <p>Автономный лаунчер игр с обходом DSE и поддержкой Secure Boot</p>
+        </div>
+      </div>
+
+      <div class="eclipse-hv-modal-content">
+        <div class="eclipse-hv-grid">
+          <div class="hv-guide-step">
+            <div class="hv-step-header">
+              <span class="hv-step-number">01</span>
+              <h4>Назначение</h4>
+            </div>
+            <p>Автономный EXE на Rust. Заменяет BAT-скрипты и внешние загрузчики. Запуск без консольных окон.</p>
+          </div>
+
+          <div class="hv-guide-step">
+            <div class="hv-step-header">
+              <span class="hv-step-number">02</span>
+              <h4>Размещение</h4>
+            </div>
+            <p>Поместите <code>Eclipse-HV.exe</code> в корень игры (рядом с главным EXE или папкой <code>Binaries</code>). При авто-установке кряка копируется сам.</p>
+          </div>
+
+          <div class="hv-guide-step">
+            <div class="hv-step-header">
+              <span class="hv-step-number">03</span>
+              <h4>Запуск и права</h4>
+            </div>
+            <p>Запустите <code>Eclipse-HV.exe</code> или перетащите EXE игры на него. Требует права администратора (UAC). Снимает DSE в памяти, Secure Boot отключать не требуется.</p>
+          </div>
+
+          <div class="hv-guide-step">
+            <div class="hv-step-header">
+              <span class="hv-step-number">04</span>
+              <h4>Автопоиск и тайминг</h4>
+            </div>
+            <p>Автоматически находит бинарник игры, запускает процесс, выжидает 5 секунд для загрузки хука и восстанавливает DSE в исходное состояние.</p>
+          </div>
+
+          <div class="hv-guide-step">
+            <div class="hv-step-header">
+              <span class="hv-step-number">05</span>
+              <h4>Изоляция ядра и XSAVE</h4>
+            </div>
+            <p>Лаунчер автоматически отключает HVCI в реестре и оптимизирует BCD (xsaveremovefeature) для процессоров с AVX-512 / Zen 4 / Intel 12+ при запуске Denuvo.</p>
+          </div>
+
+          <div class="hv-guide-step">
+            <div class="hv-step-header">
+              <span class="hv-step-number">06</span>
+              <h4>Отладка и логи</h4>
+            </div>
+            <p>Флаг <code>--debug</code> открывает консоль с логом. При ошибках создаётся <code>Eclipse-HV-error.json</code> и сразу открывается в системе.</p>
+          </div>
+        </div>
+      </div>
+
+
+
+      <div class="eclipse-hv-modal-footer">
+        <button class="primary-button" id="eclipse-hv-instructions-ok" type="button">
+          <span>Всё понятно</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <div class="toast-stack" id="toast-stack"></div>

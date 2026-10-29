@@ -2,7 +2,9 @@
 // Выполняет проверку удалённых коммитов, валидацию PE-заголовков DLL и гибридный фоллбэк на встроенные ресурсы.
 use crate::{lua_loader, models::OperationResult};
 use reqwest::blocking::Client;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+#[cfg(test)]
+use serde::Deserialize;
 use sha1::{Digest, Sha1};
 use std::{
     collections::BTreeMap,
@@ -13,34 +15,22 @@ use std::{
 };
 
 // Репозиторий источника библиотек OpenSteamTool
-const API: &str = "https://api.github.com/repos/LeoBanned/pirate-station-hv";
+// Работа с репозиторием ведется через Git Smart HTTP и raw.githubusercontent.com без использования GitHub API
 const RAW: &str = "https://raw.githubusercontent.com/LeoBanned/pirate-station-hv";
 
 // Максимальный допустимый размер DLL-библиотеки (16 МБ)
 pub(crate) const MAX_DLL: usize = 16 * 1024 * 1024;
 
-#[derive(Clone, Debug, Deserialize)]
-struct Commit {
-    sha: String,
-    commit: CommitBody,
-}
+// Структуры GitHub REST API удалены: теперь используется прямое взаимодействие через Git и raw
 
-#[derive(Clone, Debug, Deserialize)]
-struct CommitBody {
-    tree: TreeId,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct TreeId {
-    sha: String,
-}
-
+#[cfg(test)]
 #[derive(Clone, Debug, Deserialize)]
 struct Tree {
     tree: Vec<Entry>,
     truncated: bool,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, Deserialize)]
 struct Entry {
     path: String,
@@ -75,9 +65,10 @@ pub(crate) struct Bundle {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileInfo {
-    path: String,
-    bytes: usize,
-    status: String,
+    pub path: String,
+    pub bytes: usize,
+    pub current_bytes: Option<usize>,
+    pub status: String,
 }
 
 // Информация о статусе комплекта
@@ -143,6 +134,7 @@ fn download(client: &Client, url: &str, limit: usize) -> Result<Vec<u8>, String>
 }
 
 // Проверка валидности 40-значного SHA-1 хеша Git
+#[cfg(test)]
 fn valid_id(id: &str) -> bool {
     id.len() == 40 && id.bytes().all(|c| c.is_ascii_hexdigit())
 }
@@ -155,6 +147,7 @@ pub(crate) fn blob_hash(bytes: &[u8]) -> String {
     format!("{:x}", digest.finalize())
 }
 
+#[cfg(test)]
 // Построение слепка доступных на GitHub файлов из дерева Git
 fn snapshot_from_tree(commit: &str, tree: Tree) -> Result<Snapshot, String> {
     if !valid_id(commit) || tree.truncated {
@@ -220,25 +213,91 @@ fn snapshot_from_tree(commit: &str, tree: Tree) -> Result<Snapshot, String> {
     })
 }
 
-// Запрос свежего слепка репозитория через GitHub REST API
+// Получение SHA коммита ветки main через Git Smart HTTP без использования GitHub API
+fn parse_head_revision(advertisement: &str) -> Option<&str> {
+    let head = advertisement.find(" HEAD")?;
+    if head < 40 {
+        return None;
+    }
+    let revision = &advertisement[head - 40..head];
+    (revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .then_some(revision)
+}
+
+fn fetch_commit_sha(client: &Client) -> Result<String, String> {
+    let url = "https://github.com/LeoBanned/pirate-station-hv.git/info/refs?service=git-upload-pack";
+    let resp = client
+        .get(url)
+        .header(reqwest::header::CACHE_CONTROL, "no-cache")
+        .send()
+        .map_err(|e| format!("Не удалось связаться с репозиторием Git: {e}"))?;
+    let text = resp.text().map_err(|e| format!("Ошибка чтения данных Git: {e}"))?;
+    parse_head_revision(&text)
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Не удалось определить ревизию репозитория GitHub".into())
+}
+
+// Запрос актуального слепка файлов репозитория через Git refs и raw.githubusercontent.com
+// Полностью исключает использование GitHub REST API и ограничения частоты запросов (rate limit)
 fn fetch_snapshot() -> Result<Snapshot, String> {
     let client = client()?;
-    let commit: Commit = serde_json::from_slice(&download(
-        &client,
-        &format!("{API}/commits/main"),
-        512 * 1024,
-    )?)
-    .map_err(|_| "Некорректный ответ GitHub о версии репозитория")?;
-    if !valid_id(&commit.commit.tree.sha) {
-        return Err("Некорректный идентификатор дерева GitHub.".into());
+    let commit = fetch_commit_sha(&client)?;
+
+    let candidate_defs: [(&str, &[(&str, &str)]); 2] = [
+        (
+            "standard",
+            &[
+                ("standard/OpenSteamTool.dll", "OpenSteamTool.dll"),
+                ("standard/xinput1_4.dll", "xinput1_4.dll"),
+                ("standard/dwmapi.dll", "dwmapi.dll"),
+                ("standard/version.dll", "version.dll"),
+            ],
+        ),
+        (
+            "compatibility",
+            &[
+                ("compatibility/OpenSteamTool.dll", "OpenSteamTool.dll"),
+                ("compatibility/xinput1_4.dll", "xinput1_4.dll"),
+                ("compatibility/dwmapi.dll", "bin/dwmapi.dll"),
+                ("compatibility/version.dll", "version.dll"),
+            ],
+        ),
+    ];
+
+    let mut variants = BTreeMap::new();
+
+    for (variant, candidates) in candidate_defs {
+        let mut files = Vec::new();
+        for &(rel_path, target) in candidates {
+            let url = format!("{RAW}/{commit}/{rel_path}");
+            if let Ok(bytes) = download(&client, &url, MAX_DLL) {
+                if bytes.len() >= 1024 && bytes.starts_with(b"MZ") {
+                    let sha = blob_hash(&bytes);
+                    let size = bytes.len();
+                    files.push(RemoteFile {
+                        path: rel_path.to_string(),
+                        target: target.to_string(),
+                        sha,
+                        size,
+                    });
+                }
+            }
+        }
+
+        let paths = files
+            .iter()
+            .map(|f| (f.target.clone(), String::new()))
+            .collect::<BTreeMap<_, _>>();
+
+        lua_loader::validate_layout(variant, 2, &paths).map_err(|_| {
+            format!("Комплект {variant} на GitHub неполон. Требуются OpenSteamTool.dll, xinput1_4.dll и прокси-DLL.")
+        })?;
+
+        files.sort_by(|a, b| a.target.cmp(&b.target));
+        variants.insert(variant.to_string(), files);
     }
-    let tree: Tree = serde_json::from_slice(&download(
-        &client,
-        &format!("{API}/git/trees/{}?recursive=1", commit.commit.tree.sha),
-        2 * 1024 * 1024,
-    )?)
-    .map_err(|_| "Некорректный список файлов GitHub")?;
-    snapshot_from_tree(&commit.sha, tree)
+
+    Ok(Snapshot { commit, variants })
 }
 
 type Cached = Option<(Instant, Result<Snapshot, String>)>;
@@ -335,28 +394,34 @@ fn check_snapshot(steam: &Path, snapshot: &Snapshot) -> Result<UpdateInfo, Strin
         for file in files {
             // version.dll намеренно исключается из проверки обновлений,
             // поскольку Steam может переименовывать или удалять её при запуске.
-            let state = if file.target == "version.dll" {
-                "ignored"
+            let (state, local_size) = if file.target == "version.dll" {
+                ("ignored", None)
             } else if *variant != selected {
-                "available"
+                // Если комплект не активен, пытаемся определить размер локального файла, если он существует
+                let size = lua_loader::read_optional(&steam.join(&file.target))
+                    .ok()
+                    .flatten()
+                    .map(|b| b.len());
+                ("available", size)
             } else {
                 match lua_loader::read_optional(&steam.join(&file.target))? {
                     Some(bytes) if bytes.len() == file.size && blob_hash(&bytes) == file.sha => {
-                        "current"
+                        ("current", Some(bytes.len()))
                     }
-                    Some(_) => {
+                    Some(bytes) => {
                         current = false;
-                        "changed"
+                        ("changed", Some(bytes.len()))
                     }
                     None => {
                         current = false;
-                        "missing"
+                        ("missing", None)
                     }
                 }
             };
             info.push(FileInfo {
                 path: file.target.clone(),
                 bytes: file.size,
+                current_bytes: local_size,
                 status: state.into(),
             });
         }

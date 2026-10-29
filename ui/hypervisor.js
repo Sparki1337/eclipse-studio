@@ -7,7 +7,7 @@
 
   const steps = [
     ["Проверка системы", "Core Isolation и права администратора"],
-    ["Подготовка профиля", "Выбранный профиль KVC или DRV"],
+    ["Подготовка запуска", "Конфигурация гипервизора и DSE"],
     ["Служебные файлы", "Проверка загрузчика и BAT-файла"],
     ["Запуск сценария", "Системная подготовка Windows"],
     ["Запуск игры", "Старт выбранного EXE"],
@@ -16,8 +16,8 @@
   ];
 
   const defaultLaunchers = [
-    { id: "hv_launcher", badge: "KVC", name: "HV-Launcher", batch_name: "HV-Launcher.bat", helper_label: "kvc.exe" },
-    { id: "plug_n_play", badge: "DRV", name: "HV-PlugNPlay", batch_name: "HV-PlugNPlay.bat", helper_label: "drvloader.exe" },
+    { id: "hv_launcher", badge: "HV", name: "Eclipse-HV", batch_name: "Eclipse-HV.exe", helper_label: "Eclipse-HV.exe" },
+
   ];
 
   const state = {
@@ -162,14 +162,8 @@
 
   function setBusy(busy, label = "") {
     state.running = busy;
-    ["#hv-add-game", "#hv-selected-verify"].forEach((selector) => {
-      const button = $(selector);
-      if (!button) return;
-      button.disabled = busy || (selector === "#hv-selected-verify" && !state.selectedId);
-    });
-    document.querySelectorAll("#hv-selected-profiles button").forEach((button) => {
-      button.disabled = busy;
-    });
+    const addBtn = $("#hv-add-game");
+    if (addBtn) addBtn.disabled = busy;
     updateLaunchButton();
     if (label) $("#hv-run-state").textContent = label;
     renderGames();
@@ -298,10 +292,8 @@
             <div class="hv-game-heading"><strong>${escapeHtml(game.name)}</strong><b class="${game.ready ? "ready" : ""}"><i></i>${game.ready ? "Готова к запуску" : "Нужна проверка"}</b></div>
             <div class="hv-game-path" title="${escapeHtml(game.exe_path)}">${escapeHtml(game.exe_path)}</div>
             <div class="hv-game-bottom">
-              <div class="hv-game-profile"><span>ПРОФИЛЬ</span><strong>${escapeHtml(game.launcher_name || "HV-Launcher")}</strong></div>
               <div class="hv-game-actions">
                 ${selected ? '<span class="hv-active-game"><i></i>Активна</span>' : `<button class="hv-game-action select" data-hv-action="select" data-game-id="${escapeHtml(game.id)}" ${state.running ? "disabled" : ""}>Выбрать</button>`}
-                <button class="hv-game-action" data-hv-action="verify" data-game-id="${escapeHtml(game.id)}" ${state.running ? "disabled" : ""}><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M13.5 2.5v3.5h-3.5"/><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9L13.5 6"/></svg> <span>Проверить</span></button>
                 <button class="hv-game-action danger ${confirm ? "confirm" : ""}" data-hv-action="remove" data-game-id="${escapeHtml(game.id)}" ${state.running ? "disabled" : ""}>${confirm ? "Точно удалить?" : "Удалить"}</button>
               </div>
             </div>
@@ -321,12 +313,9 @@
       state.gameRunning = false;
       $("#hv-selected-title").textContent = "Игра не выбрана";
       $("#hv-selected-path").textContent = "Добавьте исполняемый файл игры.";
-      $("#hv-selected-profile").textContent = "—";
       $("#hv-selected-state").textContent = "Нет игры";
       $("#hv-selected-state").className = "";
       $("#hv-ready-status").textContent = "Нет игры";
-      $("#hv-selected-verify").disabled = true;
-      $("#hv-selected-profiles").innerHTML = "";
       updateLaunchButton();
       return;
     }
@@ -335,22 +324,10 @@
     }
     $("#hv-selected-title").textContent = game.name;
     $("#hv-selected-path").textContent = game.exe_path;
-    $("#hv-selected-profile").textContent = game.launcher_name || status?.selected_launcher?.name || "—";
-    $("#hv-selected-state").textContent = game.ready ? "Готова" : "Нужна проверка";
-    $("#hv-selected-state").className = game.ready ? "ready" : "";
-    $("#hv-ready-status").textContent = game.ready ? "Готово" : "Проверить";
-    $("#hv-selected-verify").disabled = state.running || !state.selectedId;
+    $("#hv-selected-state").textContent = "Готова";
+    $("#hv-selected-state").className = "ready";
+    $("#hv-ready-status").textContent = "Готово";
     updateLaunchButton();
-    const profiles = state.launchers.length ? state.launchers : [
-      { id: "hv_launcher", badge: "KVC", name: "HV-Launcher" },
-      { id: "plug_n_play", badge: "DRV", name: "HV-PlugNPlay" },
-    ];
-    $("#hv-selected-profiles").innerHTML = profiles.map((profile) => `
-      <button class="hv-selected-profile ${game.launcher_id === profile.id ? "active" : ""}"
-        data-hv-top-profile="${escapeHtml(profile.id)}" title="${escapeHtml(profile.name)}"
-        ${state.running ? "disabled" : ""}>
-        <span>${escapeHtml(profile.badge)}</span>
-      </button>`).join("");
   }
 
   async function refreshAll(silent = false) {
@@ -375,7 +352,8 @@
       const library = await call("add_game", { exePath, launcherId: "hv_launcher" });
       applyLibrary(library);
       await refreshAll(true);
-      appendLog("success", "Игра добавлена и подготовлена с профилем KVC.");
+    refreshEclipseHvStatus();
+      appendLog("success", "Игра добавлена в библиотеку гипервизора.");
     } catch (error) {
       appendLog("error", String(error));
     } finally {
@@ -407,43 +385,6 @@
     }
   }
 
-  async function setProfile(id, launcherId) {
-    const game = state.games.find((item) => item.id === id);
-    const profile = state.launchers.find((item) => item.id === launcherId);
-    if (!game || game.launcher_id === launcherId) return;
-
-    // Селектор обновляется сразу, подмена файлов выполняется в очереди
-    game.launcher_id = launcherId;
-    game.launcher_name = profile?.name || (launcherId === "plug_n_play" ? "HV-PlugNPlay" : "HV-Launcher");
-    state.pendingProfile = { id, launcherId };
-    renderGames();
-    renderStatus({ selected_game: selectedGame(), games_count: state.games.length });
-
-    if (state.profileSwitching) return;
-    state.profileSwitching = true;
-    setBusy(true, "Смена профиля");
-
-    try {
-      while (state.pendingProfile) {
-        const request = state.pendingProfile;
-        state.pendingProfile = null;
-        try {
-          const library = await call("set_game_launcher", request);
-          if (!state.pendingProfile) {
-            applyLibrary(library);
-            appendLog("success", `Профиль ${request.launcherId === "plug_n_play" ? "DRV" : "KVC"} установлен, файлы заменены.`);
-          }
-        } catch (error) {
-          appendLog("error", String(error));
-        }
-      }
-    } finally {
-      state.profileSwitching = false;
-      setBusy(false, "Ожидание");
-      await refreshAll(true);
-    }
-  }
-
   async function removeGame(id) {
     if (state.confirmingRemove !== id) {
       state.confirmingRemove = id;
@@ -465,7 +406,7 @@
     activateStep(1);
     state.launching = true;
     setBusy(true, "Запуск");
-    appendLog("info", "Запущен сценарий выбранного профиля.");
+    appendLog("info", "Запущен сценарий гипервизора.");
     let launchSucceeded = false;
     try {
       const report = await call("launch_selected_game");
@@ -512,15 +453,99 @@
     } catch (error) { appendLog("error", `Не удалось скопировать журнал: ${error}`); }
   }
 
+
+  // Управление универсальным автономным лаунчером Eclipse-HV
+  async function refreshEclipseHvStatus() {
+    const statusEl = $("#hv-eclipse-status");
+    const pathEl = $("#hv-eclipse-path");
+    const dlBtn = $("#hv-eclipse-download-btn");
+    const dlLabel = $("#hv-eclipse-dl-label");
+
+    if (!statusEl) return;
+
+    try {
+      const status = await call("eclipse_hv_status");
+      if (status.installed) {
+        statusEl.dataset.status = status.updateAvailable ? "update" : "installed";
+        const sizeKb = status.sizeBytes ? ` (${Math.round(status.sizeBytes / 1024)} КБ)` : "";
+        statusEl.textContent = status.updateAvailable ? "Доступно обновление" : `Установлен v${status.version}${sizeKb}`;
+        if (dlLabel) {
+          dlLabel.textContent = status.updateAvailable ? "Обновить Eclipse-HV" : "Переустановить Eclipse-HV";
+        }
+      } else {
+        statusEl.dataset.status = "missing";
+        statusEl.textContent = "Не загружен";
+        if (dlLabel) {
+          dlLabel.textContent = "Загрузить актуальную версию";
+        }
+      }
+
+      if (pathEl) {
+        const destShort = status.destinationDir || "папка не определена";
+        pathEl.textContent = `Папка: ${destShort}`;
+        pathEl.title = status.destinationDir || "";
+      }
+    } catch (err) {
+      if (statusEl) {
+        statusEl.dataset.status = "missing";
+        statusEl.textContent = "Ошибка проверки";
+      }
+    }
+  }
+
+  async function downloadEclipseHv() {
+    const dlBtn = $("#hv-eclipse-download-btn");
+    const dlLabel = $("#hv-eclipse-dl-label");
+    if (dlBtn) dlBtn.disabled = true;
+    if (dlLabel) dlLabel.textContent = "Загрузка…";
+
+    try {
+      const msg = await call("eclipse_hv_download");
+      appendLog("success", msg);
+      if (typeof window.cgsShowModal === "function") {
+        await window.cgsShowModal("Eclipse-HV", msg, { symbol: "✓" });
+      }
+    } catch (err) {
+      appendLog("error", `Ошибка загрузки Eclipse-HV: ${err}`);
+      if (typeof window.cgsShowModal === "function") {
+        await window.cgsShowModal("Ошибка загрузки Eclipse-HV", String(err), { symbol: "!" });
+      }
+    } finally {
+      if (dlBtn) dlBtn.disabled = false;
+      await refreshEclipseHvStatus();
+    }
+  }
+
+  function showEclipseHvInstructions() {
+    const backdrop = document.getElementById("eclipse-hv-instructions-backdrop");
+    if (!backdrop) return;
+    backdrop.classList.remove("hidden", "closing");
+
+    const close = () => {
+      backdrop.classList.add("closing");
+      setTimeout(() => {
+        backdrop.classList.add("hidden");
+        backdrop.classList.remove("closing");
+      }, 190);
+    };
+
+    const closeBtn = document.getElementById("eclipse-hv-instructions-close");
+    const okBtn = document.getElementById("eclipse-hv-instructions-ok");
+    if (closeBtn) closeBtn.onclick = close;
+    if (okBtn) okBtn.onclick = close;
+    backdrop.onclick = (e) => {
+      if (e.target === backdrop) close();
+    };
+  }
+
   function bindEvents() {
     $("#hv-add-game")?.addEventListener("click", addGame);
     $("#hv-help-button")?.addEventListener("click", () => {
       const message = [
         "1. Нажмите «Добавить игру» и выберите основной EXE игры.",
-        "2. Выберите KVC или DRV — нужные файлы заменятся автоматически.",
-        "3. Если карточка показывает «Нужна проверка», нажмите «Проверить».",
-        "4. Нажмите светлую кнопку «Запустить» и подтвердите UAC.",
-        "5. Пока игра работает, повторный запуск заблокирован. После закрытия игры кнопка включится сама.",
+        "2. Нажмите кнопку «Запустить» и подтвердите запрос UAC.",
+        "3. Гипервизор подготовит систему и запустит игру с защитой ядра.",
+        "4. Пока игра работает, повторный запуск заблокирован. После закрытия игры кнопка включится сама.",
       ].join("\n\n");
       if (typeof window.cgsShowModal === "function") {
         const modal = document.querySelector("#modal-backdrop .modal");
@@ -532,13 +557,12 @@
       }
     });
     $("#hv-launch-button")?.addEventListener("click", launchSelected);
-    $("#hv-selected-verify")?.addEventListener("click", () => {
-      if (state.selectedId) verifyGame(state.selectedId);
+    $("#hv-eclipse-instructions-btn")?.addEventListener("click", showEclipseHvInstructions);
+    $("#hv-eclipse-check-btn")?.addEventListener("click", async () => {
+      await refreshEclipseHvStatus();
+      appendLog("info", "Проверка версии Eclipse-HV завершена.");
     });
-    $("#hv-selected-profiles")?.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-hv-top-profile]");
-      if (button && state.selectedId && !button.disabled) setProfile(state.selectedId, button.dataset.hvTopProfile);
-    });
+    $("#hv-eclipse-download-btn")?.addEventListener("click", downloadEclipseHv);
     $("#hv-copy-log")?.addEventListener("click", copyLog);
     $("#hv-clear-log")?.addEventListener("click", () => { $("#hv-log").innerHTML = ""; });
     $("#hv-game-list")?.addEventListener("click", (event) => {
@@ -547,12 +571,13 @@
       const id = button.dataset.gameId;
       const action = button.dataset.hvAction;
       if (action === "select") selectGame(id);
-      if (action === "verify") verifyGame(id);
       if (action === "remove") removeGame(id);
-      if (action === "profile") setProfile(id, button.dataset.profileId);
     });
     window.addEventListener("cgs:view-changed", (event) => {
-      if (event.detail === "hypervisor") refreshAll(true);
+      if (event.detail === "hypervisor") {
+        refreshAll(true);
+        refreshEclipseHvStatus();
+      }
     });
   }
 

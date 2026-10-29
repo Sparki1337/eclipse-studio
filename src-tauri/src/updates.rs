@@ -8,9 +8,11 @@ use std::{
 };
 use tauri::{AppHandle, Emitter};
 
-const LATEST_RELEASE_API: &str =
-    "https://api.github.com/repos/Sparki1337/eclipse-studio/releases/latest";
+
+// Проверка обновлений выполняется через web-релизы и releases.atom без GitHub API
+// (во избежание ограничений rate limit 60 запросов/час).
 const RELEASES_PAGE: &str = "https://github.com/Sparki1337/eclipse-studio/releases";
+const RELEASES_ATOM: &str = "https://github.com/Sparki1337/eclipse-studio/releases.atom";
 const USER_AGENT: &str = "Eclipse-Studio-Update-Checker";
 
 #[derive(Debug, Deserialize)]
@@ -155,22 +157,8 @@ fn check_for_update_blocking() -> Result<UpdateInfo, String> {
         .build()
         .map_err(|error| format!("Не удалось подготовить проверку обновлений: {error}"))?;
 
-    let release = match client
-        .get(LATEST_RELEASE_API)
-        .header(reqwest::header::USER_AGENT, USER_AGENT)
-        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
-        .send()
-    {
-        Ok(response) if response.status().is_success() => {
-            response.json::<GithubRelease>().map_err(|error| {
-                format!("GitHub вернул некорректный ответ: {error}")
-            })?
-        }
-        Ok(response) if response.status() == reqwest::StatusCode::NOT_FOUND => {
-            return Err("В репозитории пока нет опубликованных релизов".into());
-        }
-        _ => check_for_update_via_web(&client)?,
-    };
+    // Прямая проверка релизов через web и Atom-ленту без GitHub API (во избежание rate limit)
+    let release = check_for_update_via_web(&client)?;
 
     let latest = release
         .tag_name
@@ -226,13 +214,49 @@ fn check_for_update_via_web(client: &Client) -> Result<GithubRelease, String> {
         Vec::new()
     };
 
+    let body = fetch_release_notes_from_atom(client, &tag);
+
     Ok(GithubRelease {
         tag_name: tag.clone(),
         name: Some(format!("Eclipse Studio {tag}")),
-        body: None,
+        body,
         html_url: final_url,
         assets,
     })
+}
+
+// Получение заметок о релизе из Atom-ленты без обращения к GitHub API
+fn fetch_release_notes_from_atom(client: &Client, tag: &str) -> Option<String> {
+    let resp = client
+        .get(RELEASES_ATOM)
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .send()
+        .ok()?;
+    let text = resp.text().ok()?;
+    let tag_needle = format!("/{tag}");
+
+    for entry in text.split("<entry>") {
+        if entry.contains(&tag_needle) {
+            if let Some(content_start) = entry.find("<content type=\"html\">") {
+                let after = &entry[content_start + 21..];
+                if let Some(content_end) = after.find("</content>") {
+                    let html = &after[..content_end];
+                    return Some(unescape_html(html));
+                }
+            }
+        }
+    }
+    None
+}
+
+// Базовое экранирование HTML-сущностей в описании
+fn unescape_html(input: &str) -> String {
+    input
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
 }
 
 fn extract_assets_from_html(html: &str, tag: &str) -> Vec<GithubAsset> {

@@ -9,7 +9,7 @@
 > **Форк проекта [Crocodile Gena Studio](https://github.com/LeoBanned/crocodile-gena-studio-releases) (автор LeoBanned)**
 > Репозиторий форка: [https://github.com/Sparki1337/eclipse-studio](https://github.com/Sparki1337/eclipse-studio)
 
-[![Версия](https://img.shields.io/badge/Версия-7.0.3-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases)
+[![Версия](https://img.shields.io/badge/Версия-8.0.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases)
 [![Платформа](https://img.shields.io/badge/Платформа-Windows_10_|_11_(x64)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
 [![Архитектура](https://img.shields.io/badge/Стек-Rust_Tauri_v2_+_Modern_JS-black?style=for-the-badge&logo=rust&logoColor=orange)](https://tauri.app/)
 [![Безопасность](https://img.shields.io/badge/Защита-Побайтовый_Бэкап-2ea44f?style=for-the-badge&logo=shield)](#-система-безопасности-и-отката)
@@ -45,7 +45,7 @@
 | **02** | **Менеджер сохранений** | 💾 | Глубокий поиск игрового прогресса (15+ путей), бэкап в ZIP/RAR, откат |
 | **03** | **DLC Unlocker** | 🔑 | Выборочная разблокировка дополнений через **SmokeAPI** или **CreamAPI** |
 | **04** | **Eclipse Manifest** | 📜 | Добавление игр в клиент Steam, поиск через Ryuu/HubCap, плагин Millennium |
-| **05** | **Гипервизор & Защита** | 🛡️ | Запуск через KVC/DRV, чистка 12 античитов, управление VBS/DSE/Test Mode |
+| **05** | **Гипервизор & Защита** | 🛡️ | Автономный лаунчер Eclipse-HV (обход DSE, фикс AVX-512/Zen 4/Denuvo), чистка 12 античитов, VBS 2.0 |
 | **06** | **Кряки (Crack Vault)** | 📦 | Облачный каталог релизов с 6-поточным встроенным загрузчиком |
 | **07** | **Утилиты** | 🧰 | Набор внешних инструментов (CirnoDownloader, Sigma, Zapret2) и гайды |
 
@@ -200,10 +200,13 @@
 
 Инженерный модуль для аудита системной среды Windows, работы со службами защиты и безопасного запуска игровых конфигураций.
 
-#### 1. Менеджер запуска конфигураций:
-* Каталогизация игр и назначение специализированных профилей запуска (KVC / DRV).
-* Автоматическая проверка прав администратора (UAC) и готовности окружения перед стартом.
-* Интерактивный журнал событий с детальным протоколированием каждого шага.
+#### 1. Автономный гипервизорный лаунчер Eclipse-HV (v1.1.0):
+* **Чистый нативный Rust**: Полная замена устаревшим BAT-скриптам, KVC и сторонним CMD-файлам.
+* **Обход DSE в памяти**: Безопасный запуск игр с сохранением включенного Secure Boot в UEFI.
+* **Интеллектуальный автопоиск бинарников**: Автоматически сканирует каталоги игры и вложенные папки (Binaries/Win64, Griffin, Engine), находит исполняемый файл и запускает его с корректной рабочей директорией.
+* **Адаптация процессоров под Denuvo (XSAVE / XCR0)**: Автоматическое чтение структуры KUSER_SHARED_DATA (0x7FFE03D8). При обнаружении процессоров с расширенными инструкциями (AVX-512 / Zen 4 / Intel 12+, где XCR0 > 7) лаунчер в 1 клик настраивает BCD-параметр xsaveremovefeature 0xFFFFFFFFFFFFFFF8 и устраняет критические вылеты Denuvo (Star Wars Galactic Racer, Planet Zoo, Phantom Blade и др.) без ручных команд.
+* **Нейтрализация конфликтов**: Автоматический контроль конфликтующих оверлеев (MSI Afterburner, RivaTuner RTSS) и активных античитов (Riot Vanguard).
+* **Диагностика и журналирование**: Создание структурированных JSON-отчётов Eclipse-HV-error.json и режим расширенного лога --debug.
 
 #### 2. Сканер античитов (Anti-Cheat Auditor):
 Глубокое сканирование и удаление остаточных компонентов **12 популярных античит-систем**:
@@ -376,7 +379,7 @@ Copyright © 2026 Sparki.
 
 <div align="center">
 
-**Eclipse Studio v7.0.3** • 2026
+**Eclipse Studio v8.0.0** • 2026
 <div align="center">
 
 [![Telegram Channel](https://img.shields.io/badge/Telegram-%D0%9F%D0%B8%D1%80%D0%B0%D1%82%D1%81%D0%BA%D0%B0%D1%8F_%D0%A1%D1%82%D0%B0%D0%BD%D1%86%D0%B8%D1%8F-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/piratestationn)

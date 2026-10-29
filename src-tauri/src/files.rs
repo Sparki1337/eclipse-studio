@@ -242,7 +242,7 @@ fn download_file(
             .connect_timeout(Duration::from_secs(15))
             .timeout(Duration::from_secs(900))
             .pool_max_idle_per_host(PARALLEL_DOWNLOAD_PARTS as usize)
-            .user_agent("EclipseStudio/7.0.3")
+            .user_agent("EclipseStudio/8.0.0")
             .build()
             .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
         let head = client
@@ -604,40 +604,12 @@ fn find_eclipse_release_asset(assets: &[serde_json::Value]) -> Option<&serde_jso
 
 fn fetch_latest_eclipse_studio_file() -> Option<FileItem> {
     let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(8))
         .user_agent("Eclipse-Studio-Update-Checker")
         .build()
         .ok()?;
 
-    if let Ok(response) = client
-        .get("https://api.github.com/repos/Sparki1337/eclipse-studio/releases/latest")
-        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
-        .send()
-    {
-        if response.status().is_success() {
-            if let Ok(release) = response.json::<serde_json::Value>() {
-                if let (Some(tag), Some(assets)) = (
-                    release.get("tag_name").and_then(|t| t.as_str()),
-                    release.get("assets").and_then(|a| a.as_array()),
-                ) {
-                    if let Some(exe_asset) = find_eclipse_release_asset(assets) {
-                        if let Some(download_url) = exe_asset.get("browser_download_url").and_then(|u| u.as_str()) {
-                            if download_url.starts_with("https://") {
-                                return Some(FileItem {
-                                    name: "Eclipse Studio".to_string(),
-                                    build: format_build_string(tag),
-                                    url: download_url.to_string(),
-                                    password: String::new(),
-                                    pinned: true,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
+    // Прямой парсинг веб-релиза без использования GitHub API (во избежание rate limit)
     fetch_latest_eclipse_studio_file_via_web(&client)
 }
 
@@ -699,7 +671,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/7.0.3")
+        .user_agent("EclipseStudio/8.0.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -1144,6 +1116,60 @@ pub(crate) async fn files_install_crack(
     .map_err(|e| format!("Операция установки прервана: {e}"))?
 }
 
+// Поиск локального или прямая загрузка актуального Eclipse-HV.exe с GitHub без API
+fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    // 1. Проверяем локальные пути (папка Hypervisor, локальная сборка tools)
+    let candidates = [
+        PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-HV.exe"),
+        PathBuf::from("tools/eclipse-hv/target/release/eclipse-hv.exe"),
+    ];
+
+    for path in &candidates {
+        if path.is_file() && fs::metadata(path).map(|m| m.len() > 100_000).unwrap_or(false) {
+            return Ok(path.clone());
+        }
+    }
+
+    // 2. Проверяем кэш приложения
+    let cache_dir = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("Не удалось определить app_local_data_dir: {e}"))?
+        .join("bin");
+    let cached_exe = cache_dir.join("Eclipse-HV.exe");
+    if cached_exe.is_file() && fs::metadata(&cached_exe).map(|m| m.len() > 100_000).unwrap_or(false) {
+        return Ok(cached_exe);
+    }
+
+    // 3. Прямая загрузка с GitHub без использования GitHub API
+    let download_url = "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("Eclipse-Studio/8.0.0")
+        .build()
+        .map_err(|e| format!("Ошибка создания HTTP клиента: {e}"))?;
+
+    let response = client
+        .get(download_url)
+        .send()
+        .and_then(reqwest::blocking::Response::error_for_status)
+        .map_err(|e| format!("Не удалось скачать Eclipse-HV.exe: {e}"))?;
+
+    let bytes = response
+        .bytes()
+        .map_err(|e| format!("Ошибка чтения данных Eclipse-HV.exe: {e}"))?;
+
+    if bytes.len() < 100_000 || !bytes.starts_with(b"MZ") {
+        return Err("Скачанный файл Eclipse-HV.exe повреждён или некорректен".into());
+    }
+
+    let _ = fs::create_dir_all(&cache_dir);
+    fs::write(&cached_exe, &bytes)
+        .map_err(|e| format!("Не удалось сохранить Eclipse-HV.exe в кэш: {e}"))?;
+
+    Ok(cached_exe)
+}
+
 fn perform_install_crack(
     app: &tauri::AppHandle,
     archive_path_str: &str,
@@ -1243,6 +1269,25 @@ fn perform_install_crack(
         return Err("В распакованном архиве не обнаружены файлы кряка для установки".into());
     }
 
+    // Размещение автономного лаунчера Eclipse-HV.exe в корне игры
+    let eclipse_hv_target = game_dir.join("Eclipse-HV.exe");
+    let mut hv_installed = false;
+
+    match resolve_or_download_eclipse_hv(app) {
+        Ok(source_path) => {
+            if let Err(e) = fs::copy(&source_path, &eclipse_hv_target) {
+                eprintln!("Предупреждение: не удалось скопировать Eclipse-HV.exe в {}: {e}", eclipse_hv_target.display());
+            } else {
+                hv_installed = true;
+                created_files.push("Eclipse-HV.exe".to_string());
+                installed_files.push(eclipse_hv_target.to_string_lossy().to_string());
+            }
+        }
+        Err(e) => {
+            eprintln!("Предупреждение: не удалось подготовить Eclipse-HV.exe: {e}");
+        }
+    }
+
     // Сохранение манифеста бэкапа (совместимо с cgs-backup.json)
     if !backed_up_files.is_empty() || !created_files.is_empty() {
         let _ = fs::create_dir_all(&backup_dir);
@@ -1280,12 +1325,17 @@ fn perform_install_crack(
     let _ = fs::remove_dir_all(&extract_dir);
 
     let message = format!(
-        "Успешно установлено файлов: {}.{}{}",
+        "Успешно установлено файлов: {}.{}{}{}",
         installed_files.len(),
         if !backed_up_files.is_empty() {
             format!(" Создан бэкап оригиналов ({} файлов).", backed_up_files.len())
         } else {
             "".to_string()
+        },
+        if hv_installed {
+            " В корень игры добавлен лаунчер Eclipse-HV.exe (обход DSE)."
+        } else {
+            ""
         },
         if archive_was_deleted {
             " Скачанный архив удалён."

@@ -44,17 +44,17 @@ const pinnedFiles = [
   },
   {
     name: "Crocodile Gena Studio",
-    build: "Build 5.0.0",
+    build: "Build 8.0.0",
     password: "",
     pinned: true,
-    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/releases/download/v5.0.0/setup.exe",
+    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/releases/download/v8.0.0/setup.exe",
   },
   {
     name: "Eclipse Studio",
-    build: "Build 7.0.3",
+    build: "Build 8.0.0",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.3/Eclipse-Studio-v7.0.3.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v8.0.0/Eclipse-Studio-v8.0.0.exe",
   },
 ];
 

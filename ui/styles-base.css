@@ -1,3 +1,37 @@
+
+/* Глобальный фирменный скроллбар Eclipse Studio */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent, #6366f1);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb, 99, 102, 241), 0.45);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 /* Шрифты: JetBrains Mono и Minecraft */
 @font-face {
   font-family: 'JetBrains Mono';
@@ -318,13 +352,24 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .settings-layout{display:flex;flex-direction:column;gap:18px}.settings-card{padding:26px 28px}.settings-card h2{font-size:20px;margin:0 0 6px}.settings-card>p{color:#6c7684;font-size:11px;margin:0 0 14px}.about-row{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--line);font-size:10px}.about-row span{color:#697381}.about-row b{font-size:9px;color:#aeb6c0}
 
 /* Modal / toast */
-.modal-backdrop{position:fixed;z-index:100;inset:0;display:grid;place-items:center;background:rgba(2,3,5,.72);backdrop-filter:blur(12px);animation:fade-in .2s}
+.modal-backdrop{position:fixed;z-index:100;inset:0;display:grid;place-items:center;background:rgba(2,3,5,.78);backdrop-filter:blur(12px);animation:fade-in .2s;overflow-y:auto;padding:24px 16px;box-sizing:border-box}
 .modal-backdrop.closing{animation:fade-out .2s cubic-bezier(0.16, 1, 0.3, 1) forwards;pointer-events:none}
 .modal-backdrop.closing .modal, .modal-backdrop.closing .telegram-hub-modal, .modal-backdrop.closing .lua-detail{animation:modal-out .2s cubic-bezier(0.16, 1, 0.3, 1) forwards}
-.modal{width:min(410px,calc(100vw - 40px));padding:28px;text-align:center;box-shadow:0 35px 100px rgba(0,0,0,.55);animation:modal-in .25s ease}.modal-symbol{width:42px;height:42px;display:grid;place-items:center;margin:0 auto 15px;border-radius:13px;color:var(--accent);font-weight:900;background:rgba(var(--accent-rgb),.09);border:1px solid rgba(var(--accent-rgb),.2)}.modal h3{font-size:17px;margin:0}.modal p{color:var(--muted);font-size:10px;line-height:1.65;margin:10px 0 22px;white-space:pre-line}.modal-actions{display:flex;justify-content:center;gap:8px}.modal-actions .secondary-button{margin:0}.modal-actions .install-button{height:35px}.toast-stack{position:fixed;z-index:120;right:22px;bottom:22px;display:flex;flex-direction:column;gap:8px}.toast{min-width:260px;max-width:360px;padding:12px 14px;border:1px solid var(--line-strong);border-radius:12px;background:var(--panel-b);box-shadow:0 20px 50px rgba(0,0,0,.38);font-size:9.5px;color:var(--text);animation:toast-in .3s ease}.toast.success{border-color:rgba(var(--accent-rgb),.23)}.toast.error{border-color:rgba(255,110,138,.25)}@keyframes fade-in{from{opacity:0}}@keyframes fade-out{from{opacity:1}to{opacity:0}}@keyframes modal-in{from{opacity:0;transform:translateY(8px) scale(.98)}}@keyframes modal-out{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(10px) scale(.96)}}@keyframes toast-in{from{opacity:0;transform:translateX(15px)}}
+.modal{width:min(460px,calc(100vw - 40px));max-height:min(88vh,720px);display:flex;flex-direction:column;padding:28px;text-align:center;box-shadow:0 35px 100px rgba(0,0,0,.55);animation:modal-in .25s ease;overflow:hidden;box-sizing:border-box}.modal-symbol{width:42px;height:42px;display:grid;place-items:center;margin:0 auto 15px;border-radius:13px;color:var(--accent);font-weight:900;background:rgba(var(--accent-rgb),.09);border:1px solid rgba(var(--accent-rgb),.2)}.modal h3{font-size:17px;margin:0}.modal p{color:var(--muted);font-size:11px;line-height:1.65;margin:10px 0 20px;white-space:pre-line;overflow-y:auto;max-height:calc(88vh - 160px);padding:0 4px}.modal-actions{display:flex;justify-content:center;gap:8px}.modal-actions .secondary-button{margin:0}.modal-actions .install-button{height:35px}.toast-stack{position:fixed;z-index:120;right:22px;bottom:22px;display:flex;flex-direction:column;gap:8px}.toast{min-width:260px;max-width:360px;padding:12px 14px;border:1px solid var(--line-strong);border-radius:12px;background:var(--panel-b);box-shadow:0 20px 50px rgba(0,0,0,.38);font-size:9.5px;color:var(--text);animation:toast-in .3s ease}.toast.success{border-color:rgba(var(--accent-rgb),.23)}.toast.error{border-color:rgba(255,110,138,.25)}@keyframes fade-in{from{opacity:0}}@keyframes fade-out{from{opacity:1}to{opacity:0}}@keyframes modal-in{from{opacity:0;transform:translateY(8px) scale(.98)}}@keyframes modal-out{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(10px) scale(.96)}}@keyframes toast-in{from{opacity:0;transform:translateX(15px)}}
 
 button.busy { pointer-events:none; opacity:.68; }
 button.busy::after { content:"";width:10px;height:10px;border:1px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite; }
+
+/* Системные модальные диалоги подтверждений должны всегда отображаться поверх других окон */
+#modal-backdrop { z-index: 200; }
+
+/* Отключение индикатора-кружочка на кнопках подтверждения обновления */
+#loader-modal-confirm.busy::after,
+.loader-update-modal button.busy::after,
+#update-install-button.busy::after {
+  content: none !important;
+  display: none !important;
+}
 
 /* Readability and spacing pass */
 body { font-size: 15px; }
@@ -700,7 +745,7 @@ body { font-size: 16px; }
 
 /* Модальное окно обновления библиотек OpenSteamTool */
 .loader-update-modal {
-  width: min(520px, calc(100vw - 44px));
+  width: min(560px, calc(100vw - 44px));
   text-align: center;
 }
 .loader-modal-bundle-card {
@@ -747,7 +792,7 @@ body { font-size: 16px; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 180px;
+  max-height: 190px;
   overflow-y: auto;
 }
 .loader-file-item {
@@ -765,12 +810,58 @@ body { font-size: 16px; }
   font-family: "Cascadia Code", Consolas, monospace;
   color: var(--text);
   font-weight: 600;
+  flex-shrink: 0;
 }
 .loader-file-state {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 10px;
+  font-family: "Cascadia Code", Consolas, monospace;
+  flex-wrap: nowrap;
+}
+.loader-file-size-old,
+.loader-file-size-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.loader-file-size-old small,
+.loader-file-size-new small {
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.72;
+}
+.loader-file-size-old strong {
+  font-weight: 600;
+  color: var(--text);
+}
+.loader-file-size-new {
+  border-color: rgba(var(--accent-rgb), 0.28);
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--accent);
+}
+.loader-file-size-new strong {
+  font-weight: 700;
+  color: var(--accent);
+}
+.loader-file-size-new.highlight {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: rgba(var(--accent-rgb), 0.16);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.18);
+}
+.loader-file-size-arrow {
+  color: var(--muted-2);
+  font-size: 10px;
+  user-select: none;
 }
 .loader-file-state .file-badge {
   padding: 2px 6px;
@@ -1010,7 +1101,8 @@ body { font-size: 16px; }
 .manifest-loader-badge.checking { color: #87919e; border-color: rgba(255, 255, 255, .08); background: rgba(255, 255, 255, .035); }
 
 .manifest-loader-sync-btn,
-.manifest-loader-apply-btn {
+.manifest-loader-apply-btn,
+.manifest-loader-test-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1053,22 +1145,37 @@ body { font-size: 16px; }
   box-shadow: 0 4px 14px rgba(var(--accent-rgb), 0.22);
   transform: translateY(-1px);
 }
+.manifest-loader-test-btn {
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+}
+.manifest-loader-test-btn:hover:not(:disabled) {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.09);
+  border-color: rgba(var(--accent-rgb), 0.45);
+  box-shadow: 0 2px 10px rgba(var(--accent-rgb), 0.1);
+  transform: translateY(-1px);
+}
 .manifest-loader-sync-btn:disabled,
-.manifest-loader-apply-btn:disabled {
+.manifest-loader-apply-btn:disabled,
+.manifest-loader-test-btn:disabled {
   opacity: .45;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
 }
 .manifest-loader-sync-btn svg,
-.manifest-loader-apply-btn svg {
+.manifest-loader-apply-btn svg,
+.manifest-loader-test-btn svg {
   width: 13px;
   height: 13px;
   flex-shrink: 0;
   display: block;
 }
 .manifest-loader-sync-btn span,
-.manifest-loader-apply-btn span {
+.manifest-loader-apply-btn span,
+.manifest-loader-test-btn span {
   display: inline-flex;
   align-items: center;
   line-height: 1;
@@ -1110,7 +1217,8 @@ body { font-size: 16px; }
   width: 210px;
 }
 .settings-collapsible-content .manifest-loader-actions .manifest-loader-sync-btn,
-.settings-collapsible-content .manifest-loader-actions .manifest-loader-apply-btn {
+.settings-collapsible-content .manifest-loader-actions .manifest-loader-apply-btn,
+.settings-collapsible-content .manifest-loader-actions .manifest-loader-test-btn {
   display: flex;
   width: 100%;
   justify-content: center;

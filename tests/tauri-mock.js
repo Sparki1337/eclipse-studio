@@ -31,7 +31,7 @@
     },
     files_cancel_download: () => true,
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "7.0.3", latest_version: "7.0.3", currentVersion: "7.0.3", latestVersion: "7.0.3" }),
+    check_for_update: () => ({ available: false, current_version: "8.0.0", latest_version: "8.0.0", currentVersion: "8.0.0", latestVersion: "8.0.0" }),
     download_app_update: async (args) => {
       const ver = args?.version || "6.6.8";
       const name = `Eclipse-Studio-v${ver}.exe`;
@@ -89,14 +89,14 @@
           available: true,
           updateAvailable: false,
           status: "synced",
-          files: [{ path: "dwmapi.dll", bytes: 1640000, status: "match" }]
+          files: [{ path: "dwmapi.dll", bytes: 1640000, currentBytes: 1640000, status: "match" }]
         },
         {
           variant: "compatibility",
           available: true,
           updateAvailable: false,
           status: "synced",
-          files: [{ path: "bin/dwmapi.dll", bytes: 1830000, status: "match" }]
+          files: [{ path: "bin/dwmapi.dll", bytes: 1830000, currentBytes: 1830000, status: "match" }]
         }
       ]
     }),
@@ -108,7 +108,43 @@
     is_selected_game_running: () => false,
     scan_installed_steam_games: () => [],
     scan_save_locations: () => [],
-    vbs_scan: () => ({ components: [] }),
+    eclipse_hv_status: () => ({
+      installed: true,
+      path: "C:\\Games\\Eclipse-HV.exe",
+      sizeBytes: 449312,
+      version: "1.0.0",
+      remoteVersion: "1.0.0",
+      updateAvailable: false,
+      destinationDir: "C:\\Games"
+    }),
+    eclipse_hv_download: () => "Eclipse-HV.exe успешно загружен в C:\\Games",
+    vbs_scan: () => ({
+      admin: true,
+      secureBoot: "false",
+      virtualizationEnabled: true,
+      hypervisorPresent: false,
+      restartRequired: false,
+      canRestore: false,
+      testSigningConfigured: false,
+      testSigningActive: false,
+      dse: { state: "enabled", label: "DSE включён", detail: "Проверка цифровой подписи активна" },
+      components: [
+        { id: "hvci", name: "Memory Integrity (HVCI)", description: "Hyper-V Protected Code Integrity", state: "active", enabled: true, locked: false }
+      ],
+      enabledCount: 1,
+      warnings: [],
+      bitlocker: { protected: false, suspended: false, message: "BitLocker не используется на системном диске" },
+      kvaShadow: { needed: false, disabled: false, label: "Не требуется (современный CPU)" },
+      uefiLock: { isLocked: false, vbsLocked: false, hvciLocked: false, credentialLocked: false, secConfigAvailable: true },
+      conflicts: []
+    }),
+    vbs_disable: () => ({ success: true, message: "VBS 2.0: гипервизор отключён", changed: 3, failed: [], restartRequired: true }),
+    vbs_restore: () => ({ success: true, message: "VBS 2.0: параметры восстановлены", changed: 3, failed: [], restartRequired: true }),
+    vbs_set_test_mode: (args) => ({ success: true, message: args?.enabled ? "Тестовый режим включён" : "Тестовый режим выключен", changed: 1, failed: [], restartRequired: true }),
+    vbs_restart: () => ({ success: true }),
+    vbs_prepare_uefi_optout: () => "UEFI Opt-Out успешно настроен.",
+    vbs_disable_faceit: () => "Служба FACEIT успешно остановлена и отключена.",
+    vbs_troubleshoot: (args) => `Диагностика ${args?.action || "unknown"} успешно завершена.`,
     anticheat_scan: () => ({ items: [] }),
     updates_page_url: () => "https://example.com",
     // Моки управления пользовательскими звуками в кэше

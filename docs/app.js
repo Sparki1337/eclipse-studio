@@ -567,7 +567,7 @@
       { title: 'Сохранения', fullTitle: 'Менеджер сохранений', p: 'Поиск, бэкап и восстановление прогресса.', desc: 'Поиск прогресса по 15+ путям Windows, архивация в ZIP/RAR и побайтовое восстановление.' },
       { title: 'DLC Unlocker', fullTitle: 'DLC Unlocker', p: 'Выборочно — через SmokeAPI и CreamAPI.', desc: 'Выборочная разблокировка дополнений Steam через SmokeAPI и CreamAPI.' },
       { title: 'Eclipse Manifest', fullTitle: 'Eclipse Manifest и манифесты', p: 'Манифесты Steam, плагин Millennium и OpenSteamTool v1/v2.', desc: 'Добавление игр в библиотеку Steam через Ryuu и HubCap, плагин Millennium v0.5.2, две версии OpenSteamTool и синхронизация.' },
-      { title: 'Гипервизор', fullTitle: 'Гипервизор: запуск игр', p: 'Библиотека и запуск игр от DenuvOwO\\ARTIFACT через профили KVC / DRV.', desc: 'Изолированный запуск игр с драйверными профилями KVC и DRV.' },
+      { title: 'Гипервизор', fullTitle: 'Гипервизор: Eclipse-HV', p: 'Автономный лаунчер Eclipse-HV v1.1.0 с автопоиском и обходом DSE.', desc: 'Запуск игр без BAT-скриптов с поддержкой AVX-512, Zen 4, Intel 12+ и Secure Boot.' },
       { title: 'Античиты', fullTitle: 'Гипервизор: античиты', p: 'Поиск и удаление античитов.', desc: 'Аудит служб, драйверов и остаточных файлов 12 популярных античитов.' },
       { title: 'VBS & HVCI', fullTitle: 'Гипервизор: VBS и HVCI', p: 'Настройка гипервизора.', desc: 'Управление Virtualization-based Security, изоляцией ядра, DSE и тестовым режимом.' },
       { title: 'Crack Vault', fullTitle: 'Crack Vault', p: 'Каталог с кряками игр от DenuvOwO\\ARTIFACT.', desc: 'Каталог актуальных релизов с паролями и 6-поточным загрузчиком.' },
@@ -581,7 +581,7 @@
       { title: 'Save Manager', fullTitle: 'Save Game Manager', p: 'Discovery, backup, and restore of progress.', desc: 'Progress discovery across 15+ Windows paths, ZIP/RAR archiving, and byte-accurate recovery.' },
       { title: 'DLC Unlocker', fullTitle: 'DLC Unlocker', p: 'Selective unlock via SmokeAPI & CreamAPI.', desc: 'Selective Steam DLC unlocking powered by SmokeAPI and CreamAPI.' },
       { title: 'Eclipse Manifest', fullTitle: 'Eclipse Manifest & Manifests', p: 'Steam manifests, Millennium plugin and OpenSteamTool v1/v2.', desc: 'Add games to Steam library via Ryuu and HubCap, Millennium v0.5.2 support, dual OpenSteamTool loaders, and cloud sync.' },
-      { title: 'Hypervisor', fullTitle: 'Hypervisor: Game Launch', p: 'Launch DenuvOwO\\ARTIFACT games via KVC / DRV.', desc: 'Isolated game execution using specialized KVC and DRV driver profiles.' },
+      { title: 'Hypervisor', fullTitle: 'Hypervisor: Eclipse-HV', p: 'Standalone Eclipse-HV v1.1.0 launcher with auto-discovery & DSE bypass.', desc: 'Zero-BAT isolated execution with AVX-512, Zen 4, Intel 12+ support & Secure Boot.' },
       { title: 'Anticheats', fullTitle: 'Hypervisor: Anticheats', p: 'Scan and remove anticheat services.', desc: 'Audit services, drivers, and residual files from 12 popular anticheat systems.' },
       { title: 'VBS & HVCI', fullTitle: 'Hypervisor: VBS & HVCI', p: 'Hypervisor & security configuration.', desc: 'Manage Virtualization-based Security, core isolation, DSE, and test mode.' },
       { title: 'Crack Vault', fullTitle: 'Crack Vault', p: 'Game cracks by DenuvOwO\\ARTIFACT.', desc: 'Catalog of current releases with passwords and multi-threaded downloader.' },
@@ -1073,7 +1073,7 @@
 
     fetch(GIST_URL, { cache: 'no-store' })
       .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .catch(() => fetch(`${FALLBACK_URL}?v=7.0.3`, { cache: 'no-store' }).then((r) => r.json()))
+      .catch(() => fetch(`${FALLBACK_URL}?v=8.0.0`, { cache: 'no-store' }).then((r) => r.json()))
       .then((data) => {
         const cracks = Array.isArray(data) ? data : (data?.cracks || []);
         allGames = cracks.filter((c) => c && c.name && c.url);

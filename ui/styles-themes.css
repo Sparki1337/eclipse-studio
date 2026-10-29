@@ -197,11 +197,13 @@ html[data-theme="light"] .ghost-button,
 html[data-theme="light"] .secondary-button,
 html[data-theme="light"] .manifest-loader-apply-btn,
 html[data-theme="light"] .manifest-loader-sync-btn,
+html[data-theme="light"] .manifest-loader-test-btn,
 html[data-theme="light"] .svc-link { background: #ffffff !important; color: #050811 !important; border-color: rgba(0,0,0,.14) !important; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
 html[data-theme="light"] .ghost-button:hover:not(:disabled),
 html[data-theme="light"] .secondary-button:hover:not(:disabled),
 html[data-theme="light"] .manifest-loader-apply-btn:hover:not(:disabled),
 html[data-theme="light"] .manifest-loader-sync-btn:hover:not(:disabled),
+html[data-theme="light"] .manifest-loader-test-btn:hover:not(:disabled),
 html[data-theme="light"] .svc-link:hover:not(:disabled) { background: #f8fafc !important; color: #000000 !important; border-color: rgba(var(--accent-rgb), .4) !important; }
 html[data-theme="light"] .loader-src-tag { background: rgba(0, 0, 0, 0.06) !important; color: #475569 !important; }
 
@@ -579,6 +581,11 @@ html[data-theme="light"] .ac-scan-button:hover:not(:disabled),
 html[data-theme="light"] .vbs-scan-button:hover:not(:disabled) {
   background: rgba(var(--accent-rgb), 0.22) !important;
   color: #000000 !important;
+}
+html[data-theme="light"] .vbs-enable-all-button {
+  border-color: rgba(46, 213, 115, 0.45);
+  color: #1a9e52;
+  background: rgba(46, 213, 115, 0.1);
 }
 html[data-theme="light"] .vbs-enable-button {
   background: rgba(var(--accent-rgb), 0.14) !important;
@@ -1118,7 +1125,8 @@ html.no-motion .settings-tab-panel {
 .svc-key.hidden {
   display: none !important;
 }
-#svc-key-block:not(.hidden) {
+#svc-key-block:not(.hidden),
+#ryuu-key-block:not(.hidden) {
   animation: hubcap-reveal 150ms ease;
 }
 @keyframes hubcap-reveal {

@@ -1,6 +1,7 @@
 # Build outputs & dependencies
 target/
 src-tauri/target/
+tools/**/target/
 node_modules/
 dist/
 /build/

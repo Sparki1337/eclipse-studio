@@ -84,6 +84,7 @@
       loaded: false,
       service: "ryuu",
       hubcapKey: "",
+      ryuuKey: "",
       hubcapUsage: { dailyUsage: 0, dailyLimit: 25, remaining: 25 },
       hubcapUsageError: "",
       hubcapUsageLoading: false,
@@ -217,9 +218,15 @@
     if (mainArea) mainArea.scrollTop = 0;
   }
 
+  let modalClosingTimer = null;
+
   function showModal(title, message, options = {}) {
     const { confirm = false, confirmText = "Продолжить", cancelText = "Отмена", symbol = confirm ? "?" : "✓" } = options;
     const backdrop = $("#modal-backdrop");
+    if (modalClosingTimer) {
+      clearTimeout(modalClosingTimer);
+      modalClosingTimer = null;
+    }
     $("#modal-title").textContent = title;
     $("#modal-message").textContent = message;
     $("#modal-symbol").textContent = symbol;
@@ -233,14 +240,15 @@
       const finish = (value) => {
         if (done) return;
         done = true;
-        backdrop.classList.add("closing");
-        setTimeout(() => {
-          backdrop.classList.add("hidden");
-          backdrop.classList.remove("closing");
-        }, 190);
         $("#modal-confirm").onclick = null;
         $("#modal-cancel").onclick = null;
-        resolve(value);
+        backdrop.classList.add("closing");
+        modalClosingTimer = setTimeout(() => {
+          backdrop.classList.add("hidden");
+          backdrop.classList.remove("closing");
+          modalClosingTimer = null;
+          resolve(value);
+        }, 190);
       };
       $("#modal-confirm").onclick = () => finish(true);
       $("#modal-cancel").onclick = () => finish(false);
@@ -1462,6 +1470,15 @@
       emptyItem.textContent = isEn ? "No files detected" : "Файлы не обнаружены";
       fileListEl.appendChild(emptyItem);
     } else {
+      // Функция форматирования размера DLL в мегабайтах с обработкой отсутствующего файла
+      const formatDllSize = (bytes) => {
+        if (bytes === null || bytes === undefined) {
+          return isEn ? "missing" : "отсутствует";
+        }
+        if (bytes === 0) return isEn ? "0 MB" : "0 МБ";
+        return (bytes / 1024 / 1024).toFixed(2) + (isEn ? " MB" : " МБ");
+      };
+
       files.forEach((file) => {
         const item = document.createElement("div");
         item.className = "loader-file-item";
@@ -1473,26 +1490,25 @@
         const stateWrap = document.createElement("div");
         stateWrap.className = "loader-file-state";
 
-        if (file.bytes > 0) {
-          const sizeSpan = document.createElement("span");
-          sizeSpan.className = "loader-file-size";
-          sizeSpan.textContent = (file.bytes / 1024 / 1024).toFixed(2) + " МБ";
-          stateWrap.appendChild(sizeSpan);
-        }
+        // Отображение конкретного веса старой (текущей) и новой скачиваемой DLL
+        const oldSpan = document.createElement("span");
+        oldSpan.className = "loader-file-size-old";
+        oldSpan.innerHTML = `<small>${isEn ? "Current:" : "Текущий:"}</small><strong>${formatDllSize(file.currentBytes)}</strong>`;
 
-        const badge = document.createElement("span");
-        badge.className = "file-badge";
-        const isModified = file.status === "new" || file.status === "update" || file.status === "mismatch";
-        if (isModified) {
-          badge.classList.add("badge-new");
-          badge.textContent = file.status === "new"
-            ? (isEn ? "Новый" : "Новый")
-            : (isEn ? "Обновлён" : "Обновлён");
-        } else {
-          badge.classList.add("badge-match");
-          badge.textContent = isEn ? "Совпадает" : "Совпадает";
+        const arrow = document.createElement("span");
+        arrow.className = "loader-file-size-arrow";
+        arrow.textContent = "→";
+
+        const newSpan = document.createElement("span");
+        newSpan.className = "loader-file-size-new";
+        if (file.currentBytes != null && file.currentBytes !== file.bytes) {
+          newSpan.classList.add("highlight");
         }
-        stateWrap.appendChild(badge);
+        newSpan.innerHTML = `<small>${isEn ? "New:" : "Новый:"}</small><strong>${formatDllSize(file.bytes)}</strong>`;
+
+        stateWrap.appendChild(oldSpan);
+        stateWrap.appendChild(arrow);
+        stateWrap.appendChild(newSpan);
 
         item.appendChild(nameSpan);
         item.appendChild(stateWrap);
@@ -1556,10 +1572,14 @@
         state.lua.loaderUpdate.updateAvailable = false;
       }
 
+      // Закрываем окно обновления со списком DLL перед показом экрана об успешном завершении,
+      // чтобы окно не перекрывало финальный диалог
+      closeLoaderUpdateModal();
+
       toast(result?.message || (isEn ? "OpenSteamTool libraries updated successfully" : "Библиотеки OpenSteamTool успешно обновлены"), "success");
       await luaRefresh();
 
-      // Предлагаем запустить Steam
+      // Кидаем на экран уведомление о том, что всё успешно обновилось, и предлагаем запустить Steam
       const shouldRestart = await showModal(
         isEn ? "Libraries updated" : "Библиотеки обновлены",
         isEn
@@ -1629,6 +1649,85 @@
       state.lua.loaderChecking = false;
       if (syncBtn) setBusy(syncBtn, false);
       if (settingsSyncBtn) setBusy(settingsSyncBtn, false);
+    }
+  }
+
+  // Функция тестирования окна и процесса обновления библиотек OpenSteamTool
+  async function testLoaderUpdate(triggerButton) {
+    const isEn = window.cgsI18n?.language === "en";
+    if (triggerButton) setBusy(triggerButton, true, isEn ? "Testing…" : "Тест…");
+
+    try {
+      let info = null;
+      try {
+        info = await call("luatools_check_loader_updates", {
+          steamPath: state.lua.steamPath || null,
+          force: true,
+        });
+      } catch (err) {
+        log(`Проверка обновлений библиотек для теста: ${err}`, "info");
+      }
+
+      const selectedVariant = state.lua.loaderSource || "v1";
+
+      // Если информация не получена из бэкенда (например, в демо-режиме или при отсутствии Steam),
+      // формируем реалистичный демонстрационный набор библиотек
+      if (!info || !info.variants || !info.variants.length) {
+        info = {
+          selectedVariant,
+          updateAvailable: true,
+          variants: [
+            {
+              variant: "v1",
+              name: isEn ? "Version 1 (Primary)" : "Версия 1 (Основная)",
+              available: true,
+              updateAvailable: true,
+              status: "update",
+              files: [
+                { path: "OpenSteamTool.dll", bytes: 1583104, currentBytes: 1515520, status: "changed" },
+                { path: "dwmapi.dll", bytes: 114688, currentBytes: 112640, status: "changed" },
+                { path: "xinput1_4.dll", bytes: 122880, currentBytes: null, status: "missing" },
+              ],
+            },
+            {
+              variant: "v2",
+              name: isEn ? "Version 2 (Alternative)" : "Версия 2 (Альтернативная)",
+              available: true,
+              updateAvailable: true,
+              status: "update",
+              files: [
+                { path: "bin/OpenSteamTool.dll", bytes: 1782579, currentBytes: 1720320, status: "changed" },
+                { path: "bin/dwmapi.dll", bytes: 114688, currentBytes: 112640, status: "changed" },
+              ],
+            },
+          ],
+        };
+      } else {
+        // Клонируем объект данных, чтобы принудительно перевести модальное окно в режим обновления
+        info = JSON.parse(JSON.stringify(info));
+        info.updateAvailable = true;
+
+        // Если все размеры совпадают (библиотеки уже обновлены до последней версии),
+        // для наглядного тестирования новой системы сравнения весов слегка уменьшаем
+        // текущий размер у файлов с одинаковым размером, чтобы отображалась подсветка и стрелка
+        info.variants?.forEach((v) => {
+          v.updateAvailable = true;
+          let hasDiff = false;
+          v.files?.forEach((f) => {
+            if (f.currentBytes !== f.bytes) {
+              hasDiff = true;
+            }
+          });
+          if (!hasDiff && v.files && v.files.length > 0) {
+            v.files[0].currentBytes = Math.round(v.files[0].bytes * 0.95);
+          }
+        });
+      }
+
+      state.lua.loaderUpdate = info;
+      promptLoaderUpdateModal(info);
+    } finally {
+      if (triggerButton) setBusy(triggerButton, false);
     }
   }
 
@@ -2053,11 +2152,15 @@
       luaDropdownMessage("Укажите API-ключ HubCap в настройках");
       return;
     }
+    if (!hubcap && !state.lua.ryuuKey.trim()) {
+      luaDropdownMessage("Укажите API-ключ Ryuu в настройках");
+      return;
+    }
     $("#lua-search-spin").classList.remove("hidden");
     try {
       const results = hubcap
         ? await call("hubcap_search", { query: q, apiKey: state.lua.hubcapKey })
-        : await call("ryuu_search", { query: q });
+        : await call("ryuu_search", { query: q, apiKey: state.lua.ryuuKey });
       renderSearchDropdown(results || []);
     } catch (error) {
       dropdown.replaceChildren();
@@ -2087,6 +2190,7 @@
           })
         : await call("ryuu_get", {
             appid: String(appid),
+            apiKey: state.lua.ryuuKey,
             steamPath: state.lua.steamPath || null,
             autoUpdate: $("#lua-auto-update").checked,
           });
@@ -2400,7 +2504,8 @@
     const svc = service === "hubcap" ? "hubcap" : "ryuu";
     state.lua.service = svc;
     $$(".svc-option").forEach((button) => button.classList.toggle("active", button.dataset.service === svc));
-    $("#svc-key-block").classList.toggle("hidden", svc !== "hubcap");
+    $("#svc-key-block")?.classList.toggle("hidden", svc !== "hubcap");
+    $("#ryuu-key-block")?.classList.toggle("hidden", svc !== "ryuu");
     $("#hubcap-limit-badge").classList.toggle("hidden", svc !== "hubcap");
     localStorage.setItem("manifestService", svc);
     const input = $("#lua-search-input");
@@ -2415,6 +2520,15 @@
     const status = $("#hubcap-key-status");
     if (status) {
       const hasKey = Boolean(state.lua.hubcapKey.trim());
+      status.textContent = hasKey ? "Ключ активен" : "Ключ не указан";
+      status.classList.toggle("active", hasKey);
+    }
+  }
+
+  function updateRyuuKeyStatus() {
+    const status = $("#ryuu-key-status");
+    if (status) {
+      const hasKey = Boolean(state.lua.ryuuKey.trim());
       status.textContent = hasKey ? "Ключ активен" : "Ключ не указан";
       status.classList.toggle("active", hasKey);
     }
@@ -3206,6 +3320,11 @@
     // Кнопки синхронизации файлов загрузчика OpenSteamTool с GitHub
     $("#manifest-loader-sync-btn")?.addEventListener("click", () => checkLoaderDllUpdates(true, true));
     $("#settings-loader-sync-btn")?.addEventListener("click", () => checkLoaderDllUpdates(true, true));
+
+    // Кнопки тестирования системы обновления библиотек OpenSteamTool
+    $("#manifest-loader-test-btn")?.addEventListener("click", (e) => testLoaderUpdate(e.currentTarget));
+    $("#settings-loader-test-btn")?.addEventListener("click", (e) => testLoaderUpdate(e.currentTarget));
+    $("#test-loader-update-button")?.addEventListener("click", (e) => testLoaderUpdate(e.currentTarget));
     $("#loader-update-action")?.addEventListener("click", () => {
       if (state.lua.loaderUpdate?.updateAvailable) {
         promptLoaderUpdateModal(state.lua.loaderUpdate);
@@ -3259,6 +3378,34 @@
       try { await call("open_external", { url: "https://hubcapmanifest.com/api-keys/stats" }); }
       catch (error) { toast(errorText(error), "error"); }
     });
+    $("#ryuu-key")?.addEventListener("input", (event) => {
+      state.lua.ryuuKey = event.currentTarget.value.trim();
+      localStorage.setItem("ryuuKey", state.lua.ryuuKey);
+      updateRyuuKeyStatus();
+    });
+    $("#ryuu-key-visibility")?.addEventListener("click", () => {
+      const input = $("#ryuu-key");
+      if (!input) return;
+      const isPassword = input.type === "password";
+      input.type = isPassword ? "text" : "password";
+      $(".eye-show", "#ryuu-key-visibility")?.classList.toggle("hidden", isPassword);
+      $(".eye-hide", "#ryuu-key-visibility")?.classList.toggle("hidden", !isPassword);
+    });
+    $("#ryuu-key-paste")?.addEventListener("click", async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          const input = $("#ryuu-key");
+          input.value = text.trim();
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      } catch (_) {}
+    });
+    $("#ryuu-key-get")?.addEventListener("click", async (e) => {
+      e.preventDefault();
+      try { await call("open_external", { url: "https://generator.ryuu.lol/api" }); }
+      catch (error) { toast(errorText(error), "error"); }
+    });
     $("#check-update-button").addEventListener("click", () => checkForUpdates(true));
     $("#update-install-button")?.addEventListener("click", () => {
       if (state.updates.latest) {
@@ -3307,11 +3454,14 @@
     state.lua.steamPath = localStorage.getItem("luaSteamPath") || "";
     state.lua.service = localStorage.getItem("manifestService") === "hubcap" ? "hubcap" : "ryuu";
     state.lua.hubcapKey = localStorage.getItem("hubcapKey") || "";
+    state.lua.ryuuKey = localStorage.getItem("ryuuKey") || "";
     applyManifestService(state.lua.service);
     $("#hubcap-key").value = state.lua.hubcapKey;
+    if ($("#ryuu-key")) $("#ryuu-key").value = state.lua.ryuuKey;
     updateHubcapKeyStatus();
+    updateRyuuKeyStatus();
     renderLoaderInfo();
-    log("Eclipse Studio 7.0.3 инициализирован", "system");
+    log("Eclipse Studio 8.0.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный вызов отображения окна, если заставка была отключена в параметрах

@@ -57,7 +57,7 @@
 
 ### 2.2 Output Directory for Portable Builds & Tools
 - **Mandatory Output Path:** `C:\Users\Sparki\Desktop\Programms\Hypervisor`
-- **Mandatory Artifact Filename:** `Eclipse-Studio-vX.X.X.exe` (strictly portable build; e.g. `Eclipse-Studio-v7.0.3.exe`).
+- **Mandatory Artifact Filename:** `Eclipse-Studio-vX.X.X.exe` (strictly portable build; e.g. `Eclipse-Studio-v8.0.0.exe`).
 - **Configuration File:** `build_config.json` at repo root (`"output_dir": "C:\\Users\\Sparki\\Desktop\\Programms\\Hypervisor"`, `"last_build_type": "portable"`).
 - **Purpose:** This folder is Sparki's dedicated hub for all portable builds, releases, and tools. When building, the model must **NEVER** save binaries elsewhere and must **NEVER** build installer bundles.
 
@@ -187,7 +187,7 @@ All backend operations run asynchronously or via `tauri::async_runtime::spawn_bl
 | **`ryuu.rs`** | Ryuu Generator API (`generator.ryuu.lol`) client with Cloudflare user-agent emulation for searching and downloading manifest files. |
 | **`hubcap.rs`** | HubCap Manifest API (`hubcapmanifest.com`) client. Supports custom user API keys, tracks daily download quota (e.g. 0/25), and downloads `.manifest` files. |
 | **`millennium.rs`** | Millennium plugin ("Eclipse Manifest" v0.5.0) manager. Compiles and extracts embedded plugin assets (`index.js`, `webkit.js`, `main.lua`) to inject a "Get Manifest" button directly into the official Steam store interface. |
-| **`hypervisor.rs`** | Hypervisor workspace and game launcher manager. Manages profiles for launching games via KVC/DRV loaders. Checks UAC elevation and monitors running game processes. |
+| **`hypervisor.rs`** | Hypervisor workspace and launcher manager. Deploys and manages the standalone Rust `Eclipse-HV.exe` launcher, checks UAC elevation, handles DSE bypass in RAM, and coordinates process launch and monitoring. |
 | **`anticheat.rs`** | Anti-Cheat Auditor. Scans Windows services and filesystem for 12 anti-cheat solutions (EAC, BattlEye, Vanguard, FACEIT, EA AntiCheat, PunkBuster, XIGNCODE3, GameGuard, ACE, TrueProtect/MoMo, Denuvo AC, EQU8). Backs up service registry keys and driver binaries before removal. |
 | **`vbs.rs`** | Windows VBS (Virtualization-Based Security), HVCI, and Driver Signature Enforcement auditor. Inspects registry settings under `HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard`. Modifies Windows Test Mode via `bcdedit /set testsigning on/off`. Creates rollback snapshots in `cgs-vbs-snapshot.json`. |
 | **`files.rs`** | Crack Vault cloud sync and downloader. Fetches catalog from GitHub Gist. Runs 6-part parallel chunk downloads with cancellation tokens. Implements **1-click crack auto-installation**: inspects archive directory structure, determines root directory vs nested game folders, extracts files (ZIP or RAR with password support), creates backups in `.backup_orig`, and optionally deletes the archive. |

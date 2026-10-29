@@ -254,7 +254,20 @@ def collect_artifacts(build_type: str, version: str, out_dir: Path) -> list[dict
             dst_name = f"Eclipse-Studio-v{version}.exe"
             dst_path = out_dir / dst_name
             sha = compute_sha256(exe_src)
-            shutil.copy2(exe_src, dst_path)
+            def safe_copy(src: Path, dst: Path):
+                try:
+                    shutil.copy2(src, dst)
+                except PermissionError:
+                    old_tmp = dst.with_name(dst.name + ".old")
+                    if old_tmp.exists():
+                        try:
+                            old_tmp.unlink()
+                        except Exception:
+                            pass
+                    dst.rename(old_tmp)
+                    shutil.copy2(src, dst)
+
+            safe_copy(exe_src, dst_path)
             collected.append({
                 "type": "Portable EXE",
                 "filename": dst_name,
@@ -287,7 +300,20 @@ def collect_artifacts(build_type: str, version: str, out_dir: Path) -> list[dict
         if exe_src.exists():
             dst_name = f"Eclipse-Studio-v{version}-Debug.exe"
             dst_path = out_dir / dst_name
-            shutil.copy2(exe_src, dst_path)
+            def safe_copy(src: Path, dst: Path):
+                try:
+                    shutil.copy2(src, dst)
+                except PermissionError:
+                    old_tmp = dst.with_name(dst.name + ".old")
+                    if old_tmp.exists():
+                        try:
+                            old_tmp.unlink()
+                        except Exception:
+                            pass
+                    dst.rename(old_tmp)
+                    shutil.copy2(src, dst)
+
+            safe_copy(exe_src, dst_path)
             collected.append({
                 "type": "Debug EXE",
                 "filename": dst_name,
