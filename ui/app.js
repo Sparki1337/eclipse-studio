@@ -2603,16 +2603,16 @@
     let enPart = "";
     let ruPart = "";
 
-    // Поиск заголовка русской секции (## Русский / ## Russian / ## RU)
-    const ruHeaderIndex = clean.search(/(?:^|\n)##?\s*(?:Русский|Russian|RU)\b/i);
-    const hrIndex = clean.indexOf("---");
+    // Поиск заголовка русской секции (Markdown ## Русский или HTML <h2>...Русский...</h2>)
+    const ruHeaderIndex = clean.search(/(?:(?:^|\n)##?\s*(?:Русский|Russian|RU)\b|<h[1-3][^>]*>[^<]*(?:Русский|Russian|RU)[^<]*<\/h[1-3]>)/i);
+    const hrIndex = clean.search(/(?:---|(?<!<[^>]*)<hr\s*\/?>)/i);
 
     if (ruHeaderIndex !== -1) {
-      enPart = clean.slice(0, ruHeaderIndex).replace(/---[\s\r\n]*$/, "").trim();
-      ruPart = clean.slice(ruHeaderIndex).replace(/^[^\n]*\n+/, "").trim();
+      enPart = clean.slice(0, ruHeaderIndex).replace(/(?:---|<hr\s*\/?>)[\s\r\n]*$/, "").trim();
+      ruPart = clean.slice(ruHeaderIndex).replace(/^([^\n]*\n+|<h[1-3][^>]*>[^<]*<\/h[1-3]>)/i, "").trim();
     } else if (hrIndex !== -1) {
       enPart = clean.slice(0, hrIndex).trim();
-      ruPart = clean.slice(hrIndex + 3).trim();
+      ruPart = clean.slice(hrIndex + 3).replace(/^[^>]*>/, "").trim();
     } else {
       enPart = clean;
       ruPart = clean;
@@ -2621,10 +2621,16 @@
     let target = (lang === "en" ? enPart : ruPart) || clean;
 
     // Отсекаем технические блоки проверки антивирусов и контрольных сумм
-    target = target.split(/(?:###?\s*(?:Antivirus\s*Verification|Проверка\s*безопасности|Security\s*Verification))/i)[0].trim();
+    target = target.split(/(?:###?\s*(?:Antivirus\s*Verification|Проверка\s*безопасности|Security\s*Verification)|<h[1-4][^>]*>[^<]*(?:Antivirus\s*Verification|Проверка\s*безопасности|Security\s*Verification)[^<]*<\/h[1-4]>)/i)[0].trim();
 
-    // Удаляем верхний дублирующий H1-заголовок релиза (# Eclipse Studio ...)
-    target = target.replace(/^#\s*Eclipse\s*Studio[^\n]*\n+/i, "").trim();
+    // Удаляем верхний дублирующий H1-заголовок релиза
+    target = target.replace(/^(?:#\s*Eclipse\s*Studio[^\n]*\n+|<h1[^>]*>[\s\S]*?<\/h1>)/i, "").trim();
+
+    // Преобразуем HTML элементы в читаемый текстовый формат
+    target = target.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, "• $1\n");
+    target = target.replace(/<h[2-4][^>]*>(.*?)<\/h[2-4]>/gi, "\n$1:\n");
+    target = target.replace(/<br\s*\/?>/gi, "\n");
+    target = target.replace(/<[^>]+>/g, "");
 
     // Убираем возможный остаточный префикс заголовка языка
     target = target.replace(/^(?:##?\s*(?:Русский|Russian|RU|English|EN)[^\n]*\n+)+/i, "").trim();
@@ -2639,7 +2645,7 @@
     // Снимаем оставшиеся markdown-выделения жирным шрифтом
     target = target.replace(/\*\*([^\*]+)\*\*/g, "$1");
 
-    return target.trim();
+    return target.replace(/^[ \t]+/gm, "").replace(/\n\s*\n\s*\n/g, "\n\n").trim();
   }
 
   let activeUpdatePrompt = null;
