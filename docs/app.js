@@ -720,7 +720,14 @@
       if (tag && !/^v/i.test(tag)) tag = `v${tag}`;
       let url = rel.html_url;
       const assets = Array.isArray(rel.assets) ? rel.assets : [];
-      const file = assets.find((a) => /\.exe$/i.test(a.name)) || assets.find((a) => /\.zip$/i.test(a.name)) || assets[0];
+      // Приоритетно ищем основной бинарник приложения, исключая сторонние утилиты вроде Eclipse-HV
+      const file =
+        assets.find((a) => /eclipse-studio.*\.exe$/i.test(a.name)) ||
+        assets.find((a) => /crocodile.*\.exe$/i.test(a.name)) ||
+        assets.find((a) => !/eclipse-hv|hypervisor/i.test(a.name) && /\.exe$/i.test(a.name)) ||
+        assets.find((a) => /\.exe$/i.test(a.name)) ||
+        assets.find((a) => /\.zip$/i.test(a.name)) ||
+        assets[0];
       if (file?.browser_download_url) {
         url = file.browser_download_url;
       }
@@ -836,7 +843,8 @@
       .catch(() => {
         syncState.fail++;
         const fallback = [
-          { tag: 'v7.0.3', rawDate: '2026-10-16T11:37:46Z', rawBytes: 47100000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/latest', fallbackSize: '44.9 МБ' },
+          { tag: 'v8.0.0', rawDate: '2026-10-29T18:00:00Z', rawBytes: 48760320, url: 'https://github.com/Sparki1337/eclipse-studio/releases/download/8.0.0/Eclipse-Studio-v8.0.0.exe', fallbackSize: '46.5 МБ' },
+          { tag: 'v7.0.3', rawDate: '2026-10-16T11:37:46Z', rawBytes: 47100000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v7.0.3', fallbackSize: '44.9 МБ' },
           { tag: 'v7.0.2', rawDate: '2026-10-15T20:29:00Z', rawBytes: 46900000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v7.0.2', fallbackSize: '44.7 МБ' },
           { tag: 'v7.0.1', rawDate: '2026-10-15T15:35:00Z', rawBytes: 46850000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v7.0.1', fallbackSize: '44.7 МБ' },
           { tag: 'v7.0.0', rawDate: '2026-10-15T12:00:00Z', rawBytes: 46800000, url: 'https://github.com/Sparki1337/eclipse-studio/releases/tag/v7.0.0', fallbackSize: '44.6 МБ' },
