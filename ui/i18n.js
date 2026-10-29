@@ -5,6 +5,54 @@
   const SUPPORTED = new Set(["ru", "en"]);
 
   const EN = {
+    "Заменить CrocLua": "Replace CrocLua",
+    "Автономный запуск с защитой ядра Windows. Сохраните важные данные перед запуском.": "Standalone launch with Windows kernel protection. Save important data before launching.",
+    "Автономный исполняемый файл для папки с игрой. Обходит Driver Signature Enforcement в памяти даже с включённым Secure Boot, запускает игру и мгновенно восстанавливает DSE.": "Standalone executable for the game folder. Bypasses Driver Signature Enforcement in memory even with Secure Boot enabled, launches the game, and immediately restores DSE.",
+    "Проверка статуса…": "Checking status…",
+    "Папка игр: поиск…": "Game folder: searching…",
+    "Управление изоляцией ядра, целостностью кода (HVCI), BitLocker, Meltdown mitigation и гипервизором Windows.": "Manage core isolation, memory integrity (HVCI), BitLocker, Meltdown mitigation, and Windows hypervisor.",
+    "Проверка статуса защиты диска C: перед перезагрузкой.": "Verification of drive C: protection status prior to reboot.",
+    "ПРОВЕРКА": "CHECKING",
+    "Оптимизация изоляции таблиц страниц ядра процессора.": "Optimization of processor kernel page table isolation.",
+    "Параметры изоляции ядра закреплены прошивкой материнской платы. Чтобы снять защиту, подготовьте модуль SecConfig.efi на системном EFI-разделе.": "Core isolation settings are locked by motherboard firmware. To remove protection, prepare the SecConfig.efi module on the system EFI partition.",
+    "Следующие компоненты мешают запуску гипервизора или хукам вызовов:": "The following components interfere with hypervisor execution or call hooks:",
+    "Инструменты для восстановления повреждённых подсистем WMI, системных файлов и хранилища компонентов Windows.": "Tools for repairing damaged WMI subsystems, system files, and the Windows component store.",
+    "Сброс и восстановление репозитория WMI при сбоях отчётов": "Reset and repair the WMI repository when report failures occur",
+    "Запуск sfc /scannow для проверки системных файлов": "Run sfc /scannow to check system files",
+    "Восстановление целостности хранилища компонентов Windows": "Restore the integrity of the Windows component store",
+    "Выберите, какую встроенную версию OpenSteamTool использовать при интеграции манифестов в клиент Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.": "Choose which embedded OpenSteamTool version to use when integrating manifests into the Steam client. Switch to the alternative version if the primary version fails or Steam does not load manifests.",
+    "(осталось": "(remaining",
+    "Инструкция по Eclipse-HV": "Eclipse-HV Instructions",
+    "Автономный лаунчер игр с обходом DSE и поддержкой Secure Boot": "Standalone game launcher with DSE bypass and Secure Boot support",
+    "Автономный EXE на Rust. Заменяет BAT-скрипты и внешние загрузчики. Запуск без консольных окон.": "Standalone Rust executable. Replaces BAT scripts and external loaders. Clean launch with no console windows.",
+    "Размещение": "Placement",
+    "Поместите Eclipse-HV.exe в корень игры (рядом с главным EXE или папкой Binaries). При авто-установке кряка копируется сам.": "Place Eclipse-HV.exe in the game root (next to the main EXE or the Binaries folder). Auto-installation copies it automatically.",
+    "Запуск и права": "Launch & Privileges",
+    "Запустите Eclipse-HV.exe или перетащите EXE игры на него. Требует права администратора (UAC). Снимает DSE в памяти, Secure Boot отключать не требуется.": "Launch Eclipse-HV.exe or drag the game EXE onto it. Requires administrator privileges (UAC). Bypasses DSE in memory, no need to disable Secure Boot.",
+    "Автопоиск и тайминг": "Auto-search & Timing",
+    "Автоматически находит бинарник игры, запускает процесс, выжидает 5 секунд для загрузки хука и восстанавливает DSE в исходное состояние.": "Automatically discovers the game binary, starts the process, waits 5 seconds to load the hook, and restores DSE to its original state.",
+    "Изоляция ядра и XSAVE": "Core Isolation & XSAVE",
+    "Лаунчер автоматически отключает HVCI в реестре и оптимизирует BCD (xsaveremovefeature) для процессоров с AVX-512 / Zen 4 / Intel 12+ при запуске Denuvo.": "The launcher automatically disables HVCI in the registry and optimizes BCD (xsaveremovefeature) for AVX-512 / Zen 4 / Intel 12+ CPUs when running Denuvo.",
+    "Отладка и логи": "Debugging & Logs",
+    "Флаг --debug открывает консоль с логом. При ошибках создаётся Eclipse-HV-error.json и сразу открывается в системе.": "The --debug flag opens a console window with logs. On errors, Eclipse-HV-error.json is created and immediately opened in the system.",
+    "Всё понятно": "Got it",
+    "C:\\Games\\Название игры": "C:\\Games\\Game Title",
+    "Установить выбранную версию в Steam": "Install selected version to Steam",
+    "Инструкция по использованию Eclipse-HV": "Instructions for using Eclipse-HV",
+    "Подготовка запуска": "Launch preparation",
+    "Конфигурация гипервизора и DSE": "Hypervisor configuration and DSE",
+    "Запуск сценария": "Running scenario",
+    "Системная подготовка Windows": "Preparing Windows",
+    "Запуск игры": "Launch game",
+    "Старт выбранного EXE": "Starting selected EXE",
+    "Возврат DSE": "Restore DSE",
+    "Восстановление после запуска": "Restoration after launch",
+    "Завершение сценария": "Scenario completion",
+    "Ошибка проверки": "Verification error",
+    "папка не определена": "folder not specified",
+    "Загрузить актуальную версию": "Download latest version",
+    "Доступно обновление": "Update available",
+
     "Установлен CreamAPI. Выберите CreamAPI и удалите его, затем установите SmokeAPI.": "CreamAPI is installed. Select CreamAPI and remove it before installing SmokeAPI.",
     "Установлен SmokeAPI. Выберите SmokeAPI и удалите его, затем установите CreamAPI.": "SmokeAPI is installed. Select SmokeAPI and remove it before installing CreamAPI.",
     "Найдите установленные игры Steam, выберите игру и настройте её дополнения.": "Find installed Steam games, select a game and configure its DLC.",
@@ -1032,7 +1080,10 @@
     "Текущий": "Current"
   };
 
-  const PATTERNS = [
+    const PATTERNS = [
+    [/^Установлен v([\d\.]+)(.*)$/u, (_, v, rest) => `Installed v${v}${rest.replace("КБ", "KB")}`],
+    [/^Папка:\s*(.+)$/u, (_, p) => `Folder: ${p}`],
+    [/^Папка игр:\s*(.+)$/u, (_, p) => `Game folder: ${p}`],
     [/^Будет использована (x64|x86)-версия SmokeAPI\. Если прокси не загружается игрой, попробуйте другое имя DLL\.$/u, (_, arch) => `The ${arch} SmokeAPI build will be used. If the game does not load this proxy, try another DLL name.`],
     [/^Установлено игр: (\d+)(?: · Библиотек: (\d+))?( · Часть библиотек не удалось прочитать)?$/u, (_, games, libraries, partial) => `Installed games: ${games}${libraries ? ` · Libraries: ${libraries}` : ""}${partial ? " · Some libraries could not be read" : ""}`],
     [/^CreamAPI: библиотека Steam будет подменена в (\d+) директориях\. Оригиналы сохраняются и восстанавливаются при удалении\.$/u, (_, count) => `CreamAPI: the Steam API will be replaced in ${count} folders. Originals are backed up and restored on removal.`],
@@ -1082,7 +1133,14 @@
     [/^Обновление v(.+) готово в папке программы$/u, (_, version) => `Update v${version} is ready in application folder`]
   ];
 
-  const FRAGMENTS = [
+    const FRAGMENTS = [
+    ["Папка: ", "Folder: "],
+    ["Папка игр: ", "Game folder: "],
+    ["папка не определена", "folder not specified"],
+    ["поиск…", "searching…"],
+    ["Проверка статуса…", "Checking status…"],
+    [" КБ", " KB"],
+    [" КБ)", " KB)"],
     ["Локальный кэш Steam недоступен", "Local Steam cache is unavailable"],
     ["Показан локальный кэш; новые DLC могут отсутствовать. Повторите сканирование при подключении к Steam.", "Showing cached DLC; new DLC may be missing. Scan again when connected to Steam."],
     ["Для части DLC доступен только AppID, название получить не удалось.", "Some DLC could not be named and are shown by AppID."],
