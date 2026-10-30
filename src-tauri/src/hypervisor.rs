@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     env, fs,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
+    process::Command,
     time::Duration,
 };
 use tauri::Emitter;
@@ -199,29 +199,19 @@ pub(crate) async fn check_asset_updates(app: tauri::AppHandle) -> Result<(), Str
     Ok(())
 }
 
-// Диалог выбора исполняемого файла игры через проводник Windows
+// Диалог выбора исполняемого файла игры через нативный проводник Windows (IFileOpenDialog)
 #[tauri::command]
-pub(crate) fn select_game_exe() -> Result<Option<String>, String> {
-    let script = r#"
-Add-Type -AssemblyName System.Windows.Forms
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
-$dialog = New-Object System.Windows.Forms.OpenFileDialog
-$dialog.Title = 'Выберите EXE игры'
-$dialog.Filter = 'Executable (*.exe)|*.exe'
-$dialog.Multiselect = $false
-if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-  Write-Output $dialog.FileName
-}
-"#;
+pub(crate) async fn select_game_exe(window: tauri::Window) -> Result<Option<String>, String> {
+    #[cfg(target_os = "windows")]
+    let owner = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
+    #[cfg(not(target_os = "windows"))]
+    let owner = 0;
 
-    let output = powershell_output(script)?;
-    let path = output.trim();
-
-    if path.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(path.to_string()))
-    }
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::native_dialog::pick_exe_file("Выберите исполняемый файл игры (.exe)", owner)
+    })
+    .await
+    .map_err(|error| format!("Диалог выбора файла прерван: {error}"))?
 }
 
 // Добавление игры в библиотеку и размещение в ней Eclipse-HV.exe
@@ -630,35 +620,6 @@ fn emit(
     );
 }
 
-// Выполнение скрипта PowerShell
-fn powershell_output(script: &str) -> Result<String, String> {
-    let mut command = Command::new("powershell.exe");
-    command
-        .arg("-NoProfile")
-        .arg("-NonInteractive")
-        .arg("-Command")
-        .arg(script)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    #[cfg(target_os = "windows")]
-    command.creation_flags(CREATE_NO_WINDOW);
-
-    let output = command
-        .output()
-        .map_err(|error| format!("Не удалось запустить PowerShell: {error}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if stderr.is_empty() {
-            "PowerShell завершился с ошибкой.".to_string()
-        } else {
-            stderr
-        });
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
 
 // Проверка наличия прав администратора
 fn is_admin() -> bool {
@@ -730,7 +691,14 @@ pub(crate) async fn eclipse_hv_status(target_dir: Option<String>) -> Result<Ecli
         };
 
         let embedded_size = EMBEDDED_ECLIPSE_HV.len() as u64;
-        let update_available = !installed || (size_bytes.is_some() && size_bytes != Some(embedded_size));
+        // Обновление требуется только если файл не установлен или его размер отличается от встроенного актуального лаунчера
+        let update_available = if !installed {
+            true
+        } else if let Some(local_size) = size_bytes {
+            local_size != embedded_size
+        } else {
+            true
+        };
 
         Ok(EclipseHvStatus {
             installed,
@@ -738,6 +706,72 @@ pub(crate) async fn eclipse_hv_status(target_dir: Option<String>) -> Result<Ecli
             size_bytes,
             version: if installed { "1.1.0".to_string() } else { "не установлен".to_string() },
             remote_version: Some("1.1.0".to_string()),
+            update_available,
+            destination_dir: dest.to_string_lossy().to_string(),
+        })
+    })
+    .await
+    .map_err(|e| format!("Операция проверки прервана: {e}"))?
+}
+
+/// Проверка обновлений автономного лаунчера Eclipse-HV через сеть и встроенные ресурсы
+#[tauri::command]
+pub(crate) async fn eclipse_hv_check_update(target_dir: Option<String>) -> Result<EclipseHvStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let dest = resolve_eclipse_hv_dest(target_dir.as_deref());
+        let exe_path = dest.join("Eclipse-HV.exe");
+        let installed = exe_path.is_file();
+        let size_bytes = if installed {
+            fs::metadata(&exe_path).ok().map(|m| m.len())
+        } else {
+            None
+        };
+
+        let embedded_size = EMBEDDED_ECLIPSE_HV.len() as u64;
+
+        // Сетевая проверка актуальности лаунчера с переходом по редиректам
+        let mut remote_size: Option<u64> = None;
+        let remote_version = "1.1.0".to_string();
+
+        let client = reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(4))
+            .user_agent("Eclipse-Studio/8.0.0")
+            .redirect(reqwest::redirect::Policy::limited(5))
+            .build();
+
+        if let Ok(client) = client {
+            let download_url = "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
+            if let Ok(resp) = client.head(download_url).send() {
+                if resp.status().is_success() {
+                    if let Some(cl) = resp.content_length() {
+                        // Отсекаем некорректные пустые заголовки промежуточных редиректов
+                        if cl > 100_000 {
+                            remote_size = Some(cl);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Обновление доступно, только если файл не установлен или его размер отличается от актуального
+        let update_available = if !installed {
+            true
+        } else if let Some(local_size) = size_bytes {
+            if let Some(r_size) = remote_size {
+                local_size != r_size
+            } else {
+                local_size != embedded_size
+            }
+        } else {
+            true
+        };
+
+        Ok(EclipseHvStatus {
+            installed,
+            path: if installed { Some(exe_path.to_string_lossy().to_string()) } else { None },
+            size_bytes,
+            version: if installed { "1.1.0".to_string() } else { "не установлен".to_string() },
+            remote_version: Some(remote_version),
             update_available,
             destination_dir: dest.to_string_lossy().to_string(),
         })

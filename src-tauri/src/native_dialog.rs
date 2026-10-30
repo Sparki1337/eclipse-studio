@@ -58,6 +58,69 @@ pub(crate) fn pick_folder(title: &str, owner: isize) -> Result<Option<String>, S
     }
 }
 
+/// Нативный системный выбор исполняемого файла (.exe) через Windows COM IFileOpenDialog
+pub(crate) fn pick_exe_file(title: &str, owner: isize) -> Result<Option<String>, String> {
+    #[cfg(windows)]
+    {
+        use windows::{
+            core::{HRESULT, HSTRING},
+            Win32::{
+                Foundation::HWND,
+                System::Com::{
+                    CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize,
+                    CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
+                },
+                UI::Shell::{
+                    FileOpenDialog, IFileOpenDialog, FOS_FILEMUSTEXIST,
+                    FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, SIGDN_FILESYSPATH,
+                },
+            },
+        };
+        struct Apartment;
+        impl Drop for Apartment {
+            fn drop(&mut self) {
+                unsafe { CoUninitialize() };
+            }
+        }
+        let result = unsafe {
+            (|| -> windows::core::Result<Option<String>> {
+                CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok()?;
+                let _apartment = Apartment;
+                let dialog: IFileOpenDialog =
+                    CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
+                let options = dialog.GetOptions()?;
+                dialog.SetOptions(
+                    options | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST,
+                )?;
+                dialog.SetTitle(&HSTRING::from(title))?;
+                let _ = dialog.SetDefaultExtension(&HSTRING::from("exe"));
+
+                if let Err(error) = dialog.Show(Some(HWND(owner as *mut _))) {
+                    if error.code() == HRESULT(0x800704c7u32 as i32) {
+                        return Ok(None);
+                    }
+                    return Err(error);
+                }
+                let item = dialog.GetResult()?;
+                let selected = item.GetDisplayName(SIGDN_FILESYSPATH)?;
+                let path = selected.to_string();
+                CoTaskMemFree(Some(selected.0.cast()));
+                Ok(Some(path?))
+            })()
+        };
+        result.map_err(|error| format!("Не удалось открыть выбор файла: {error}"))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = owner;
+        Ok(rfd::FileDialog::new()
+            .set_title(title)
+            .add_filter("Исполняемые файлы", &["exe"])
+            .pick_file()
+            .map(|path| path.to_string_lossy().into_owned()))
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub(crate) fn pick_files(title: &str, extensions: &[&str]) -> Vec<String> {
     rfd::FileDialog::new()

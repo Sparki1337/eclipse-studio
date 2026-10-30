@@ -241,7 +241,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>8.0.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>8.1.0</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -332,7 +332,7 @@
         <div class="home-hero premium-panel">
           <div class="home-glow"></div>
           <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 8.0.0</span>
+            <span class="hero-kicker">ECLIPSE STUDIO 8.1.0</span>
             <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
             <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
           </div>
@@ -383,7 +383,7 @@
               <section class="premium-panel game-panel">
                 <div class="game-cover"><img id="game-banner" alt="Обложка игры"/><div class="cover-fallback" id="cover-fallback">CG</div><span class="game-state" id="game-status">CLEAN</span></div>
                 <div class="game-summary">
-                  <div class="game-title-row"><div><span>ОБНАРУЖЕННАЯ ИГРА</span><h2 id="game-title">Название игры</h2></div><button class="icon-button" id="rescan-button" title="Повторить сканирование"><svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg></button></div>
+                  <div class="game-title-row"><div><span>ОБНАРУЖЕННАЯ ИГРА</span><h2 id="game-title">Название игры</h2></div><button class="icon-button" id="rescan-button" title="Повторить сканирование"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button></div>
                   <div class="metadata-grid">
                     <div><small>APP ID</small><strong id="game-appid">—</strong></div><div><small>ДВИЖОК</small><strong id="game-engine">—</strong></div><div><small>EXECUTABLE</small><strong id="game-exe">—</strong></div><div><small>STEAM API</small><strong id="game-steam">—</strong></div>
                   </div>
@@ -470,7 +470,7 @@
             <section class="premium-panel game-panel">
               <div class="game-cover"><img id="dlc-banner" alt="Обложка игры"/><div class="cover-fallback" id="dlc-cover-fallback">CG</div><span class="game-state" id="dlc-state">CLEAN</span></div>
               <div class="game-summary">
-                <div class="game-title-row"><div><span>ОБНАРУЖЕННАЯ ИГРА</span><h2 id="dlc-title">Название игры</h2></div><button class="icon-button" id="dlc-rescan-button" title="Повторить определение"><svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg></button></div>
+                <div class="game-title-row"><div><span>ОБНАРУЖЕННАЯ ИГРА</span><h2 id="dlc-title">Название игры</h2></div><button class="icon-button" id="dlc-rescan-button" title="Повторить определение"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button></div>
                 <div class="metadata-grid">
                   <div><small>APP ID</small><strong id="dlc-appid-value">—</strong></div>
                   <div><small>БИБЛИОТЕКА</small><strong id="dlc-api-value">—</strong></div>
@@ -516,7 +516,7 @@
                 <span class="setting-copy"><b>Разблокировать все</b><small>Включить все найденные дополнения. Выключите, чтобы выбрать DLC вручную.</small></span>
                 <span class="switch"><input type="checkbox" id="dlc-unlock-all" checked /><i></i></span>
               </label>
-              <div class="dlc-catalog-status"><span id="dlc-catalog-status" role="status"></span><button class="dlc-button" id="dlc-catalog-retry"><svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg><span>Повторить сканирование DLC</span></button></div>
+              <div class="dlc-catalog-status"><span id="dlc-catalog-status" role="status"></span><button class="dlc-button" id="dlc-catalog-retry"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg><span>Повторить сканирование DLC</span></button></div>
               <div class="save-empty" id="dlc-empty">
                 <span><svg viewBox="0 0 32 32"><rect width="22" height="14" x="5" y="13" rx="2"/><path d="M10 13V8.5a6 6 0 0 1 11.9-1.2"/></svg></span>
                 <h3>Каталог ещё не загружен</h3>
@@ -587,7 +587,7 @@
               <h2>Eclipse Manifest</h2>
               <p>Добавляйте игры прямо в библиотеку Steam. Перетащите файлы <code>.lua</code>, <code>.manifest</code> или <code>.zip</code> — программа сама разложит их по нужным папкам Steam. Затем перезапустите Steam, и игра появится в клиенте.</p>
             </div>
-            <button class="install-button" id="lua-restart-button"><span>Перезапустить Steam</span><svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg></button>
+            <button class="install-button" id="lua-restart-button"><span>Перезапустить Steam</span><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
           </section>
 
           <div class="lua-status-grid">
@@ -649,7 +649,7 @@
               </div>
               <div class="manifest-loader-actions">
                 <button type="button" class="manifest-loader-sync-btn" id="manifest-loader-sync-btn" title="Проверить и синхронизировать DLL с GitHub">
-                  <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M1.5 8a6.5 6.5 0 1 1 1.9 4.6M1.5 12.5V8h4.5"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
                   <span>Синхронизация</span>
                 </button>
                 <button type="button" class="manifest-loader-apply-btn" id="manifest-loader-apply-btn" title="Установить выбранную версию в Steam">
@@ -786,7 +786,7 @@
               </div>
               <div class="hv-eclipse-actions">
                 <button class="secondary-button" id="hv-eclipse-check-btn" type="button">
-                  <svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
                   <span>Проверить версию</span>
                 </button>
                 <button class="primary-button" id="hv-eclipse-download-btn" type="button">
@@ -885,7 +885,7 @@
               </div>
               <div class="ac-hero-actions">
                 <button class="ac-scan-button" id="ac-scan-button">
-                  <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg>
+                  <svg viewBox="0 0 20 20" style="width:15px;height:15px"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg>
                   <span>Сканировать</span>
                 </button>
                 <button class="ac-remove-all hidden" id="ac-remove-all"><span><svg viewBox="0 0 16 16" style="width:14px;height:14px;stroke-width:1.8;vertical-align:-2px"><path d="M2.5 4.5h11m-9.5 0v8.5a1.5 1.5 0 0 0 1.5 1.5h6a1.5 1.5 0 0 0 1.5-1.5v-8.5m-6 0V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5"/></svg></span>Удалить найденные <b id="ac-remove-count">0</b></button>
@@ -1100,7 +1100,7 @@
                     <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>
                   </button>
                 </div>
-                <button class="files-refresh" id="files-refresh"><svg viewBox="0 0 20 20"><path d="M16.5 3.5v4h-4"/><path d="M3.5 10a6.5 6.5 0 1 0 1.9-4.6L16.5 7.5"/></svg><span>Обновить список</span></button>
+                <button class="files-refresh" id="files-refresh"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg><span>Обновить список</span></button>
               </div>
             </div>
 
@@ -1329,7 +1329,7 @@
                           <input type="range" id="splash-speed" min="0.5" max="3" step="0.25" value="1" aria-label="Скорость заставки" />
                           <b id="splash-speed-value">1.0x</b>
                         </div>
-                        <button type="button" class="font-scale-reset-btn" id="splash-speed-reset" title="Сбросить скорость (1.0x)" aria-label="Сбросить скорость">↺</button>
+                        <button type="button" class="font-scale-reset-btn" id="splash-speed-reset" title="Сбросить скорость (1.0x)" aria-label="Сбросить скорость"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
                       </div>
                     </div>
                   </div>
@@ -1403,7 +1403,7 @@
                           <input type="range" id="audio-volume" min="0" max="100" step="5" value="65" aria-label="Общая громкость" />
                           <b id="audio-volume-value">65%</b>
                         </div>
-                        <button type="button" class="font-scale-reset-btn" id="audio-volume-reset" title="Сбросить громкость (65%)" aria-label="Сбросить громкость">↺</button>
+                        <button type="button" class="font-scale-reset-btn" id="audio-volume-reset" title="Сбросить громкость (65%)" aria-label="Сбросить громкость"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
                       </div>
                     </div>
 
@@ -1676,7 +1676,7 @@
                     </div>
                     <div class="manifest-loader-actions">
                       <button type="button" class="manifest-loader-sync-btn" id="settings-loader-sync-btn" title="Синхронизировать файлы загрузчика с облаком GitHub">
-                        <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M1.5 8a6.5 6.5 0 1 1 1.9 4.6M1.5 12.5V8h4.5"/></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
                         <span>Синхронизация</span>
                       </button>
                       <button type="button" class="manifest-loader-apply-btn" id="settings-loader-apply-btn" title="Установить выбранную версию в Steam">
@@ -1844,7 +1844,7 @@
                         <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M2 13h12a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1H7.5L6 2.5H2a1 1 0 0 0-1 1v8.5a1 1 0 0 0 1 1z"/></svg>
                       </button>
                       <button type="button" class="download-action-icon-btn hidden" id="download-dir-reset" title="Сбросить к папке по умолчанию" aria-label="Сбросить">
-                        <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M3 8a5 5 0 1 1 1.5 3.5L3 13m0-4.5V13h4.5"/></svg>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
                       </button>
                     </div>
                   </div>
@@ -1855,7 +1855,7 @@
                 <summary class="settings-collapsible-summary">
                   <div class="settings-collapsible-header">
                     <span class="settings-collapsible-icon">
-                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M16 10a6 6 0 1 1-1.8-4.2L16 4m0 4.5V4h-4.5"/></svg>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
                     </span>
                     <div class="settings-collapsible-title">
                       <strong>Обновления</strong>
@@ -1867,7 +1867,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.0.0</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.1.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -1888,7 +1888,7 @@
                     </span>
                     <div class="settings-collapsible-title">
                       <strong>О программе</strong>
-                      <small>Версия и активные модули программы</small>
+                      <small>Версия и системное окружение</small>
                     </div>
                   </div>
                   <span class="settings-collapsible-chevron">
@@ -1896,9 +1896,10 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия</span><b>8.0.0</b></div>
-                  <div class="about-row"><span>Назначение</span><b>Игровые инструменты</b></div>
-                  <div class="about-row"><span>Активные модули</span><b>Online Fix · Сохранения · DLC · Eclipse Manifest · Гипервизор · Кряки · Утилиты</b></div>
+                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">8.0.0</b></div>
+                  <div class="about-row"><span>Версия Eclipse HV</span><b id="about-hv-version">Проверка…</b></div>
+                  <div class="about-row"><span>Права доступа</span><b id="about-admin-rights">Проверка…</b></div>
+                  <div class="about-row"><span>Путь к Steam</span><b id="about-steam-path" class="about-path">Определение…</b></div>
                 </div>
               </details>
             </section>
@@ -2103,7 +2104,7 @@
       <span>Настройки панели…</span>
     </button>
     <button type="button" class="nav-context-item danger" id="nav-context-reset" role="menuitem">
-      <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M3 8a5 5 0 1 1 1.5 3.5L3 13m0-4.5V13h4.5"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
       <span>Сбросить панель</span>
     </button>
   </div>

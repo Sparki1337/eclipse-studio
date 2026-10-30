@@ -18,7 +18,7 @@ description: Сборка строго портативной версии Eclip
    - **СТРОГО** `C:\Users\Sparki\Desktop\Programms\Hypervisor` (папка Hypervisor).
    - Запрещено сохранять бинарники в другие папки или на рабочий стол напрямую.
 3. **Имя выходного файла**:
-   - **СТРОГО** `Eclipse-Studio-vX.X.X.exe` (где `X.X.X` — актуальная версия из `tauri.conf.json`, например `Eclipse-Studio-v7.0.2.exe`).
+   - **СТРОГО** `Eclipse-Studio-vX.X.X.exe` (где `X.X.X` — актуальная версия из `tauri.conf.json`, например `Eclipse-Studio-v8.1.0.exe`).
    - Запрещено использовать суффиксы `-Portable`, `-Setup` и любые другие.
 4. **Протокол безопасности Git**:
    - **НИКОГДА** не выполнять `git commit` или `git push` без явного подтверждения пользователя.
@@ -61,7 +61,7 @@ python tools/build_release_helper.py
    ```
 
 4. **Формирование релиза GitHub**:
-   - **Tag**: `X.X.X` (например `6.6.7`)
+   - **Tag**: `X.X.X` (например `8.1.0`)
    - **Title**: `Eclipse Studio - X.X.X`
    - **Release Notes**:
      ```markdown

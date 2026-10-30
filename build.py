@@ -62,10 +62,10 @@ def get_project_version() -> str:
         try:
             with open(TAURI_CONF, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                return data.get("version", "6.0.0")
+                return data.get("version", "8.1.0")
         except Exception:
             pass
-    return "6.0.0"
+    return "8.0.0"
 
 
 def check_tool(name: str) -> bool:

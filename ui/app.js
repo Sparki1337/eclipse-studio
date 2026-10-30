@@ -212,7 +212,10 @@
     $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === name));
     $("#page-eyebrow").textContent = viewMeta[name][0];
     $("#page-title").textContent = viewMeta[name][1];
-    if (name === "lua" || name === "settings") luaRefresh();
+    if (name === "lua" || name === "settings") {
+      luaRefresh();
+      updateAboutInfo();
+    }
     window.dispatchEvent(new CustomEvent("cgs:view-changed", { detail: name }));
     const mainArea = $(".main-area");
     if (mainArea) mainArea.scrollTop = 0;
@@ -1188,6 +1191,7 @@
     renderMillenniumStatus();
     renderLoaderInfo();
     renderLuaGames();
+    updateAboutInfo();
   }
 
   function renderMillenniumStatus() {
@@ -2506,7 +2510,7 @@
     $$(".svc-option").forEach((button) => button.classList.toggle("active", button.dataset.service === svc));
     $("#svc-key-block")?.classList.toggle("hidden", svc !== "hubcap");
     $("#ryuu-key-block")?.classList.toggle("hidden", svc !== "ryuu");
-    $("#hubcap-limit-badge").classList.toggle("hidden", svc !== "hubcap");
+    $("#hubcap-limit-badge")?.classList.toggle("hidden", svc !== "hubcap");
     localStorage.setItem("manifestService", svc);
     const input = $("#lua-search-input");
     if (input) input.placeholder = svc === "hubcap"
@@ -2569,6 +2573,7 @@
     }
   }
 
+
   async function refreshHubcapUsage() {
     if (!invoke || state.lua.hubcapUsageLoading) return;
     if (!state.lua.hubcapKey.trim()) {
@@ -2587,6 +2592,63 @@
     } finally {
       state.lua.hubcapUsageLoading = false;
       renderHubcapUsage();
+    }
+  }
+
+  // Обновление полезной системной информации в блоке «О программе»
+  async function updateAboutInfo() {
+    // 1. Версия программы (без суффикса Portable x64, так как других сборок нет)
+    const appVerEl = $("#about-app-version");
+    if (appVerEl) {
+      appVerEl.textContent = state.version || "8.0.0";
+    }
+
+    // 2. Версия Eclipse HV (без буквы v)
+    const hvVerEl = $("#about-hv-version");
+    if (hvVerEl) {
+      if (invoke) {
+        try {
+          const hvStatus = await call("eclipse_hv_status");
+          if (hvStatus && hvStatus.installed) {
+            const rawVer = hvStatus.version || "1.1.0";
+            hvVerEl.textContent = rawVer.replace(/^v/i, "");
+          } else {
+            hvVerEl.textContent = "Не установлен";
+          }
+        } catch (_) {
+          hvVerEl.textContent = "Не установлен";
+        }
+      } else {
+        hvVerEl.textContent = "1.1.0";
+      }
+    }
+
+    // 3. Права доступа
+    const adminEl = $("#about-admin-rights");
+    if (adminEl) {
+      if (invoke) {
+        try {
+          const isElevated = await call("process_is_elevated");
+          adminEl.textContent = isElevated ? "Администратор (UAC ✓)" : "Обычный пользователь";
+        } catch (_) {
+          adminEl.textContent = "Обычный пользователь";
+        }
+      } else {
+        adminEl.textContent = "Администратор (UAC ✓)";
+      }
+    }
+
+    // 4. Путь к Steam
+    const steamEl = $("#about-steam-path");
+    if (steamEl) {
+      const path = state.lua.steamPath || localStorage.getItem("luaSteamPath") || "";
+      if (path) {
+        steamEl.textContent = path;
+        steamEl.title = path;
+      } else {
+        steamEl.textContent = "Не обнаружен";
+        steamEl.title = "";
+      }
     }
   }
 
@@ -3379,11 +3441,7 @@
         }
       } catch (_) {}
     });
-    $("#hubcap-key-get").addEventListener("click", async (e) => {
-      e.preventDefault();
-      try { await call("open_external", { url: "https://hubcapmanifest.com/api-keys/stats" }); }
-      catch (error) { toast(errorText(error), "error"); }
-    });
+    let ryuuKeyTimer = null;
     $("#ryuu-key")?.addEventListener("input", (event) => {
       state.lua.ryuuKey = event.currentTarget.value.trim();
       localStorage.setItem("ryuuKey", state.lua.ryuuKey);
@@ -3406,11 +3464,6 @@
           input.dispatchEvent(new Event("input", { bubbles: true }));
         }
       } catch (_) {}
-    });
-    $("#ryuu-key-get")?.addEventListener("click", async (e) => {
-      e.preventDefault();
-      try { await call("open_external", { url: "https://generator.ryuu.lol/api" }); }
-      catch (error) { toast(errorText(error), "error"); }
     });
     $("#check-update-button").addEventListener("click", () => checkForUpdates(true));
     $("#update-install-button")?.addEventListener("click", () => {
@@ -3467,7 +3520,8 @@
     updateHubcapKeyStatus();
     updateRyuuKeyStatus();
     renderLoaderInfo();
-    log("Eclipse Studio 8.0.0 инициализирован", "system");
+    updateAboutInfo();
+    log("Eclipse Studio 8.1.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный вызов отображения окна, если заставка была отключена в параметрах

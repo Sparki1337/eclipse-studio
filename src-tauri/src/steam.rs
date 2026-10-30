@@ -195,7 +195,8 @@ fn clean_query(query: &str) -> String {
         .to_string()
 }
 
-fn search_game_inner(query: &str) -> Result<Option<GameSummary>, String> {
+// Поиск игры в Steam Store по текстовому запросу
+pub(crate) fn search_game_inner(query: &str) -> Result<Option<GameSummary>, String> {
     let clean = clean_query(query);
     if clean.chars().count() < 2 {
         return Ok(None);

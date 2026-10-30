@@ -31,7 +31,7 @@
     },
     files_cancel_download: () => true,
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "8.0.0", latest_version: "8.0.0", currentVersion: "8.0.0", latestVersion: "8.0.0" }),
+    check_for_update: () => ({ available: false, current_version: "8.1.0", latest_version: "8.1.0", currentVersion: "8.1.0", latestVersion: "8.1.0" }),
     download_app_update: async (args) => {
       const ver = args?.version || "6.6.8";
       const name = `Eclipse-Studio-v${ver}.exe`;
@@ -103,6 +103,7 @@
     luatools_update_loader: () => ({ success: true, message: "Библиотеки OpenSteamTool успешно обновлены" }),
     game_artwork_store_url: () => null,
     millennium_plugin_status: () => ({ installed: false, millenniumInstalled: false }),
+    ryuu_usage: () => ({ dailyUsage: 0, dailyLimit: 50, remaining: 50 }),
     hubcap_usage: () => ({ used: 3, limit: 25, remaining: 22 }),
     list_games: () => [], get_app_status: () => ({}), check_asset_updates: () => ({}),
     is_selected_game_running: () => false,
@@ -111,9 +112,18 @@
     eclipse_hv_status: () => ({
       installed: true,
       path: "C:\\Games\\Eclipse-HV.exe",
-      sizeBytes: 449312,
-      version: "1.0.0",
-      remoteVersion: "1.0.0",
+      sizeBytes: 559104,
+      version: "1.1.0",
+      remoteVersion: "1.1.0",
+      updateAvailable: false,
+      destinationDir: "C:\\Games"
+    }),
+    eclipse_hv_check_update: () => ({
+      installed: true,
+      path: "C:\\Games\\Eclipse-HV.exe",
+      sizeBytes: 559104,
+      version: "1.1.0",
+      remoteVersion: "1.1.0",
       updateAvailable: false,
       destinationDir: "C:\\Games"
     }),

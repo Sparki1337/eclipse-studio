@@ -40,17 +40,17 @@ const pinnedFiles = [
   },
   {
     name: "Crocodile Gena Studio",
-    build: "Build 5.0.0",
+    build: "Build 8.1.0",
     password: "",
     pinned: true,
-    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/releases/download/v5.0.0/setup.exe",
+    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/download/v8.1.0/setup.exe",
   },
   {
     name: "Eclipse Studio",
-    build: "Build 7.0.2",
+    build: "Build 8.1.0",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.2/Eclipse-Studio-v7.0.2.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/download/v8.1.0/Eclipse-Studio-v8.1.0.exe",
   },
 ];
 
@@ -85,10 +85,10 @@ function generateMockScript() {
   const responses = {
     check_for_update: () => ({
       available: false,
-      current_version: "6.6.7",
-      latest_version: "6.6.7",
-      currentVersion: "6.6.7",
-      latestVersion: "6.6.7",
+      current_version: "8.1.0",
+      latest_version: "8.1.0",
+      currentVersion: "8.1.0",
+      latestVersion: "8.1.0",
     }),
     get_app_status: () => ({}),
     check_asset_updates: () => ({ status: "ok" }),
@@ -161,6 +161,7 @@ function generateMockScript() {
       installed: true,
       millenniumInstalled: true,
     }),
+    ryuu_usage: () => ({ dailyUsage: 0, dailyLimit: 50, remaining: 50 }),
     hubcap_usage: () => ({ used: 1, limit: 25, remaining: 24 }),
     luatools_restore_manifests: () => null,
 
@@ -205,12 +206,12 @@ function generateMockScript() {
 
     check_for_update: () => ({
       available: false,
-      currentVersion: "7.0.2",
-      latestVersion: "7.0.2",
-      title: "Eclipse Studio 7.0.2",
+      currentVersion: "8.1.0",
+      latestVersion: "8.1.0",
+      title: "Eclipse Studio 8.1.0",
       notes: "Актуальная версия",
       releaseUrl: "https://github.com/Sparki1337/eclipse-studio/releases",
-      portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v7.0.2/Eclipse-Studio-v7.0.2.exe",
+      portableUrl: "https://github.com/Sparki1337/eclipse-studio/download/v8.1.0/Eclipse-Studio-v8.1.0.exe",
       installerUrl: null,
     }),
     download_app_update: async (args) => {

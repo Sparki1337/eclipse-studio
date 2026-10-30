@@ -20,6 +20,7 @@ desktop.ini
 .idea/
 *.swp
 *.bak
+.sharrowkin/
 
 # Environment & local credentials
 .env

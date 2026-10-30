@@ -977,9 +977,9 @@ html.compact .ac-stats strong {
   margin: 3px 0 1px !important;
 }
 
-html.compact .hv-selected-panel { min-height: 120px !important; padding: 0 22px 0 0 !important; }
+html.compact .hv-selected-panel { min-height: 110px !important; padding: 0 20px 0 0 !important; gap: 16px !important; }
 html.compact .hv-selected-icon:not(.hv-selected-cover) { width: 38px !important; height: 38px !important; flex-basis: 38px !important; font-size: 18px !important; }
-html.compact .hv-selected-icon.hv-selected-cover { width: 200px !important; min-width: 200px !important; max-width: 200px !important; min-height: 120px !important; align-self: stretch !important; }
+html.compact .hv-selected-icon.hv-selected-cover { width: 235px !important; min-width: 235px !important; max-width: 235px !important; flex: 0 0 235px !important; height: 100% !important; min-height: 110px !important; align-self: stretch !important; border-radius: 15px 0 0 15px !important; }
 html.compact .hv-selected-copy h3 { font-size: 16px !important; margin: 0 0 2px !important; }
 
 html.compact .dlc-library-panel,
@@ -2247,6 +2247,9 @@ summary.settings-collapsible-summary:hover {
 .settings-collapsible-icon svg {
   width: 18px;
   height: 18px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
 }
 .settings-collapsible-title {
   display: flex;

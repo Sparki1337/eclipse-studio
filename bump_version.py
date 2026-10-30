@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Скрипт для обновления версии проекта во всех файлах
+# Скрипт синхронизации и обновления версии проекта во всех файлах репозитория
 
 import re
 import sys
@@ -11,7 +11,7 @@ from pathlib import Path
 # Корень репозитория
 ROOT_DIR = Path(__file__).resolve().parent
 
-# Настройка UTF-8 для консоли Windows
+# Настройка вывода UTF-8 для консоли Windows
 if sys.platform.startswith("win"):
     try:
         if hasattr(sys.stdout, "reconfigure"):
@@ -21,7 +21,7 @@ if sys.platform.startswith("win"):
     except Exception:
         pass
 
-# Список файлов для обновления
+# Основные файлы проекта
 TAURI_CONF = ROOT_DIR / "src-tauri" / "tauri.conf.json"
 CARGO_TOML = ROOT_DIR / "src-tauri" / "Cargo.toml"
 PACKAGE_JSON = ROOT_DIR / "package.json"
@@ -37,31 +37,48 @@ README_MD = ROOT_DIR / "README.md"
 BUILD_MD = ROOT_DIR / "BUILD.md"
 DOCS_INDEX_HTML = ROOT_DIR / "docs" / "index.html"
 DOCS_APP_JS = ROOT_DIR / "docs" / "app.js"
-CAPTURE_SCREENSHOTS_JS = ROOT_DIR / "tools" / "capture_all_screenshots.js"
+BUILD_PY = ROOT_DIR / "build.py"
+
+# Инструменты и утилиты
+TOOLS_CAPTURE = ROOT_DIR / "tools" / "capture_all_screenshots.js"
+TOOLS_UI_DEV = ROOT_DIR / "tools" / "ui_dev_server.js"
+TOOLS_RELEASE_HELPER = ROOT_DIR / "tools" / "build_release_helper.py"
+
+# Скрипты и скиллы агентов (.agents/skills)
+SKILL_CAPTURE = ROOT_DIR / ".agents" / "skills" / "docsupd" / "scripts" / "capture_all_screenshots.js"
+SKILL_UI_DEV = ROOT_DIR / ".agents" / "skills" / "ui-dev" / "scripts" / "ui_dev_server.js"
+SKILL_MAKE_RELEASE = ROOT_DIR / ".agents" / "skills" / "build" / "scripts" / "make_release.py"
+SKILL_BUILD_MD = ROOT_DIR / ".agents" / "skills" / "build" / "SKILL.md"
 
 
 def get_current_version() -> str:
-    # Чтение текущей версии из tauri.conf.json
+    # Чтение текущей версии из tauri.conf.json или Cargo.toml
     if TAURI_CONF.exists():
-        with open(TAURI_CONF, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data.get("version", "0.0.0")
+        try:
+            with open(TAURI_CONF, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("version", "0.0.0")
+        except Exception:
+            pass
     if CARGO_TOML.exists():
-        content = CARGO_TOML.read_text(encoding="utf-8")
-        match = re.search(r'(?m)^\s*version\s*=\s*"([^"]+)"', content)
-        if match:
-            return match.group(1)
+        try:
+            content = CARGO_TOML.read_text(encoding="utf-8")
+            match = re.search(r'(?m)^\s*version\s*=\s*"([^"]+)"', content)
+            if match:
+                return match.group(1)
+        except Exception:
+            pass
     return "0.0.0"
 
 
 def validate_version(ver: str) -> bool:
-    # Проверка формата semver (например, 6.0.0, 6.1.0-beta.1)
+    # Проверка формата semver (например, 8.0.0, 8.0.1-beta.1)
     pattern = r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$"
     return bool(re.match(pattern, ver))
 
 
 def update_json_version(path: Path, new_ver: str) -> bool:
-    # Обновление поля version в JSON файле
+    # Обновление поля version в JSON-файле
     if not path.exists():
         return False
     try:
@@ -171,7 +188,7 @@ def update_js_files(old_ver: str, new_ver: str) -> bool:
 
 
 def update_rust_sources(old_ver: str, new_ver: str) -> bool:
-    # Обновление User-Agent в Rust коде
+    # Обновление User-Agent в сетевых модулях Rust
     success = True
     for file_path in [DLC_CATALOG_RS, FILES_RS]:
         if file_path.exists():
@@ -190,7 +207,7 @@ def update_rust_sources(old_ver: str, new_ver: str) -> bool:
 
 
 def update_tests(old_ver: str, new_ver: str) -> bool:
-    # Обновление фикстур тестов
+    # Обновление тестовых фикстур
     success = True
     if TAURI_MOCK_JS.exists():
         try:
@@ -219,14 +236,28 @@ def update_docs(old_ver: str, new_ver: str) -> bool:
     if README_MD.exists():
         try:
             content = README_MD.read_text(encoding="utf-8")
+            # Обновление щитов/бейджей версий
             content = re.sub(
                 r'Версия-[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?-63f5c2',
                 f"Версия-{new_ver}-63f5c2",
                 content,
             )
+            # Обновление футера и текстовых упоминаний
             content = re.sub(
                 r'\*\*Eclipse Studio v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\*\*',
                 f"**Eclipse Studio v{new_ver}**",
+                content,
+            )
+            # Обновление имени портативного файла
+            content = re.sub(
+                r'Eclipse-Studio-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.exe',
+                f"Eclipse-Studio-v{new_ver}.exe",
+                content,
+            )
+            # Обновление ссылок на скачивание
+            content = re.sub(
+                r'/(?:releases/)?download/v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?/',
+                f'/download/v{new_ver}/',
                 content,
             )
             README_MD.write_text(content, encoding="utf-8")
@@ -242,6 +273,16 @@ def update_docs(old_ver: str, new_ver: str) -> bool:
                 f"Eclipse Studio v{new_ver}",
                 content,
             )
+            content = re.sub(
+                r'Eclipse-Studio-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.exe',
+                f"Eclipse-Studio-v{new_ver}.exe",
+                content,
+            )
+            content = re.sub(
+                r'python bump_version\.py\s+[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?',
+                f"python bump_version.py {new_ver}",
+                content,
+            )
             BUILD_MD.write_text(content, encoding="utf-8")
         except Exception as e:
             print(f"[!] Ошибка при обновлении BUILD.md: {e}")
@@ -251,12 +292,12 @@ def update_docs(old_ver: str, new_ver: str) -> bool:
 
 
 def update_website(old_ver: str, new_ver: str) -> bool:
-    # Обновление версий на веб-сайте docs/index.html и docs/app.js
+    # Обновление версий на промо-сайте docs/index.html и docs/app.js
     success = True
     if DOCS_INDEX_HTML.exists():
         try:
             content = DOCS_INDEX_HTML.read_text(encoding="utf-8")
-            # Обновление ссылок на стили и скрипты
+            # Обновление версий стилей и скриптов в параметрах запроса
             content = re.sub(
                 r'(style\.css\?v=)[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?',
                 rf'\g<1>{new_ver}',
@@ -267,7 +308,7 @@ def update_website(old_ver: str, new_ver: str) -> bool:
                 rf'\g<1>{new_ver}',
                 content,
             )
-            # Обновление бейджей версий в шапке, герое, карточке релиза и футере
+            # Бейджи версий в шапке, герое и карточке
             content = re.sub(
                 r'(<span class="brand-ver" data-version>v)[^<]+(</span>)',
                 rf'\g<1>{new_ver}\g<2>',
@@ -301,7 +342,6 @@ def update_website(old_ver: str, new_ver: str) -> bool:
     if DOCS_APP_JS.exists():
         try:
             content = DOCS_APP_JS.read_text(encoding="utf-8")
-            # Обновление кэш-бастера к cracks.json
             content = re.sub(
                 r'(\$\{FALLBACK_URL\}\?v=)[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?',
                 rf'\g<1>{new_ver}',
@@ -315,32 +355,145 @@ def update_website(old_ver: str, new_ver: str) -> bool:
     return success
 
 
-def update_capture_tool(old_ver: str, new_ver: str) -> bool:
-    # Обновление версии закрепленного релиза в tools/capture_all_screenshots.js
-    if not CAPTURE_SCREENSHOTS_JS.exists():
-        return False
-    try:
-        content = CAPTURE_SCREENSHOTS_JS.read_text(encoding="utf-8")
-        content = re.sub(
-            r'build:\s*"Build\s+[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"',
-            f'build: "Build {new_ver}"',
-            content,
-        )
-        content = re.sub(
-            r'Eclipse-Studio-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.exe',
-            f'Eclipse-Studio-v{new_ver}.exe',
-            content,
-        )
-        content = re.sub(
-            r'/download/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?/',
-            f'/download/v{new_ver}/',
-            content,
-        )
-        CAPTURE_SCREENSHOTS_JS.write_text(content, encoding="utf-8")
-        return True
-    except Exception as e:
-        print(f"[!] Ошибка при обновлении capture_all_screenshots.js: {e}")
-        return False
+def update_capture_tools(old_ver: str, new_ver: str) -> bool:
+    # Обновление скриптов снятия скриншотов
+    success = True
+    for file_path in [TOOLS_CAPTURE, SKILL_CAPTURE]:
+        if not file_path.exists():
+            continue
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            content = re.sub(
+                r'build:\s*"Build\s+[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"',
+                f'build: "Build {new_ver}"',
+                content,
+            )
+            content = re.sub(
+                r'Eclipse-Studio-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.exe',
+                f'Eclipse-Studio-v{new_ver}.exe',
+                content,
+            )
+            content = re.sub(
+                r'/(?:releases/)?download/v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?/',
+                f'/download/v{new_ver}/',
+                content,
+            )
+            content = re.sub(
+                r'(current_version|latest_version|currentVersion|latestVersion):\s*"[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"',
+                rf'\g<1>: "{new_ver}"',
+                content,
+            )
+            file_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"[!] Ошибка при обновлении {file_path.name}: {e}")
+            success = False
+    return success
+
+
+def update_dev_servers(old_ver: str, new_ver: str) -> bool:
+    # Обновление тестовых серверов разработки UI
+    success = True
+    for file_path in [TOOLS_UI_DEV, SKILL_UI_DEV]:
+        if not file_path.exists():
+            continue
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            content = re.sub(
+                r'build:\s*"Build\s+[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"',
+                f'build: "Build {new_ver}"',
+                content,
+            )
+            content = re.sub(
+                r'Eclipse-Studio-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.exe',
+                f'Eclipse-Studio-v{new_ver}.exe',
+                content,
+            )
+            content = re.sub(
+                r'/(?:releases/)?download/v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?/',
+                f'/download/v{new_ver}/',
+                content,
+            )
+            content = re.sub(
+                r'(current_version|latest_version|currentVersion|latestVersion):\s*"[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"',
+                rf'\g<1>: "{new_ver}"',
+                content,
+            )
+            content = re.sub(
+                r'title:\s*"Eclipse Studio\s+[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"',
+                f'title: "Eclipse Studio {new_ver}"',
+                content,
+            )
+            file_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"[!] Ошибка при обновлении {file_path.name}: {e}")
+            success = False
+    return success
+
+
+def update_build_helpers(old_ver: str, new_ver: str) -> bool:
+    # Обновление скриптов сборки и хелперов релиза
+    success = True
+
+    # 1. build.py
+    if BUILD_PY.exists():
+        try:
+            content = BUILD_PY.read_text(encoding="utf-8")
+            content = re.sub(
+                r'(data\.get\("version",\s*")[^"]+("\))',
+                rf'\g<1>{new_ver}\g<2>',
+                content,
+            )
+            content = re.sub(
+                r'(return\s*")[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?("\s*#.*Чтение версии)',
+                rf'\g<1>{new_ver}\g<3>',
+                content,
+            )
+            BUILD_PY.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"[!] Ошибка при обновлении build.py: {e}")
+            success = False
+
+    # 2. build_release_helper.py и make_release.py
+    for file_path in [TOOLS_RELEASE_HELPER, SKILL_MAKE_RELEASE]:
+        if not file_path.exists():
+            continue
+        try:
+            content = file_path.read_text(encoding="utf-8")
+            content = re.sub(
+                r'(data\.get\("version",\s*")[^"]+("\))',
+                rf'\g<1>{new_ver}\g<2>',
+                content,
+            )
+            content = re.sub(
+                r'(return\s*")[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(")',
+                rf'\g<1>{new_ver}\g<3>',
+                content,
+            )
+            file_path.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"[!] Ошибка при обновлении {file_path.name}: {e}")
+            success = False
+
+    # 3. .agents/skills/build/SKILL.md
+    if SKILL_BUILD_MD.exists():
+        try:
+            content = SKILL_BUILD_MD.read_text(encoding="utf-8")
+            content = re.sub(
+                r'Eclipse-Studio-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\.exe',
+                f'Eclipse-Studio-v{new_ver}.exe',
+                content,
+            )
+            content = re.sub(
+                r'например `[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?`',
+                f'например `{new_ver}`',
+                content,
+            )
+            SKILL_BUILD_MD.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"[!] Ошибка при обновлении SKILL.md: {e}")
+            success = False
+
+    return success
 
 
 def sync_cargo_lock() -> None:
@@ -356,7 +509,7 @@ def sync_cargo_lock() -> None:
         )
         print("[+] Cargo.lock успешно синхронизирован")
     except Exception:
-        # Если cargo недоступен, это не фатально
+        # Если cargo недоступен в окружении, это не фатально
         pass
 
 
@@ -373,7 +526,7 @@ def main() -> None:
         new_ver = sys.argv[1].strip()
     else:
         try:
-            new_ver = input("Введите новую версию (например, 6.0.1 или 6.1.0): ").strip()
+            new_ver = input("Введите новую версию (например, 8.0.1 или 8.1.0): ").strip()
         except (KeyboardInterrupt, EOFError):
             print("\nОтменено.")
             sys.exit(0)
@@ -383,7 +536,7 @@ def main() -> None:
         sys.exit(1)
 
     if not validate_version(new_ver):
-        print(f"[-] Некорректный формат версии: '{new_ver}'. Ожидается semver (например, 6.0.1).")
+        print(f"[-] Некорректный формат версии: '{new_ver}'. Ожидается semver (например, 8.0.1).")
         sys.exit(1)
 
     if new_ver == current_ver:
@@ -392,7 +545,7 @@ def main() -> None:
 
     print(f"\nПрименение новой версии: {current_ver} -> {new_ver}...")
 
-    # Выполнение обновлений
+    # Выполнение обновлений всех файлов проекта
     updated_files = []
 
     if update_json_version(TAURI_CONF, new_ver):
@@ -415,8 +568,12 @@ def main() -> None:
         updated_files.append("README.md & BUILD.md")
     if update_website(current_ver, new_ver):
         updated_files.append("docs/index.html & docs/app.js")
-    if update_capture_tool(current_ver, new_ver):
-        updated_files.append("tools/capture_all_screenshots.js")
+    if update_capture_tools(current_ver, new_ver):
+        updated_files.append("tools/capture_all_screenshots.js & skills")
+    if update_dev_servers(current_ver, new_ver):
+        updated_files.append("tools/ui_dev_server.js & skills")
+    if update_build_helpers(current_ver, new_ver):
+        updated_files.append("build.py, build_release_helper.py & skills")
 
     # Синхронизация Cargo.lock
     sync_cargo_lock()

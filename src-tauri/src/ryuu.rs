@@ -42,6 +42,80 @@ pub struct RyuuGame {
     pub kind: Option<String>,
 }
 
+// Статистика использования и суточный лимит загрузок Ryuu
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RyuuUsage {
+    #[serde(alias = "daily_usage")]
+    pub daily_usage: u64,
+    #[serde(alias = "daily_limit")]
+    pub daily_limit: u64,
+    #[serde(default)]
+    pub remaining: u64,
+}
+
+// Локальная структура суточного счетчика в ryuu-usage.json
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct StoredUsage {
+    day: u64,
+    daily_usage: u64,
+    daily_limit: u64,
+}
+
+// Текущий день в секундах / 86400 (Unix-эпоха)
+fn current_epoch_day() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        / 86400
+}
+
+// Путь к файлу локального суточного счетчика
+fn usage_path(app: &AppHandle) -> Option<PathBuf> {
+    let dir = app.path().app_local_data_dir().ok()?;
+    let _ = fs::create_dir_all(&dir);
+    Some(dir.join("ryuu-usage.json"))
+}
+
+// Чтение суточного счетчика с автосбросом в новый день
+fn read_stored_usage(app: &AppHandle) -> StoredUsage {
+    let today = current_epoch_day();
+    let default = StoredUsage {
+        day: today,
+        daily_usage: 0,
+        daily_limit: 50,
+    };
+    let Some(path) = usage_path(app) else {
+        return default;
+    };
+    if let Ok(bytes) = fs::read(&path) {
+        if let Ok(stored) = serde_json::from_slice::<StoredUsage>(&bytes) {
+            if stored.day == today {
+                return stored;
+            }
+        }
+    }
+    default
+}
+
+// Сохранение суточного счетчика
+fn write_stored_usage(app: &AppHandle, usage: &StoredUsage) {
+    if let Some(path) = usage_path(app) {
+        if let Ok(json) = serde_json::to_vec_pretty(usage) {
+            let _ = fs::write(path, json);
+        }
+    }
+}
+
+// Фиксация успешного скачивания через Ryuu
+pub fn record_ryuu_download(app: &AppHandle) {
+    let mut stored = read_stored_usage(app);
+    stored.day = current_epoch_day();
+    stored.daily_usage = stored.daily_usage.saturating_add(1);
+    write_stored_usage(app, &stored);
+}
+
 fn catalog_cache() -> &'static Mutex<Option<Vec<RyuuGame>>> {
     static CACHE: OnceLock<Mutex<Option<Vec<RyuuGame>>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(None))
@@ -227,8 +301,26 @@ fn http_get(url: &str, auth: Option<&str>, identity: bool) -> Result<Vec<u8>, St
         }
     }
 
-    let _ = network_error;
-    Err("Генератор недоступен — вероятно, провайдер блокирует домен. Включите VPN и попробуйте снова.".to_string())
+    let lower = network_error.to_lowercase();
+    let is_antivirus_or_ssl = lower.contains("access denied")
+        || lower.contains("access_denied")
+        || lower.contains("sec_e_logon_denied")
+        || lower.contains("0x8009030c")
+        || lower.contains("tlsv1_alert")
+        || lower.contains("blocked by eset")
+        || lower.contains("certificate");
+
+    if is_antivirus_or_ssl {
+        Err(
+            "Генератор недоступен: соединение отклонено защитой антивируса (ESET/NOD32/веб-фильтр). \
+            Добавьте generator.ryuu.lol в список разрешённых адресов антивируса или переключитесь на сервис HubCap."
+                .to_string(),
+        )
+    } else {
+        Err(format!(
+            "Генератор недоступен: {network_error}. Добавьте домен в исключения антивируса, используйте VPN/Zapret2 или переключитесь на HubCap."
+        ))
+    }
 }
 
 fn catalog_path(app: &AppHandle) -> Option<PathBuf> {
@@ -431,7 +523,13 @@ fn ryuu_get_blocking(
     let bytes = http_get(&format!("{DOWNLOAD_BASE}{clean}"), Some(key), true);
 
     match bytes {
-        Ok(bytes) => luatools::install_zip_bytes(&app, &bytes, steam_path, auto_update),
+        Ok(bytes) => {
+            let result = luatools::install_zip_bytes(&app, &bytes, steam_path, auto_update);
+            if result.success {
+                record_ryuu_download(&app);
+            }
+            result
+        }
         Err(message) => LuaInstallResult {
             success: false,
             message,
@@ -439,4 +537,80 @@ fn ryuu_get_blocking(
             added_appids: vec![],
         },
     }
+}
+
+// Запрос статистики использования и лимитов Ryuu
+#[tauri::command]
+pub async fn ryuu_usage(app: AppHandle, api_key: String) -> Result<RyuuUsage, String> {
+    tauri::async_runtime::spawn_blocking(move || ryuu_usage_blocking(app, api_key))
+        .await
+        .map_err(|error| format!("Ошибка получения квоты Ryuu: {error}"))?
+}
+
+fn ryuu_usage_blocking(app: AppHandle, api_key: String) -> Result<RyuuUsage, String> {
+    let key = api_key.trim();
+    let mut stored = read_stored_usage(&app);
+
+    // Если указан API-ключ, пробуем запросить актуальные серверные квоты
+    if !key.is_empty() {
+        for endpoint in [
+            "https://generator.ryuu.lol/api/user/stats",
+            "https://generator.ryuu.lol/api/stats",
+            "https://generator.ryuu.lol/api/user",
+        ] {
+            if let Ok(bytes) = http_get(endpoint, Some(key), false) {
+                if let Ok(json) = serde_json::from_slice::<Value>(&bytes) {
+                    let remaining_opt = json
+                        .get("remaining")
+                        .or_else(|| json.get("downloads_left"))
+                        .or_else(|| json.get("downloadsLeft"))
+                        .or_else(|| json.get("downloadsLeftToday"))
+                        .and_then(|v| v.as_u64());
+
+                    let limit_opt = json
+                        .get("daily_limit")
+                        .or_else(|| json.get("dailyLimit"))
+                        .or_else(|| json.get("limit"))
+                        .and_then(|v| v.as_u64());
+
+                    let usage_opt = json
+                        .get("daily_usage")
+                        .or_else(|| json.get("dailyUsage"))
+                        .or_else(|| json.get("used"))
+                        .and_then(|v| v.as_u64());
+
+                    if remaining_opt.is_some() || limit_opt.is_some() || usage_opt.is_some() {
+                        let daily_limit = limit_opt.unwrap_or(stored.daily_limit);
+                        let daily_usage = usage_opt.unwrap_or_else(|| {
+                            if let Some(rem) = remaining_opt {
+                                daily_limit.saturating_sub(rem)
+                            } else {
+                                stored.daily_usage
+                            }
+                        });
+                        let remaining =
+                            remaining_opt.unwrap_or_else(|| daily_limit.saturating_sub(daily_usage));
+
+                        stored.daily_limit = daily_limit;
+                        stored.daily_usage = daily_usage;
+                        write_stored_usage(&app, &stored);
+
+                        return Ok(RyuuUsage {
+                            daily_usage,
+                            daily_limit,
+                            remaining,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Возврат надежного локального суточного счетчика
+    let remaining = stored.daily_limit.saturating_sub(stored.daily_usage);
+    Ok(RyuuUsage {
+        daily_usage: stored.daily_usage,
+        daily_limit: stored.daily_limit,
+        remaining,
+    })
 }

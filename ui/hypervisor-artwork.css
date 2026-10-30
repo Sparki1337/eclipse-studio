@@ -1,41 +1,47 @@
-/* Баннер выбранной игры */
+/* Стили полноразмерных обложек и карточек модуля Hypervisor (Eclipse-HV) */
+
+/* Панель выбранной игры: обложка слева на всю высоту без обрезки, текст сразу после нее */
+:is(html, html.compact) .hv-selected-panel,
 .hv-selected-panel {
   position: relative !important;
-  display: grid !important;
-  grid-template-columns: 250px minmax(0, 1fr) auto !important;
-  column-gap: 24px !important;
-  row-gap: 0 !important;
+  display: flex !important;
   align-items: stretch !important;
-  padding: 0 28px 0 0 !important;
+  gap: 20px !important;
+  padding: 0 24px 0 0 !important;
   overflow: hidden !important;
-  min-height: 156px !important;
+  min-height: 124px !important;
   border-radius: 16px !important;
   border: 1px solid var(--line) !important;
   background: linear-gradient(145deg, var(--panel-a), var(--panel-b)) !important;
   margin-bottom: 20px !important;
 }
 
-/* Обложка выбранной игры в баннере: во всю высоту карточки, без внешних рамок */
+/* Обложка выбранной игры: на всю высоту плашки с точной шириной пропорций Steam Capsule (460/215) */
 :is(html, html.compact) .hv-selected-icon.hv-selected-cover,
 .hv-selected-icon.hv-selected-cover {
-  width: 250px !important;
-  min-width: 250px !important;
-  max-width: 250px !important;
-  height: auto !important;
-  min-height: 156px !important;
-  flex: 0 0 250px !important;
+  width: 265px !important;
+  min-width: 265px !important;
+  max-width: 265px !important;
+  flex: 0 0 265px !important;
+  height: 100% !important;
+  min-height: 124px !important;
+  aspect-ratio: 460 / 215 !important;
   align-self: stretch !important;
-  border-radius: 0 !important;
   position: relative !important;
   overflow: hidden !important;
-  border: 0 !important;
-  background: transparent !important;
+  border-radius: 15px 0 0 15px !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-top: 0 !important;
+  border-bottom: 0 !important;
+  border-left: 0 !important;
+  background: #0d0f14 !important;
   box-shadow: none !important;
   padding: 0 !important;
   margin: 0 !important;
+  box-sizing: border-box !important;
 }
 
-/* Изображение обложки плавно растворяется в фон карточки справа */
+/* Изображение обложки: полная картинка без затуханий и без обрезки */
 :is(html, html.compact) .hv-selected-icon.hv-selected-cover .hv-cover-image,
 .hv-selected-icon.hv-selected-cover .hv-cover-image,
 .hv-cover-image {
@@ -45,25 +51,29 @@
   height: 100% !important;
   object-fit: cover !important;
   object-position: center !important;
+  border-radius: 15px 0 0 15px !important;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.22s ease;
-  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 58%, rgba(0, 0, 0, 0.85) 74%, transparent 100%) !important;
-  mask-image: linear-gradient(90deg, #000 0%, #000 58%, rgba(0, 0, 0, 0.85) 74%, transparent 100%) !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
 }
 
 .hv-cover.has-artwork .hv-cover-image {
   opacity: 1 !important;
 }
 
+/* Текстовый блок выбранной игры: начинается строго возле картинки */
 .hv-selected-copy {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: center !important;
   align-self: center !important;
-  gap: 8px !important;
-  padding: 20px 0 !important;
-  min-width: 0 !important;
+  gap: 6px !important;
+  padding: 14px 0 !important;
+  margin: 0 !important;
 }
 
 .hv-selected-copy h3 {
@@ -85,14 +95,15 @@
   white-space: nowrap !important;
 }
 
+/* Кнопка запуска справа */
 .hv-selected-actions {
+  flex: 0 0 auto !important;
   display: flex !important;
   align-items: center !important;
   align-self: center !important;
+  margin-left: auto !important;
+  padding: 14px 0 !important;
   gap: 12px !important;
-  padding: 20px 0 !important;
-  flex-shrink: 0 !important;
-  margin: 0 !important;
   width: auto !important;
 }
 
@@ -103,59 +114,89 @@
   padding: 16px !important;
 }
 
+:is(html, html.compact) .hv-game-card,
 .hv-game-card {
-  display: grid !important;
-  grid-template-columns: 180px minmax(0, 1fr) !important;
-  align-items: stretch !important;
-  padding: 0 19px 0 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 12px 18px 12px 14px !important;
   border: 1px solid var(--line) !important;
   border-radius: 14px !important;
   background: rgba(255, 255, 255, 0.02) !important;
   overflow: hidden !important;
   transition: all 0.18s ease !important;
+  min-height: auto !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+  user-select: none !important;
 }
 
 .hv-game-card:hover {
-  border-color: rgba(255, 255, 255, 0.12) !important;
-  background: rgba(255, 255, 255, 0.035) !important;
+  border-color: rgba(var(--accent-rgb), 0.35) !important;
+  background: rgba(var(--accent-rgb), 0.04) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.hv-game-card:active {
+  transform: translateY(0) !important;
 }
 
 .hv-game-card.selected {
-  border-color: rgba(var(--accent-rgb), 0.35) !important;
-  background: rgba(var(--accent-rgb), 0.05) !important;
-  box-shadow: inset 3px 0 var(--accent) !important;
+  border-color: rgba(var(--accent-rgb), 0.5) !important;
+  background: rgba(var(--accent-rgb), 0.07) !important;
+  box-shadow: inset 3px 0 var(--accent), 0 4px 18px rgba(0, 0, 0, 0.25) !important;
 }
 
-/* Миниатюра капсулы в карточке игры */
+/* Миниатюра капсулы в карточке игры: аккуратная плашка со скруглениями со всех сторон */
+:is(html, html.compact) .hv-game-symbol.hv-game-cover,
 .hv-game-symbol.hv-game-cover {
-  width: 180px !important;
-  height: auto !important;
-  min-height: 120px !important;
-  align-self: stretch !important;
-  border-radius: 0 !important;
+  width: 130px !important;
+  min-width: 130px !important;
+  max-width: 130px !important;
+  height: 61px !important;
+  aspect-ratio: 460 / 215 !important;
+  flex: 0 0 130px !important;
+  align-self: center !important;
+  border-radius: 9px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4) !important;
   overflow: hidden !important;
   position: relative !important;
-  border: 0 !important;
-  background: transparent !important;
+  background: #0d0f14 !important;
   padding: 0 !important;
-  flex-shrink: 0 !important;
-  box-sizing: border-box !important;
+  margin: 0 !important;
   cursor: pointer !important;
+  box-sizing: border-box !important;
+}
+
+:is(html, html.compact) .hv-game-symbol.hv-game-cover .hv-cover-image,
+.hv-game-symbol.hv-game-cover .hv-cover-image {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  border-radius: 8px !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
 }
 
 .hv-game-main {
   min-width: 0 !important;
-  align-self: center !important;
-  padding: 16px 0 !important;
+  flex: 1 1 auto !important;
+  padding: 0 !important;
 }
 
-/* Обложки и фолбэки */
+/* Общий базовый контейнер обложек */
 .hv-cover {
   position: relative !important;
   display: block !important;
   overflow: hidden !important;
   padding: 0 !important;
   border: 0 !important;
+  box-sizing: border-box !important;
 }
 
 .hv-cover.has-artwork {
@@ -164,6 +205,7 @@
   box-shadow: none !important;
 }
 
+/* Фолбэк когда обложка не найдена или еще загружается */
 .hv-cover-fallback {
   position: absolute !important;
   inset: 0 !important;
@@ -175,6 +217,7 @@
   background: linear-gradient(125deg, rgba(var(--accent-rgb), 0.08), transparent) !important;
   transition: opacity 0.2s ease !important;
   pointer-events: none !important;
+  border-radius: inherit !important;
 }
 
 .hv-cover-fallback svg {
@@ -208,63 +251,42 @@
   overflow-y: auto !important;
 }
 
-/* Адаптивность для экранов */
-@media (max-width: 1380px) {
+/* Адаптивность для узких экранов */
+@media (max-width: 1180px) {
+  :is(html, html.compact) .hv-selected-panel,
   .hv-selected-panel {
-    grid-template-columns: 220px minmax(0, 1fr) !important;
-    row-gap: 14px !important;
-    padding: 0 24px 0 0 !important;
-  }
-  :is(html, html.compact) .hv-selected-icon.hv-selected-cover {
-    width: 220px !important;
-    min-width: 220px !important;
-    max-width: 220px !important;
-    grid-row: 1 / 3 !important;
-  }
-  .hv-selected-copy {
-    padding: 20px 0 0 !important;
+    flex-wrap: wrap !important;
+    gap: 14px !important;
+    padding: 0 16px 14px 0 !important;
   }
   .hv-selected-actions {
-    grid-column: 2 !important;
-    justify-self: end !important;
-    margin: 0 0 20px !important;
-    padding: 0 !important;
-    flex-wrap: wrap !important;
-  }
-}
-
-@media (max-width: 1180px) {
-  .hv-selected-panel {
-    grid-template-columns: 180px minmax(0, 1fr) !important;
-    padding-right: 20px !important;
-  }
-  :is(html, html.compact) .hv-selected-icon.hv-selected-cover {
-    width: 180px !important;
-    min-width: 180px !important;
-    max-width: 180px !important;
-  }
-  .hv-game-card {
-    grid-template-columns: 160px minmax(0, 1fr) !important;
-    gap: 14px !important;
-  }
-  .hv-game-symbol.hv-game-cover {
-    width: 160px !important;
+    margin-left: 0 !important;
+    width: 100% !important;
+    justify-content: flex-end !important;
+    padding: 0 0 0 16px !important;
   }
 }
 
 @media (max-width: 900px) {
+  :is(html, html.compact) .hv-selected-panel,
   .hv-selected-panel {
-    grid-template-columns: 160px minmax(0, 1fr) !important;
-    column-gap: 16px !important;
-    padding-right: 18px !important;
+    min-height: 100px !important;
+    gap: 12px !important;
   }
-  :is(html, html.compact) .hv-selected-icon.hv-selected-cover {
-    width: 160px !important;
-    min-width: 160px !important;
+  :is(html, html.compact) .hv-selected-icon.hv-selected-cover,
+  .hv-selected-icon.hv-selected-cover {
+    width: 214px !important;
+    min-width: 214px !important;
+    max-width: 214px !important;
+    flex: 0 0 214px !important;
+    min-height: 100px !important;
   }
-  .hv-selected-actions {
-    justify-self: stretch !important;
-    justify-content: flex-end !important;
-    flex-wrap: wrap !important;
+  :is(html, html.compact) .hv-game-symbol.hv-game-cover,
+  .hv-game-symbol.hv-game-cover {
+    width: 115px !important;
+    min-width: 115px !important;
+    max-width: 115px !important;
+    height: 54px !important;
+    flex: 0 0 115px !important;
   }
 }
