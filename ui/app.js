@@ -2666,24 +2666,25 @@
     let ruPart = "";
 
     // Поиск заголовка русской секции (Markdown ## Русский или HTML <h2>...Русский...</h2>)
-    const ruHeaderIndex = clean.search(/(?:(?:^|\n)##?\s*(?:Русский|Russian|RU)\b|<h[1-3][^>]*>[^<]*(?:Русский|Russian|RU)[^<]*<\/h[1-3]>)/i);
-    const hrIndex = clean.search(/(?:---|(?<!<[^>]*)<hr\s*\/?>)/i);
+    // Обязательно учитываем границы слов для "RU", чтобы исключить ложное совпадение с "Antivirus"
+    const ruHeaderRegex = /(?:(?:^|\n)##?\s*(?:Русский|\b(?:Russian|RU)\b)|<h[1-3][^>]*>(?:(?!<\/h[1-3]>).)*?(?:(?<=^|[\s>"'«])Русский(?=$|[\s<"'».,:;])|\b(?:Russian|RU)\b)(?:(?!<\/h[1-3]>).)*?<\/h[1-3]>)/iu;
+    const ruHeaderMatch = clean.match(ruHeaderRegex);
 
-    if (ruHeaderIndex !== -1) {
-      enPart = clean.slice(0, ruHeaderIndex).replace(/(?:---|<hr\s*\/?>)[\s\r\n]*$/, "").trim();
-      ruPart = clean.slice(ruHeaderIndex).replace(/^([^\n]*\n+|<h[1-3][^>]*>[^<]*<\/h[1-3]>)/i, "").trim();
-    } else if (hrIndex !== -1) {
-      enPart = clean.slice(0, hrIndex).trim();
-      ruPart = clean.slice(hrIndex + 3).replace(/^[^>]*>/, "").trim();
+    const hrRegex = /(?:---|(?<!<[^>]*)<hr\s*\/?>)/i;
+    const hrMatch = clean.match(hrRegex);
+
+    if (ruHeaderMatch) {
+      enPart = clean.slice(0, ruHeaderMatch.index).replace(/(?:---|<hr\s*\/?>)[\s\r\n]*$/, "").trim();
+      ruPart = clean.slice(ruHeaderMatch.index + ruHeaderMatch[0].length).trim();
+    } else if (hrMatch) {
+      enPart = clean.slice(0, hrMatch.index).trim();
+      ruPart = clean.slice(hrMatch.index + hrMatch[0].length).replace(/^[^>]*>/, "").trim();
     } else {
       enPart = clean;
       ruPart = clean;
     }
 
     let target = (lang === "en" ? enPart : ruPart) || clean;
-
-    // Отсекаем технические блоки проверки антивирусов и контрольных сумм
-    target = target.split(/(?:###?\s*(?:Antivirus\s*Verification|Проверка\s*безопасности|Security\s*Verification)|<h[1-4][^>]*>[^<]*(?:Antivirus\s*Verification|Проверка\s*безопасности|Security\s*Verification)[^<]*<\/h[1-4]>)/i)[0].trim();
 
     // Удаляем верхний дублирующий H1-заголовок релиза
     target = target.replace(/^(?:#\s*Eclipse\s*Studio[^\n]*\n+|<h1[^>]*>[\s\S]*?<\/h1>)/i, "").trim();
@@ -2706,6 +2707,14 @@
 
     // Снимаем оставшиеся markdown-выделения жирным шрифтом
     target = target.replace(/\*\*([^\*]+)\*\*/g, "$1");
+
+    // Декодируем часто встречающиеся HTML сущности
+    target = target
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
 
     return target.replace(/^[ \t]+/gm, "").replace(/\n\s*\n\s*\n/g, "\n\n").trim();
   }
