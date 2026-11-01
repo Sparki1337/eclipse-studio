@@ -68,10 +68,12 @@ fn map_status(status: reqwest::StatusCode) -> String {
 }
 
 #[tauri::command]
-pub async fn hubcap_usage(api_key: String) -> Result<HubcapUsage, String> {
-    tauri::async_runtime::spawn_blocking(move || hubcap_usage_blocking(api_key))
-        .await
-        .map_err(|error| format!("Проверка лимита прервана: {error}"))?
+pub async fn hubcap_usage(app: AppHandle) -> Result<HubcapUsage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        hubcap_usage_blocking(crate::secure_state::secret(&app, "hubcap")?)
+    })
+    .await
+    .map_err(|error| format!("Проверка лимита прервана: {error}"))?
 }
 
 fn hubcap_usage_blocking(api_key: String) -> Result<HubcapUsage, String> {
@@ -95,10 +97,12 @@ fn hubcap_usage_blocking(api_key: String) -> Result<HubcapUsage, String> {
 }
 
 #[tauri::command]
-pub async fn hubcap_search(query: String, api_key: String) -> Result<Vec<RyuuGame>, String> {
-    tauri::async_runtime::spawn_blocking(move || hubcap_search_blocking(query, api_key))
-        .await
-        .map_err(|error| format!("Поиск прерван: {error}"))?
+pub async fn hubcap_search(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        hubcap_search_blocking(query, crate::secure_state::secret(&app, "hubcap")?)
+    })
+    .await
+    .map_err(|error| format!("Поиск прерван: {error}"))?
 }
 
 fn hubcap_search_blocking(query: String, api_key: String) -> Result<Vec<RyuuGame>, String> {
@@ -148,12 +152,19 @@ fn hubcap_search_blocking(query: String, api_key: String) -> Result<Vec<RyuuGame
 pub async fn hubcap_get(
     app: AppHandle,
     appid: String,
-    api_key: String,
     steam_path: Option<String>,
     auto_update: bool,
 ) -> LuaInstallResult {
     match tauri::async_runtime::spawn_blocking(move || {
-        hubcap_get_blocking(app, appid, api_key, steam_path, auto_update)
+        match crate::secure_state::secret(&app, "hubcap") {
+            Ok(api_key) => hubcap_get_blocking(app, appid, api_key, steam_path, auto_update),
+            Err(error) => LuaInstallResult {
+                success: false,
+                message: error,
+                logs: vec![],
+                added_appids: vec![],
+            },
+        }
     })
     .await
     {

@@ -354,21 +354,41 @@ pub(crate) async fn anticheat_scan() -> Result<AntiCheatReport, String> {
 
 #[tauri::command]
 pub(crate) async fn anticheat_remove(
+    app: tauri::AppHandle,
     id: String,
     backup_dir: String,
 ) -> Result<AntiCheatRemovalResult, String> {
-    tauri::async_runtime::spawn_blocking(move || remove_selected(Some(&id), Path::new(&backup_dir)))
-        .await
-        .map_err(|error| format!("Удаление античита прервано: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::jobs::run(
+            &[
+                crate::jobs::system_resource(&app),
+                PathBuf::from(&backup_dir),
+            ],
+            "Удаление выбранных компонентов",
+            || remove_selected(Some(&id), Path::new(&backup_dir)),
+        )?
+    })
+    .await
+    .map_err(|error| format!("Удаление античита прервано: {error}"))?
 }
 
 #[tauri::command]
 pub(crate) async fn anticheat_remove_all(
+    app: tauri::AppHandle,
     backup_dir: String,
 ) -> Result<AntiCheatRemovalResult, String> {
-    tauri::async_runtime::spawn_blocking(move || remove_selected(None, Path::new(&backup_dir)))
-        .await
-        .map_err(|error| format!("Удаление античитов прервано: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::jobs::run(
+            &[
+                crate::jobs::system_resource(&app),
+                PathBuf::from(&backup_dir),
+            ],
+            "Удаление системных компонентов",
+            || remove_selected(None, Path::new(&backup_dir)),
+        )?
+    })
+    .await
+    .map_err(|error| format!("Удаление античитов прервано: {error}"))?
 }
 
 #[tauri::command]
@@ -687,7 +707,11 @@ fn remove_selected(
     }
     fs::create_dir_all(backup_root)
         .map_err(|error| format!("Не удалось открыть выбранную папку: {error}"))?;
-    let backup = backup_root.join(format!("Crocodile-Gena-AntiCheat-Backup-{timestamp}"));
+    crate::safe_path::no_links(backup_root)?;
+    let backup = backup_root.join(format!(
+        "Eclipse-AntiCheat-Backup-{timestamp}-{}",
+        uuid::Uuid::new_v4()
+    ));
     fs::create_dir_all(&backup)
         .map_err(|error| format!("Не удалось создать резервную папку: {error}"))?;
 
@@ -696,7 +720,7 @@ fn remove_selected(
     let mut restart_required = false;
     for detection in selected {
         let item_backup = backup.join(&detection.item.id);
-        let _ = fs::create_dir_all(&item_backup);
+        fs::create_dir_all(&item_backup).map_err(|e| e.to_string())?;
         for (index, target) in detection.targets.iter().enumerate() {
             let result = match target {
                 Target::Service(name) => remove_service(name, &item_backup),
@@ -731,11 +755,11 @@ fn remove_selected(
 
 fn remove_service(name: &str, backup: &Path) -> Result<(), String> {
     let registry_path = format!(r"HKLM\SYSTEM\CurrentControlSet\Services\{name}");
-    let _ = export_registry(
+    export_registry(
         &registry_path,
         &backup.join(format!("service-{name}.reg")),
         "64",
-    );
+    )?;
     let mut stop = Command::new("sc.exe");
     stop.args(["stop", name]);
     #[cfg(target_os = "windows")]
@@ -758,7 +782,15 @@ fn remove_service(name: &str, backup: &Path) -> Result<(), String> {
 fn remove_registry(path: &str, backup: &Path, index: usize) -> Result<(), String> {
     for view in ["64", "32"] {
         let export = backup.join(format!("registry-{index}-{view}.reg"));
-        let _ = export_registry(path, &export, view);
+        // Отсутствующий вид пропускается, ошибка экспорта существующего ключа останавливает удаление.
+        let mut probe = Command::new("reg.exe");
+        probe.args(["query", path, &format!("/reg:{view}")]);
+        #[cfg(windows)]
+        probe.creation_flags(CREATE_NO_WINDOW);
+        if !probe.output().map_err(|e| e.to_string())?.status.success() {
+            continue;
+        }
+        export_registry(path, &export, view)?;
         let mut command = Command::new("reg.exe");
         command.args(["delete", path, "/f", &format!("/reg:{view}")]);
         #[cfg(target_os = "windows")]
@@ -774,7 +806,7 @@ fn remove_registry(path: &str, backup: &Path, index: usize) -> Result<(), String
     }
 }
 
-fn export_registry(path: &str, destination: &Path, view: &str) -> Result<(), String> {
+fn export_registry_raw(path: &str, destination: &Path, view: &str) -> Result<(), String> {
     let mut command = Command::new("reg.exe");
     command.args(["export", path]);
     command.arg(destination);
@@ -784,11 +816,33 @@ fn export_registry(path: &str, destination: &Path, view: &str) -> Result<(), Str
     let output = command
         .output()
         .map_err(|error| format!("не удалось сохранить {path}: {error}"))?;
-    output
-        .status
-        .success()
-        .then_some(())
-        .ok_or_else(|| format!("не удалось сохранить резервную копию {path}"))
+    if !output.status.success() {
+        return Err(format!("Не удалось сохранить резервную копию {path}"));
+    }
+    let data = fs::read(destination).map_err(|e| e.to_string())?;
+    if data.len() < 20 {
+        return Err("Экспорт реестра пуст или повреждён".into());
+    }
+    fs::File::open(destination)
+        .and_then(|f| f.sync_all())
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+fn export_registry(path: &str, destination: &Path, view: &str) -> Result<(), String> {
+    export_registry_raw(path, destination, view)?;
+    seal_record(
+        destination.parent().ok_or("Не найдена папка бэкапа")?,
+        &SystemRestoreRecord::Registry {
+            path: path.into(),
+            view: view.into(),
+            file: destination
+                .file_name()
+                .ok_or("Не найдено имя бэкапа")?
+                .to_string_lossy()
+                .into_owned(),
+            hash: crate::durable::hash_file(destination)?,
+        },
+    )
 }
 
 fn quarantine_path(path: &Path, backup: &Path, index: usize) -> Result<(), String> {
@@ -803,12 +857,30 @@ fn quarantine_path(path: &Path, backup: &Path, index: usize) -> Result<(), Strin
         .and_then(|value| value.to_str())
         .unwrap_or("component");
     let destination = backup.join(format!("file-{index}-{name}"));
-    fs::rename(path, &destination).map_err(|error| {
-        format!(
-            "файл или папка используется и не перемещена: {} ({error})",
-            path.display()
-        )
-    })
+    crate::safe_path::no_links(path)?;
+    let hashes = tree_hashes(path)?;
+    copy_tree(path, &destination)?;
+    if tree_hashes(&destination)? != hashes {
+        return Err("Проверка резервной копии не пройдена; оригинал оставлен".into());
+    }
+    seal_record(
+        backup,
+        &SystemRestoreRecord::File {
+            path: path.display().to_string(),
+            file: destination
+                .file_name()
+                .ok_or("Нет имени бэкапа")?
+                .to_string_lossy()
+                .into_owned(),
+            hashes,
+            directory: path.is_dir(),
+        },
+    )?;
+    if path.is_dir() {
+        fs::remove_dir_all(path).map_err(|e| e.to_string())
+    } else {
+        fs::remove_file(path).map_err(|e| e.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -834,4 +906,140 @@ mod tests {
             service_image_path(r#"\??\C:\Windows\System32\drivers\ace-base.sys"#).expect("path");
         assert!(path.ends_with(r"System32\drivers\ace-base.sys"));
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
+enum SystemRestoreRecord {
+    Registry {
+        path: String,
+        view: String,
+        file: String,
+        hash: String,
+    },
+    File {
+        path: String,
+        file: String,
+        hashes: std::collections::BTreeMap<String, String>,
+        directory: bool,
+    },
+}
+fn seal_record(backup: &Path, record: &SystemRestoreRecord) -> Result<(), String> {
+    let bytes = serde_json::to_vec(record).map_err(|e| e.to_string())?;
+    let data = crate::secure_state::crypt(&bytes, true)?;
+    crate::durable::write(
+        &backup.join(format!("{}.restore.dpapi", uuid::Uuid::new_v4())),
+        &data,
+    )
+}
+fn tree_hashes(path: &Path) -> Result<std::collections::BTreeMap<String, String>, String> {
+    let mut hashes = std::collections::BTreeMap::new();
+    if path.is_file() {
+        hashes.insert("file".into(), crate::durable::hash_file(path)?);
+        return Ok(hashes);
+    }
+    crate::archive_policy::validate_tree(path)?;
+    for entry in walkdir::WalkDir::new(path).follow_links(false) {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.file_type().is_file() {
+            hashes.insert(
+                entry
+                    .path()
+                    .strip_prefix(path)
+                    .map_err(|e| e.to_string())?
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+                crate::durable::hash_file(entry.path())?,
+            );
+        }
+    }
+    Ok(hashes)
+}
+fn copy_tree(source: &Path, destination: &Path) -> Result<(), String> {
+    crate::safe_path::no_links(source)?;
+    if source.is_file() {
+        return crate::durable::copy(source, destination);
+    }
+    fs::create_dir_all(destination).map_err(|e| e.to_string())?;
+    for entry in walkdir::WalkDir::new(source).follow_links(false) {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.path() == source {
+            continue;
+        }
+        let relative = entry
+            .path()
+            .strip_prefix(source)
+            .map_err(|e| e.to_string())?;
+        let target = crate::safe_path::join(destination, &relative.to_string_lossy())?;
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(target).map_err(|e| e.to_string())?;
+        } else if entry.file_type().is_file() {
+            crate::durable::copy(entry.path(), &target)?;
+        } else {
+            return Err("Ссылка или специальный файл в системной папке".into());
+        }
+    }
+    Ok(())
+}
+#[tauri::command]
+pub(crate) async fn anticheat_restore(
+    app: tauri::AppHandle,
+    backup_dir: String,
+) -> Result<AntiCheatRemovalResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = crate::safe_path::root(Path::new(&backup_dir))?;
+        crate::jobs::run(&[crate::jobs::system_resource(&app), root.clone()], "Вернуть системные компоненты как было", || -> Result<AntiCheatRemovalResult, String> {
+            let mut records = Vec::new();
+            for entry in walkdir::WalkDir::new(&root).follow_links(false) {
+                let entry = entry.map_err(|e| e.to_string())?;
+                if !entry.file_type().is_file() || !entry.file_name().to_string_lossy().ends_with(".restore.dpapi") { continue; }
+                if records.len() >= 4096 { return Err("Слишком много записей восстановления".into()); }
+                let path = crate::safe_path::child(&root, entry.path())?;
+                let data = fs::read(&path).map_err(|e| e.to_string())?;
+                if data.len() > 32 * 1024 * 1024 { return Err("Слишком большая запись восстановления".into()); }
+                let record: SystemRestoreRecord = serde_json::from_slice(&crate::secure_state::crypt(&data, false)?).map_err(|e| e.to_string())?;
+                let parent = path.parent().ok_or("Не найдена папка записи")?.to_path_buf();
+                match &record {
+                    SystemRestoreRecord::Registry { path, view, file, hash } => {
+                        if !path.starts_with("HKLM\\") && !path.starts_with("HKCU\\") || !["32", "64"].contains(&view.as_str()) { return Err("Неверная запись реестра".into()); }
+                        if crate::durable::hash_file(&crate::safe_path::join(&parent, file)?)? != *hash { return Err("Резервная копия реестра повреждена".into()); }
+                    },
+                    SystemRestoreRecord::File { path, file, hashes, .. } => {
+                        crate::safe_path::no_links(Path::new(path))?;
+                        if tree_hashes(&crate::safe_path::join(&parent, file)?)? != *hashes { return Err("Резервная копия системных файлов повреждена".into()); }
+                    }
+                }
+                records.push((parent, record));
+            }
+            if records.is_empty() { return Err("Проверяемая карта восстановления не найдена. Старые .reg без подписанной карты не импортируются автоматически.".into()); }
+            let mut restored = 0; let mut failed = Vec::new();
+            // Сначала файлы, затем реестр служб. Регистрация драйвера может потребовать перезапуска.
+            records.sort_by_key(|(_, r)| matches!(r, SystemRestoreRecord::Registry { .. }));
+            for (parent, record) in records {
+                let result = match record {
+                    SystemRestoreRecord::File { path, file, hashes, directory } => (|| {
+                        let target = Path::new(&path); crate::safe_path::no_links(target)?;
+                        if target.exists() {
+                            if directory { return Err(format!("Папка уже существует; автоматическое слияние запрещено: {path}")); }
+                            crate::durable::copy(target, &parent.join(format!("before-restore-{}", uuid::Uuid::new_v4())))?;
+                        }
+                        copy_tree(&crate::safe_path::join(&parent, &file)?, target)?;
+                        if tree_hashes(target)? != hashes { return Err("Проверка восстановленных файлов не пройдена".into()); } Ok(())
+                    })(),
+                    SystemRestoreRecord::Registry { path, view, file, hash } => (|| {
+                        // Защищаем текущее содержимое перед импортом, если ключ уже появился заново.
+                        if registry_key_exists(&path) { export_registry_raw(&path, &parent.join(format!("before-restore-{}.reg", uuid::Uuid::new_v4())), &view)?; }
+                        let mut command = Command::new("reg.exe"); command.arg("import").arg(crate::safe_path::join(&parent, &file)?).arg(format!("/reg:{view}"));
+                        #[cfg(windows)] command.creation_flags(CREATE_NO_WINDOW);
+                        let output = command.output().map_err(|e| e.to_string())?; if !output.status.success() { return Err(format!("Не удалось импортировать {path}")); }
+                        let check = parent.join(format!("verify-{}.reg", uuid::Uuid::new_v4())); export_registry_raw(&path, &check, &view)?;
+                        if crate::durable::hash_file(&check)? != hash { return Err(format!("Содержимое реестра после восстановления отличается: {path}")); }
+                        Ok(())
+                    })(),
+                };
+                match result { Ok(()) => restored += 1, Err(e) => failed.push(e) }
+            }
+            Ok(AntiCheatRemovalResult { success: failed.is_empty(), message: if failed.is_empty() { "Файлы и реестр возвращены и проверены. Для регистрации служб перезапустите Windows.".into() } else { "Восстановление выполнено частично; резервные копии сохранены".into() }, removed: restored, failed, backup_dir: Some(root.display().to_string()), restart_required: restored > 0 })
+        })?
+    }).await.map_err(|e| e.to_string())?
 }

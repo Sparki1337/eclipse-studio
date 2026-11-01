@@ -1,16 +1,21 @@
 # Build outputs & dependencies
 target/
 src-tauri/target/
-tools/**/target/
+eclipse-hv/target/
 node_modules/
 dist/
 /build/
 *.log
 *.tmp
+*.zip
+*.7z
+*.rar
 __pycache__/
 *.pyc
 build_config.json
 .build_config.json
+src-tauri/gen/schemas/
+test-results/
 
 # OS & IDE temporary files
 .DS_Store
@@ -28,5 +33,5 @@ desktop.ini
 *.local
 
 # Preserve essential hidden asset directories for Tauri compilation
-!src-tauri/src/assets/eclipse-manifest/.millennium/
-!src-tauri/src/assets/eclipse-manifest/.millennium/**
+!eclipse-manifest/.millennium/
+!eclipse-manifest/.millennium/**

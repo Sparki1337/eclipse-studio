@@ -56,7 +56,7 @@ fn read_vdf_id(path: &Path) -> Option<u64> {
         // Поиск шаблонов Apps\12345, Apps\\12345 или Apps/12345
         if let Some(idx) = lower.find("apps") {
             let after = &line[idx + 4..];
-            let trimmed = after.trim_start_matches(|c: char| c == '\\' || c == '/');
+            let trimmed = after.trim_start_matches(['\\', '/']);
             let digits: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
             if let Ok(id) = digits.parse::<u64>() {
                 if id > 0 && id <= u32::MAX as u64 && id != 480 && id != 228980 {
@@ -132,8 +132,12 @@ fn game_root(exe: &Path) -> Option<PathBuf> {
     // 1. Проверяем стандартную структуру Steam: steamapps/common/<Game>
     for dir in parent.ancestors() {
         if let (Some(p1), Some(p2)) = (dir.parent(), dir.parent().and_then(|p| p.parent())) {
-            if p1.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case("common"))
-                && p2.file_name().is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case("steamapps"))
+            if p1
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case("common"))
+                && p2
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case("steamapps"))
             {
                 return Some(dir.to_path_buf());
             }
@@ -153,7 +157,10 @@ fn game_root(exe: &Path) -> Option<PathBuf> {
         let lower = name.to_lowercase();
 
         // Пропускаем папки архитектур и бинарников
-        if matches!(lower.as_str(), "win64" | "win32" | "x64" | "x86" | "binaries" | "bin" | "shipping") {
+        if matches!(
+            lower.as_str(),
+            "win64" | "win32" | "x64" | "x86" | "binaries" | "bin" | "shipping"
+        ) {
             current = p;
             continue;
         }
@@ -164,15 +171,27 @@ fn game_root(exe: &Path) -> Option<PathBuf> {
         }
 
         // Проверяем, является ли родитель общей папкой каталога игр или корнем диска
-        let p_name = p.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+        let p_name = p
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_lowercase();
         let is_lib_parent = matches!(
             p_name.as_str(),
-            "games" | "steamlibrary" | "steam" | "steamapps" | "common" | "torrent games" | "repacks" | "игры"
+            "games"
+                | "steamlibrary"
+                | "steam"
+                | "steamapps"
+                | "common"
+                | "torrent games"
+                | "repacks"
+                | "игры"
         ) || (p.parent().is_none() && !is_system_or_temp_dir(&p_name));
 
         // Проверяем маркеры корня проекта игры
         let has_engine = current.join("Engine").is_dir();
-        let has_installscript = current.join("installscript.vdf").is_file() || current.join("runasadmin.vdf").is_file();
+        let has_installscript =
+            current.join("installscript.vdf").is_file() || current.join("runasadmin.vdf").is_file();
         let has_backup_orig = current.join(".backup_orig").is_dir();
         let has_appid_txt = current.join("steam_appid.txt").is_file();
 
@@ -180,7 +199,12 @@ fn game_root(exe: &Path) -> Option<PathBuf> {
             return Some(current);
         }
 
-        if is_lib_parent && !matches!(lower.as_str(), "engine" | "epic" | "epiconlineservices" | "directx" | "_redist" | "redist") {
+        if is_lib_parent
+            && !matches!(
+                lower.as_str(),
+                "engine" | "epic" | "epiconlineservices" | "directx" | "_redist" | "redist"
+            )
+        {
             return Some(current);
         }
 
@@ -198,7 +222,24 @@ fn is_generic_title(title: &str) -> bool {
     }
     matches!(
         lower.as_str(),
-        "game" | "games" | "launcher" | "samplegame" | "main" | "app" | "play" | "start" | "client" | "unityplayer" | "shipping" | "unknown" | "users" | "user" | "windows" | "target" | "debug" | "release"
+        "game"
+            | "games"
+            | "launcher"
+            | "samplegame"
+            | "main"
+            | "app"
+            | "play"
+            | "start"
+            | "client"
+            | "unityplayer"
+            | "shipping"
+            | "unknown"
+            | "users"
+            | "user"
+            | "windows"
+            | "target"
+            | "debug"
+            | "release"
     )
 }
 
@@ -327,7 +368,9 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
             if let Some(id) = read_id(entry.path()) {
                 ids.insert(id);
             }
-        } else if fname.eq_ignore_ascii_case("installscript.vdf") || fname.eq_ignore_ascii_case("runasadmin.vdf") {
+        } else if fname.eq_ignore_ascii_case("installscript.vdf")
+            || fname.eq_ignore_ascii_case("runasadmin.vdf")
+        {
             if let Some(id) = read_vdf_id(entry.path()) {
                 ids.insert(id);
             }
@@ -361,7 +404,8 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
                     let query_lower = clean.to_lowercase();
                     if sum_name.contains(&query_lower) || query_lower.contains(&sum_name) || {
                         let words: Vec<&str> = query_lower.split_whitespace().collect();
-                        !words.is_empty() && words.iter().all(|w| w.len() < 3 || sum_name.contains(w))
+                        !words.is_empty()
+                            && words.iter().all(|w| w.len() < 3 || sum_name.contains(w))
                     } {
                         return Some((summary.appid, Some(summary.name)));
                     }
@@ -392,19 +436,31 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
 #[tauri::command]
 pub(crate) async fn game_artwork(exe_path: String) -> Result<Option<GameArtwork>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let Some((appid, game_name)) = identify_with_name(Path::new(&exe_path)) else { return Ok(None); };
-        let local = crate::luatools::resolve_steam_path(None)
-            .and_then(|steam| crate::steam_library::read_local_cover(&steam, appid).ok().flatten());
+        let Some((appid, game_name)) = identify_with_name(Path::new(&exe_path)) else {
+            return Ok(None);
+        };
+        let local = crate::luatools::resolve_steam_path(None).and_then(|steam| {
+            crate::steam_library::read_local_cover(&steam, appid)
+                .ok()
+                .flatten()
+        });
 
         let mut urls = Vec::new();
         // 1. Точный URL обложки из Steam Store (включая актуальные хешированные пути CDN)
-        if let Some(store_url) = crate::steam::app_overview(appid).and_then(|app| app.header_image) {
+        if let Some(store_url) = crate::steam::app_overview(appid).and_then(|app| app.header_image)
+        {
             urls.push(store_url);
         }
         // 2. Стандартные резервные пути Steam CDN
-        urls.push(format!("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"));
-        urls.push(format!("https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg"));
-        urls.push(format!("https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"));
+        urls.push(format!(
+            "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
+        ));
+        urls.push(format!(
+            "https://cdn.akamai.steamstatic.com/steam/apps/{appid}/header.jpg"
+        ));
+        urls.push(format!(
+            "https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
+        ));
 
         Ok(Some(GameArtwork {
             appid,
@@ -412,7 +468,9 @@ pub(crate) async fn game_artwork(exe_path: String) -> Result<Option<GameArtwork>
             local,
             urls,
         }))
-    }).await.map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // Запрос обложки игры по AppID из магазина Steam
@@ -506,7 +564,8 @@ mod tests {
         let temp = TempDir::new();
         let root = temp.path().join("Games/My Awesome Game");
         let exe = root.join("Griffin/Binaries/Win64/SWGR-Win64-Shipping.exe");
-        let engine_settings = root.join("Engine/Binaries/ThirdParty/Steamworks/Steamv162/Win64/steam_settings");
+        let engine_settings =
+            root.join("Engine/Binaries/ThirdParty/Steamworks/Steamv162/Win64/steam_settings");
         fs::create_dir_all(exe.parent().unwrap()).unwrap();
         fs::create_dir_all(&engine_settings).unwrap();
         fs::write(&exe, b"MZ_TEST_EXE").unwrap();

@@ -1,15 +1,28 @@
 {
   "name": "eclipse-studio",
   "private": true,
-  "version": "8.1.0",
+  "version": "8.2.0",
   "description": "Eclipse Studio — premium Tauri desktop client",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "test": "node tests/contracts.cjs && node tests/ui.test.js",
+    "test:ui": "node tests/ui.test.js",
+    "test:contracts": "node tests/contracts.cjs",
+    "test:safety": "cargo test --manifest-path tests/safety-core/Cargo.toml --locked",
+    "check:plugin": "node scripts/plugin-integrity.cjs check",
+    "build:plugin": "npm --prefix eclipse-manifest run build",
+    "build:portable": "python scripts/build.py --type portable",
+    "bump": "python scripts/bump_version.py",
+    "release": "python scripts/release.py",
+    "ui:dev": "node scripts/ui_dev_server.js",
+    "screenshots": "node scripts/capture_all_screenshots.js",
+    "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.1",
+    "playwright": "1.64.1",
     "puppeteer-core": "^25.14.0"
   }
 }

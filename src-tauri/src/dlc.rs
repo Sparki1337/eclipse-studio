@@ -145,10 +145,8 @@ fn read_config(dir: &Path) -> Option<(Option<u64>, bool, BTreeMap<String, String
             "steam" if key.eq_ignore_ascii_case("unlockall") => {
                 unlock_all = value.eq_ignore_ascii_case("true") || value == "1";
             }
-            "dlc" => {
-                if key.parse::<u64>().is_ok() {
-                    dlcs.insert(key.to_string(), value.to_string());
-                }
+            "dlc" if key.parse::<u64>().is_ok() => {
+                dlcs.insert(key.to_string(), value.to_string());
             }
             _ => {}
         }
@@ -388,7 +386,10 @@ pub async fn install_dlc_unlocker(app: AppHandle, request: DlcInstallRequest) ->
     }
 }
 
-fn install_dlc_unlocker_blocking(app: AppHandle, request: DlcInstallRequest) -> OperationResult {
+fn install_dlc_unlocker_blocking_unlocked(
+    app: AppHandle,
+    request: DlcInstallRequest,
+) -> OperationResult {
     let game_dir = PathBuf::from(&request.game_dir);
     if !game_dir.is_dir() {
         return OperationResult::error("Папка игры не найдена", vec![]);
@@ -523,7 +524,7 @@ pub async fn uninstall_dlc_unlocker(game_dir: String) -> OperationResult {
     }
 }
 
-fn uninstall_dlc_unlocker_blocking(game_dir: String) -> OperationResult {
+fn uninstall_dlc_unlocker_blocking_unlocked(game_dir: String) -> OperationResult {
     let game_dir = PathBuf::from(&game_dir);
     if !game_dir.is_dir() {
         return OperationResult::error("Папка игры не найдена", vec![]);
@@ -557,6 +558,26 @@ fn uninstall_dlc_unlocker_blocking(game_dir: String) -> OperationResult {
             logs,
         )
     }
+}
+
+fn install_dlc_unlocker_blocking(app: AppHandle, request: DlcInstallRequest) -> OperationResult {
+    let resource = PathBuf::from(&request.game_dir);
+    crate::jobs::run(
+        &[resource],
+        "Установка DLC-компонентов",
+        || install_dlc_unlocker_blocking_unlocked(app, request),
+    )
+    .unwrap_or_else(|e| OperationResult::error(e, vec![]))
+}
+
+fn uninstall_dlc_unlocker_blocking(game_dir: String) -> OperationResult {
+    let resource = PathBuf::from(&game_dir);
+    crate::jobs::run(
+        &[resource],
+        "Удаление DLC-компонентов",
+        || uninstall_dlc_unlocker_blocking_unlocked(game_dir),
+    )
+    .unwrap_or_else(|e| OperationResult::error(e, vec![]))
 }
 
 #[cfg(test)]

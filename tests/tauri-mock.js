@@ -16,7 +16,36 @@
     ],
   };
 
+  const nativeKey = "__native_state";
+  const nativeRead = () => JSON.parse(sessionStorage.getItem(nativeKey) || '{"migrated":false,"values":{}}');
+  const nativeSave = data => sessionStorage.setItem(nativeKey, JSON.stringify(data));
+  window.__mockEmit = (name, payload) => (listeners[name] || []).forEach(handler => handler({ payload }));
+  const defaults = {
+    state_bootstrap: ({legacy}) => {
+      if (config.migrationFailure) throw new Error("DPAPI write verification failed");
+      const data=nativeRead(); if (!data.migrated) { data.values={...legacy,...data.values}; data.migrated=true; nativeSave(data); }
+      const {hubcapKey,ryuuKey,...values}=data.values;
+      return {values,secretConfigured:{hubcapKey:!!hubcapKey,ryuuKey:!!ryuuKey},migrationVerified:true};
+    },
+    state_apply: ({changes}) => { const data=nativeRead(); for(const [key,value] of Object.entries(changes)){if(value===null)delete data.values[key];else data.values[key]=value;} nativeSave(data); return null; },
+    state_set_secret: ({service,value}) => {const data=nativeRead();data.values[service+"Key"]=value;nativeSave(data);return !!value;},
+    jobs_list: () => config.jobs || [],
+    files_install_crack: () => ({success:true,status:"success",installedFiles:["game.dll"],skipped:[],message:"Установлено и проверено"}),
+    files_pause_download: () => true,
+    files_discard_download: () => null,
+    save_add_location: () => "D:\\Games\\Saves",
+    save_exclude_location: () => null,
+    preview_save_backup: () => ({fileCount:2,totalBytes:100,files:["slot/save.dat"],skipped:[],truncated:false}),
+    inspect_save_archive: () => ({fileCount:2,totalBytes:100,files:["slot/save.dat"],skipped:[],truncated:false}),
+    save_undo_restore: () => ({success:true,message:"Восстановлено",logs:[]}),
+    save_discard_restore_backup: () => null,
+    anticheat_restore: () => ({success:true,message:"Восстановлено",removed:1,failed:[]}),
+  };
   const responses = {
+    ...defaults,
+    process_is_elevated: () => config.admin ?? true,
+    relaunch_as_admin: () => null,
+    enable_file_drop: () => null,
     open_external: () => null,
     minimize_window: () => null, toggle_maximize_window: () => null, close_window: () => null, start_dragging_window: () => null, show_window: () => null,
     pick_game_directory: () => config.pickResult ?? "D:\\Games\\Picked",
@@ -27,11 +56,16 @@
     files_download: (args) => {
       const dir = args.targetDir || "C:\\Users\\Test\\Downloads";
       const name = args.suggestedName || "file.zip";
+      if (config.pausable) return new Promise((resolve,reject) => {
+        window.__pendingDownload = {resolve,reject,args};
+        window.__mockEmit("files-download-progress", {url:args.url,downloaded:50,total:100,percent:50,resumable:true});
+      });
       return { fileName: name, path: `${dir}\\${name}` };
     },
-    files_cancel_download: () => true,
+    files_pause_download: () => {window.__pendingDownload?.reject("Загрузка приостановлена; проверенные сегменты сохранены для докачки");return true;},
+    files_cancel_download: () => {window.__pendingDownload?.reject("Загрузка отменена");return true;},
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "8.1.0", latest_version: "8.1.0", currentVersion: "8.1.0", latestVersion: "8.1.0" }),
+    check_for_update: () => ({ available: false, current_version: "8.2.0", latest_version: "8.2.0", currentVersion: "8.2.0", latestVersion: "8.2.0" }),
     download_app_update: async (args) => {
       const ver = args?.version || "6.6.8";
       const name = `Eclipse-Studio-v${ver}.exe`;
@@ -129,7 +163,7 @@
     }),
     eclipse_hv_download: () => "Eclipse-HV.exe успешно загружен в C:\\Games",
     vbs_scan: () => ({
-      admin: true,
+      admin: config.admin ?? true,
       secureBoot: "false",
       virtualizationEnabled: true,
       hypervisorPresent: false,
@@ -142,8 +176,8 @@
         { id: "hvci", name: "Memory Integrity (HVCI)", description: "Hyper-V Protected Code Integrity", state: "active", enabled: true, locked: false }
       ],
       enabledCount: 1,
-      warnings: [],
-      bitlocker: { protected: false, suspended: false, message: "BitLocker не используется на системном диске" },
+      warnings: config.vbsWarnings || [],
+      bitlocker: config.bitlocker || { state: "off", protected: false, suspended: false, message: "BitLocker не используется на системном диске" },
       kvaShadow: { needed: false, disabled: false, label: "Не требуется (современный CPU)" },
       uefiLock: { isLocked: false, vbsLocked: false, hvciLocked: false, credentialLocked: false, secConfigAvailable: true },
       conflicts: []
@@ -155,6 +189,17 @@
     vbs_prepare_uefi_optout: () => "UEFI Opt-Out успешно настроен.",
     vbs_disable_faceit: () => "Служба FACEIT успешно остановлена и отключена.",
     vbs_troubleshoot: (args) => `Диагностика ${args?.action || "unknown"} успешно завершена.`,
+    vbs_get_protections: () => [
+      { id: "vbs", name: "Virtualization-based Security (VBS)", category: "Ядро и гипервизор", description: "Базовая изоляция ядра и системный гипервизор Windows", enabled: false, locked: false, lockReason: null },
+      { id: "hvci", name: "Целостность памяти (HVCI)", category: "Ядро и гипервизор", description: "Изоляция памяти ядра и проверка целостности исполняемого кода", enabled: false, locked: false, lockReason: null },
+      { id: "vulnerable-drivers", name: "Черный список уязвимых драйверов", category: "Целостность драйверов", description: "Блокировка загрузки драйверов из списка Microsoft Vulnerable Driver Blocklist", enabled: true, locked: false, lockReason: null },
+      { id: "credential-guard", name: "Credential Guard и защита LSA", category: "Учётные данные", description: "Изоляция подсистемы LSA для защиты паролей и билетов Kerberos", enabled: false, locked: false, lockReason: null },
+      { id: "system-guard", name: "System Guard и HyperGuard", category: "Аппаратная защита", description: "Контроль целостности при загрузке системы и защита гипервизора", enabled: false, locked: false, lockReason: null },
+      { id: "kva-shadow", name: "KVA Shadow (Meltdown Mitigation)", category: "Процессор", description: "Теневое разделение адресных пространств ядра для защиты от Meltdown", enabled: false, locked: false, lockReason: null },
+      { id: "xsave-mask", name: "Маска XSAVE в загрузчике (xsaveremovefeature)", category: "Параметры загрузчика (BCD)", description: "Скрытие AVX-512 и расширенных наборов инструкций процессора от программ", enabled: false, locked: false, lockReason: null },
+      { id: "testsigning", name: "Тестовый режим (Testsigning / DSE)", category: "Параметры загрузчика (BCD)", description: "Разрешение загрузки неподписанных и тестовых драйверов Windows", enabled: false, locked: false, lockReason: null }
+    ],
+    vbs_set_protection: (args) => ({ success: true, message: `Параметр ${args?.id || ""} успешно изменён`, changed: 1, failed: [], restartRequired: true }),
     anticheat_scan: () => ({ items: [] }),
     updates_page_url: () => "https://example.com",
     // Моки управления пользовательскими звуками в кэше
@@ -187,6 +232,7 @@
     if (missing.has(command) || (registered.size && !registered.has(command))) {
       throw `Command ${command} not found`;
     }
+    if (Object.hasOwn(config.responses || {}, command)) return config.responses[command];
     if (responses[command]) return responses[command](args);
     throw `mock: нет ответа для ${command}`;
   }

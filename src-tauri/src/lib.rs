@@ -1,12 +1,17 @@
 mod anticheat;
+mod archive_policy;
 mod audio_cache;
+mod backup;
 mod dlc;
 mod dlc_catalog;
+mod download;
+mod durable;
 mod engine;
 mod files;
 mod game_artwork;
 mod hubcap;
 mod hypervisor;
+mod jobs;
 mod loader_github;
 mod lua_loader;
 mod luatools;
@@ -14,8 +19,12 @@ mod millennium;
 mod models;
 mod native_dialog;
 mod native_drop;
+mod operation_outcome;
+mod resource_lock;
 mod ryuu;
+mod safe_path;
 mod saves;
+mod secure_state;
 mod smaki;
 mod steam;
 mod steam_library;
@@ -30,35 +39,35 @@ const EMBEDDED_CORE_COMPONENTS: &[(&str, &[u8])] = &[
         "SteamFix64.dll",
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../backend/core_engine/SteamFix64.dll"
+            "/resources/core_engine/SteamFix64.dll"
         )),
     ),
     (
         "winmm_unity.dll",
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../backend/core_engine/winmm_unity.dll"
+            "/resources/core_engine/winmm_unity.dll"
         )),
     ),
     (
         "EpicFix64.dll",
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../backend/core_engine/EpicFix64.dll"
+            "/resources/core_engine/EpicFix64.dll"
         )),
     ),
     (
         "EpicFix.ini",
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../backend/core_engine/EpicFix.ini"
+            "/resources/core_engine/EpicFix.ini"
         )),
     ),
     (
         "EOSSDK-Win64-Shipping.dll",
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../backend/core_engine/EOSSDK-Win64-Shipping.dll"
+            "/resources/core_engine/EOSSDK-Win64-Shipping.dll"
         )),
     ),
 ];
@@ -68,14 +77,14 @@ const EMBEDDED_DLC_COMPONENTS: &[(&str, &[u8])] = &[
         "steam_api.dll",
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../CreamAPI/steam_api.dll"
+            "/resources/creamapi/steam_api.dll"
         )),
     ),
     (
         "steam_api64.dll",
         include_bytes!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../CreamAPI/steam_api64.dll"
+            "/resources/creamapi/steam_api64.dll"
         )),
     ),
 ];
@@ -223,7 +232,8 @@ fn process_is_elevated() -> bool {
 
 #[cfg(target_os = "windows")]
 #[tauri::command]
-fn relaunch_as_admin() -> Result<(), String> {
+fn relaunch_as_admin(app: AppHandle) -> Result<(), String> {
+    let handoff = crate::resource_lock::begin_handoff()?;
     use std::os::windows::ffi::OsStrExt;
     use windows::{
         core::PCWSTR,
@@ -237,12 +247,16 @@ fn relaunch_as_admin() -> Result<(), String> {
         .chain(std::iter::once(0))
         .collect();
     let verb: Vec<u16> = "runas".encode_utf16().chain(std::iter::once(0)).collect();
+    let arguments: Vec<u16> = "--elevated-handoff"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
     let result = unsafe {
         ShellExecuteW(
             None,
             PCWSTR(verb.as_ptr()),
             PCWSTR(executable.as_ptr()),
-            PCWSTR::null(),
+            PCWSTR(arguments.as_ptr()),
             PCWSTR::null(),
             SW_SHOWNORMAL,
         )
@@ -257,6 +271,10 @@ fn relaunch_as_admin() -> Result<(), String> {
             )
         });
     }
+    // До завершения процесса блокируем новые изменения. Новый экземпляр ждёт
+    // освобождения файловой блокировки; отмена UAC оставляет текущую копию живой.
+    std::mem::forget(handoff);
+    app.exit(0);
     Ok(())
 }
 
@@ -281,6 +299,10 @@ pub fn run() {
             close_window,
             start_dragging_window,
             show_window,
+            secure_state::state_bootstrap,
+            secure_state::state_apply,
+            secure_state::state_set_secret,
+            jobs::jobs_list,
             audio_cache::audio_save_custom_sound,
             audio_cache::audio_list_custom_sounds,
             audio_cache::audio_delete_custom_sound,
@@ -288,6 +310,12 @@ pub fn run() {
             game_artwork::game_artwork,
             game_artwork::game_artwork_store_url,
             saves::scan_save_locations,
+            saves::save_add_location,
+            saves::save_exclude_location,
+            saves::preview_save_backup,
+            saves::inspect_save_archive,
+            saves::save_undo_restore,
+            saves::save_discard_restore_backup,
             saves::pick_save_archive,
             saves::create_save_archive,
             saves::pick_save_restore_archive,
@@ -352,10 +380,13 @@ pub fn run() {
             hypervisor::eclipse_hv_check_update,
             hypervisor::eclipse_hv_download,
             anticheat::anticheat_scan,
+            anticheat::anticheat_restore,
             anticheat::anticheat_pick_backup_directory,
             anticheat::anticheat_remove,
             anticheat::anticheat_remove_all,
             vbs::vbs_scan,
+            vbs::vbs_get_protections,
+            vbs::vbs_set_protection,
             vbs::vbs_disable,
             vbs::vbs_restore,
             vbs::vbs_enable_all,
@@ -368,6 +399,8 @@ pub fn run() {
             files::files_download,
             files::files_install_crack,
             files::files_cancel_download,
+            files::files_pause_download,
+            files::files_discard_download,
             files::files_reveal,
             files::files_default_download_dir,
             files::files_pick_download_dir,
@@ -382,6 +415,7 @@ pub fn run() {
             updates::cleanup_old_app_versions,
         ])
         .setup(|app| {
+            jobs::init(app.handle()).map_err(std::io::Error::other)?;
             // Окно создано скрытым (visible: false), чтобы исключить показ пустого синего/темного экрана до рендеринга страницы.
             // Приложение отобразит окно сразу после отрисовки первого кадра заставки через команду show_window.
             // Добавляем страховочный таймер на случай непредвиденных задержек в WebView2:
@@ -417,10 +451,17 @@ fn extract_embedded(
     for (name, contents) in components {
         let target = directory.join(name);
         let is_current = std::fs::metadata(&target)
-            .map(|metadata| metadata.is_file() && metadata.len() == contents.len() as u64)
+            .map(|metadata| {
+                metadata.is_file()
+                    && crate::durable::hash_file(&target).ok().as_deref()
+                        == Some(&format!(
+                            "{:x}",
+                            <sha2::Sha256 as sha2::Digest>::digest(contents)
+                        ))
+            })
             .unwrap_or(false);
         if !is_current {
-            std::fs::write(&target, contents).ok()?;
+            crate::durable::write(&target, contents).ok()?;
         }
     }
 
@@ -459,10 +500,9 @@ pub(crate) fn core_engine_path(app: &AppHandle) -> std::path::PathBuf {
 
     #[cfg(debug_assertions)]
     {
-        return std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("backend")
-            .join("core_engine");
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("core_engine")
     }
 
     #[cfg(not(debug_assertions))]
@@ -500,9 +540,9 @@ pub(crate) fn dlc_unlocker_path(app: &AppHandle) -> std::path::PathBuf {
 
     #[cfg(debug_assertions)]
     {
-        return std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("CreamAPI");
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join("creamapi")
     }
 
     #[cfg(not(debug_assertions))]

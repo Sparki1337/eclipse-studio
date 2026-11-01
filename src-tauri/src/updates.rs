@@ -8,7 +8,6 @@ use std::{
 };
 use tauri::{AppHandle, Emitter};
 
-
 // Проверка обновлений выполняется через web-релизы и releases.atom без GitHub API
 // (во избежание ограничений rate limit 60 запросов/час).
 const RELEASES_PAGE: &str = "https://github.com/Sparki1337/eclipse-studio/releases";
@@ -68,14 +67,10 @@ pub struct UpdateDownloadResult {
 fn version_parts(version: &str) -> Option<Vec<u64>> {
     let clean = version
         .trim()
-        .trim_start_matches(|character: char| character == 'v' || character == 'V')
+        .trim_start_matches(['v', 'V'])
         .split_once('-')
         .map(|(base, _)| base)
-        .unwrap_or_else(|| {
-            version
-                .trim()
-                .trim_start_matches(|character: char| character == 'v' || character == 'V')
-        });
+        .unwrap_or_else(|| version.trim().trim_start_matches(['v', 'V']));
     let parts = clean
         .split('.')
         .map(str::parse::<u64>)
@@ -113,7 +108,10 @@ fn portable_url(release: &GithubRelease) -> Option<String> {
         .rev()
         .find(|asset| {
             let name = asset.name.to_ascii_lowercase();
-            name.contains("eclipse") && name.ends_with(".exe") && !name.contains("setup") && !name.contains("installer")
+            name.contains("eclipse")
+                && name.ends_with(".exe")
+                && !name.contains("setup")
+                && !name.contains("installer")
         })
         .or_else(|| {
             release.assets.iter().rev().find(|asset| {
@@ -163,7 +161,7 @@ fn check_for_update_blocking() -> Result<UpdateInfo, String> {
     let latest = release
         .tag_name
         .trim()
-        .trim_start_matches(|character: char| character == 'v' || character == 'V')
+        .trim_start_matches(['v', 'V'])
         .to_string();
     if version_parts(&latest).is_none() {
         return Err(format!(
@@ -203,8 +201,13 @@ fn check_for_update_via_web(client: &Client) -> Result<GithubRelease, String> {
         .ok_or_else(|| "Не удалось определить номер версии со страницы релизов".to_string())?
         .to_string();
 
-    let assets_url = format!("https://github.com/Sparki1337/eclipse-studio/releases/expanded_assets/{tag}");
-    let assets = if let Ok(assets_res) = client.get(&assets_url).header(reqwest::header::USER_AGENT, USER_AGENT).send() {
+    let assets_url =
+        format!("https://github.com/Sparki1337/eclipse-studio/releases/expanded_assets/{tag}");
+    let assets = if let Ok(assets_res) = client
+        .get(&assets_url)
+        .header(reqwest::header::USER_AGENT, USER_AGENT)
+        .send()
+    {
         if let Ok(html) = assets_res.text() {
             extract_assets_from_html(&html, &tag)
         } else {
@@ -373,8 +376,11 @@ pub fn cleanup_old_versions_in_dir(
         let lower = file_name.to_ascii_lowercase();
 
         // 1. Очистка временных файлов обновлений и загрузок (.download, .part, .tmp)
-        let is_temp_update_file = (lower.starts_with(".eclipse-studio") || lower.starts_with("eclipse-studio"))
-            && (lower.ends_with(".download") || lower.ends_with(".part") || lower.ends_with(".tmp"));
+        let is_temp_update_file = (lower.starts_with(".eclipse-studio")
+            || lower.starts_with("eclipse-studio"))
+            && (lower.ends_with(".download")
+                || lower.ends_with(".part")
+                || lower.ends_with(".tmp"));
 
         if is_temp_update_file {
             if delete_file_with_retry(&path, 5, Duration::from_millis(150)) {
@@ -387,10 +393,10 @@ pub fn cleanup_old_versions_in_dir(
         if lower.ends_with(".exe") && (lower.contains("eclipse") || lower.contains("crocodile")) {
             if let Some(old_ver) = extract_version_from_filename(file_name) {
                 // Удаляем только если текущая версия строго новее найденной
-                if is_newer(current_version, &old_ver) {
-                    if delete_file_with_retry(&path, 5, Duration::from_millis(150)) {
-                        deleted_count += 1;
-                    }
+                if is_newer(current_version, &old_ver)
+                    && delete_file_with_retry(&path, 5, Duration::from_millis(150))
+                {
+                    deleted_count += 1;
                 }
             }
         }
@@ -454,9 +460,9 @@ fn download_app_update_blocking(
         (u.to_string(), v.to_string())
     } else {
         let update_info = check_for_update_blocking()?;
-        let portable = update_info
-            .portable_url
-            .ok_or_else(|| "Для новой версии не найдена ссылка на портативный EXE-файл".to_string())?;
+        let portable = update_info.portable_url.ok_or_else(|| {
+            "Для новой версии не найдена ссылка на портативный EXE-файл".to_string()
+        })?;
         (portable, update_info.latest_version)
     };
 
@@ -504,7 +510,9 @@ fn download_app_update_blocking(
 
         downloaded_bytes += read as u64;
 
-        if last_emit.elapsed() >= Duration::from_millis(150) || (total_bytes > 0 && downloaded_bytes >= total_bytes) {
+        if last_emit.elapsed() >= Duration::from_millis(150)
+            || (total_bytes > 0 && downloaded_bytes >= total_bytes)
+        {
             let elapsed_secs = start_time.elapsed().as_secs_f64().max(0.001);
             let speed = (downloaded_bytes as f64 / elapsed_secs) as u64;
             let percentage = if total_bytes > 0 {
@@ -739,7 +747,8 @@ mod tests {
 
     #[test]
     fn cleans_up_older_versions_and_temp_files_safely() {
-        let temp_dir = std::env::temp_dir().join(format!("cgs_test_cleanup_{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("cgs_test_cleanup_{}", std::process::id()));
         let _ = fs::create_dir_all(&temp_dir);
 
         let old_exe = temp_dir.join("Eclipse-Studio-v6.6.0.exe");
@@ -760,10 +769,22 @@ mod tests {
         // Должны удалиться: старая версия (6.6.0) и временный файл (.download)
         assert_eq!(deleted, 2);
         assert!(!old_exe.exists(), "Старая версия должна быть удалена");
-        assert!(!temp_download.exists(), "Временный файл загрузки должен быть удален");
-        assert!(current_exe.exists(), "Текущая запущенная версия не должна удаляться");
-        assert!(future_exe.exists(), "Более новая версия не должна удаляться");
-        assert!(foreign_file.exists(), "Посторонние пользовательские файлы не должны удаляться");
+        assert!(
+            !temp_download.exists(),
+            "Временный файл загрузки должен быть удален"
+        );
+        assert!(
+            current_exe.exists(),
+            "Текущая запущенная версия не должна удаляться"
+        );
+        assert!(
+            future_exe.exists(),
+            "Более новая версия не должна удаляться"
+        );
+        assert!(
+            foreign_file.exists(),
+            "Посторонние пользовательские файлы не должны удаляться"
+        );
 
         let _ = fs::remove_dir_all(&temp_dir);
     }

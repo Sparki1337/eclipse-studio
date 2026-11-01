@@ -71,8 +71,8 @@ pub(crate) fn pick_exe_file(title: &str, owner: isize) -> Result<Option<String>,
                     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
                 },
                 UI::Shell::{
-                    FileOpenDialog, IFileOpenDialog, FOS_FILEMUSTEXIST,
-                    FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, SIGDN_FILESYSPATH,
+                    FileOpenDialog, IFileOpenDialog, FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM,
+                    FOS_PATHMUSTEXIST, SIGDN_FILESYSPATH,
                 },
             },
         };

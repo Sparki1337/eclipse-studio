@@ -31,48 +31,51 @@ const EMBEDDED_MILLENNIUM_FILES: &[(&str, &[u8])] = &[
 const EMBEDDED_PLUGIN_FILES: &[(&str, &[u8])] = &[
     (
         "backend/install-loader.ps1",
-        include_bytes!("assets/eclipse-manifest/backend/install-loader.ps1"),
+        include_bytes!("../../eclipse-manifest/backend/install-loader.ps1"),
     ),
     (
         "backend/loader/OpenSteamTool.dll",
-        include_bytes!("assets/OpenSteamTool.dll"),
+        include_bytes!("../resources/opensteamtool/v1/OpenSteamTool.dll"),
     ),
-    ("backend/loader/dwmapi.dll", include_bytes!("assets/dwmapi.dll")),
+    (
+        "backend/loader/dwmapi.dll",
+        include_bytes!("../resources/opensteamtool/v1/dwmapi.dll"),
+    ),
     (
         "backend/loader/xinput1_4.dll",
-        include_bytes!("assets/xinput1_4.dll"),
+        include_bytes!("../resources/opensteamtool/v1/xinput1_4.dll"),
     ),
     (
         "backend/loader/compatibility/OpenSteamTool.dll",
-        include_bytes!("assets/ost_desktop/OpenSteamTool.dll"),
+        include_bytes!("../resources/opensteamtool/v2/OpenSteamTool.dll"),
     ),
     (
         "backend/loader/compatibility/dwmapi.dll",
-        include_bytes!("assets/ost_desktop/dwmapi.dll"),
+        include_bytes!("../resources/opensteamtool/v2/dwmapi.dll"),
     ),
     (
         "backend/loader/compatibility/xinput1_4.dll",
-        include_bytes!("assets/ost_desktop/xinput1_4.dll"),
+        include_bytes!("../resources/opensteamtool/v2/xinput1_4.dll"),
     ),
     (
         "backend/loader/opensteamtool.toml",
-        include_bytes!("assets/opensteamtool.toml"),
+        include_bytes!("../resources/opensteamtool/v1/opensteamtool.toml"),
     ),
     (
         "plugin.json",
-        include_bytes!("assets/eclipse-manifest/plugin.json"),
+        include_bytes!("../../eclipse-manifest/plugin.json"),
     ),
     (
         "backend/main.lua",
-        include_bytes!("assets/eclipse-manifest/backend/main.lua"),
+        include_bytes!("../../eclipse-manifest/backend/main.lua"),
     ),
     (
         ".millennium/Dist/index.js",
-        include_bytes!("assets/eclipse-manifest/.millennium/Dist/index.js"),
+        include_bytes!("../../eclipse-manifest/.millennium/Dist/index.js"),
     ),
     (
         ".millennium/Dist/webkit.js",
-        include_bytes!("assets/eclipse-manifest/.millennium/Dist/webkit.js"),
+        include_bytes!("../../eclipse-manifest/.millennium/Dist/webkit.js"),
     ),
 ];
 
@@ -221,7 +224,9 @@ fn status_for(steam_path: Option<String>) -> MillenniumPluginStatus {
 
     let legacy_croclua_paths = find_legacy_croclua_plugins(&steam);
     let legacy_croclua_found = !legacy_croclua_paths.is_empty();
-    let legacy_croclua_path = legacy_croclua_paths.first().map(|p| p.display().to_string());
+    let legacy_croclua_path = legacy_croclua_paths
+        .first()
+        .map(|p| p.display().to_string());
     let legacy_croclua_name = legacy_croclua_paths.first().and_then(|p| {
         installed_plugin_name(p).or_else(|| p.file_name().map(|f| f.to_string_lossy().to_string()))
     });
@@ -276,6 +281,17 @@ pub fn millennium_plugin_status(steam_path: Option<String>) -> MillenniumPluginS
 
 #[tauri::command]
 pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path) else {
         return OperationResult::error("Папка Steam не найдена", vec![]);
     };
@@ -294,18 +310,14 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
     let mut logs = Vec::new();
     let mut changed = 0_u32;
 
-    // Автоматическое удаление устаревшей папки crocodile-manifest при миграции
-    let legacy_plugin = millennium_dir(&steam).join("plugins").join("crocodile-manifest");
-    if legacy_plugin.is_dir() {
-        if fs::remove_dir_all(&legacy_plugin).is_ok() {
-            logs.push("Удалена устаревшая папка плагина: crocodile-manifest".to_string());
-        }
-    }
-
+    // Старый плагин не удаляется автоматически: удаление требует отдельного подтверждения и бэкапа.
     for (relative, contents) in EMBEDDED_PLUGIN_FILES {
         let target = relative
             .split('/')
             .fold(target_root.clone(), |path, part| path.join(part));
+        if let Err(e) = crate::safe_path::child(&steam, &target) {
+            return OperationResult::error(e, logs);
+        }
         if let Some(parent) = target.parent() {
             if let Err(error) = fs::create_dir_all(parent) {
                 return OperationResult::error(
@@ -319,7 +331,14 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
             logs.push(format!("Без изменений: {relative}"));
             continue;
         }
-        if let Err(error) = fs::write(&target, contents) {
+        if let Err(error) = target
+            .strip_prefix(&steam)
+            .map_err(|e| e.to_string())
+            .and_then(|relative| {
+                crate::backup::protect(&steam, &relative.to_string_lossy(), "millennium-install")
+            })
+            .and_then(|_| crate::durable::write(&target, contents))
+        {
             return OperationResult::error(
                 format!("Не удалось записать {}: {error}", target.display()),
                 logs,
@@ -365,7 +384,11 @@ pub(crate) fn update_installed_for_loader(steam: &Path) -> Result<(), String> {
         }
     }
     if installed_version.as_deref() == Some(BUNDLED_PLUGIN_VERSION)
-        && fs::read(plugin.join("backend/install-loader.ps1")).ok().as_deref() == Some(EMBEDDED_PLUGIN_FILES[0].1) {
+        && fs::read(plugin.join("backend/install-loader.ps1"))
+            .ok()
+            .as_deref()
+            == Some(EMBEDDED_PLUGIN_FILES[0].1)
+    {
         return Ok(());
     }
     let result = millennium_install_plugin(Some(steam.display().to_string()));
@@ -378,11 +401,24 @@ pub(crate) fn update_installed_for_loader(steam: &Path) -> Result<(), String> {
 
 #[tauri::command]
 pub fn millennium_remove_plugin(steam_path: Option<String>) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path) else {
         return OperationResult::error("Папка Steam не найдена", vec![]);
     };
     let target = plugin_dir(&steam);
-    let legacy_target = millennium_dir(&steam).join("plugins").join("crocodile-manifest");
+    let legacy_target = millennium_dir(&steam)
+        .join("plugins")
+        .join("crocodile-manifest");
     if !target.is_dir() && !legacy_target.is_dir() {
         return OperationResult::error("Плагин Eclipse Manifest не установлен", vec![]);
     }
@@ -396,7 +432,10 @@ pub fn millennium_remove_plugin(steam_path: Option<String>) -> OperationResult {
     let mut logs = Vec::new();
     if legacy_target.is_dir() {
         let _ = fs::remove_dir_all(&legacy_target);
-        logs.push(format!("Удалена устаревшая папка: {}", legacy_target.display()));
+        logs.push(format!(
+            "Удалена устаревшая папка: {}",
+            legacy_target.display()
+        ));
     }
     if target.is_dir() {
         match fs::remove_dir_all(&target) {
@@ -404,10 +443,7 @@ pub fn millennium_remove_plugin(steam_path: Option<String>) -> OperationResult {
                 logs.push(format!("Удалена папка: {}", target.display()));
             }
             Err(error) => {
-                return OperationResult::error(
-                    format!("Не удалось удалить плагин: {error}"),
-                    logs,
-                );
+                return OperationResult::error(format!("Не удалось удалить плагин: {error}"), logs);
             }
         }
     }
@@ -421,6 +457,17 @@ pub fn millennium_remove_plugin(steam_path: Option<String>) -> OperationResult {
 // Замена устаревшего плагина CrocLua на Eclipse Manifest
 #[tauri::command]
 pub fn millennium_migrate_from_croclua(steam_path: Option<String>) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path.clone()) else {
         return OperationResult::error("Папка Steam не найдена", vec![]);
     };
@@ -430,7 +477,10 @@ pub fn millennium_migrate_from_croclua(steam_path: Option<String>) -> OperationR
         if let Err(err) = fs::remove_dir_all(&path) {
             logs.push(format!("Не удалось удалить {}: {err}", path.display()));
         } else {
-            logs.push(format!("Удалена папка устаревшего плагина CrocLua: {}", path.display()));
+            logs.push(format!(
+                "Удалена папка устаревшего плагина CrocLua: {}",
+                path.display()
+            ));
         }
     }
     let install_res = millennium_install_plugin(steam_path);
@@ -442,7 +492,10 @@ pub fn millennium_migrate_from_croclua(steam_path: Option<String>) -> OperationR
         )
     } else {
         OperationResult::error(
-            format!("Плагин удалён, но при установке Eclipse Manifest произошла ошибка: {}", install_res.message),
+            format!(
+                "Плагин удалён, но при установке Eclipse Manifest произошла ошибка: {}",
+                install_res.message
+            ),
             logs,
         )
     }
@@ -451,6 +504,17 @@ pub fn millennium_migrate_from_croclua(steam_path: Option<String>) -> OperationR
 // Удаление устаревшего плагина CrocLua без немедленной установки
 #[tauri::command]
 pub fn millennium_remove_legacy_croclua(steam_path: Option<String>) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path) else {
         return OperationResult::error("Папка Steam не найдена", vec![]);
     };
@@ -473,6 +537,13 @@ pub fn millennium_remove_legacy_croclua(steam_path: Option<String>) -> Operation
 }
 
 fn install_bundled_runtime(steam: &Path) -> OperationResult {
+    let _resource_guard = match crate::resource_lock::Guard::scope(&[steam.to_path_buf()]) {
+        Ok(guard) => guard,
+        Err(error) => {
+            return OperationResult::error(error, vec![]);
+        }
+    };
+
     let mut logs = Vec::new();
     let mut changed = 0_u32;
     for (relative, contents) in EMBEDDED_MILLENNIUM_FILES {
@@ -485,6 +556,9 @@ fn install_bundled_runtime(steam: &Path) -> OperationResult {
         let target = relative
             .split('/')
             .fold(steam.to_path_buf(), |path, part| path.join(part));
+        if let Err(e) = crate::safe_path::child(steam, &target) {
+            return OperationResult::error(e, logs);
+        }
         if let Some(parent) = target.parent() {
             if let Err(error) = fs::create_dir_all(parent) {
                 return OperationResult::error(
@@ -497,7 +571,14 @@ fn install_bundled_runtime(steam: &Path) -> OperationResult {
             logs.push(format!("Без изменений: {relative}"));
             continue;
         }
-        if let Err(error) = fs::write(&target, contents) {
+        if let Err(error) = target
+            .strip_prefix(steam)
+            .map_err(|e| e.to_string())
+            .and_then(|relative| {
+                crate::backup::protect(steam, &relative.to_string_lossy(), "millennium-install")
+            })
+            .and_then(|_| crate::durable::write(&target, contents))
+        {
             return OperationResult::error(
                 format!("Не удалось записать {}: {error}", target.display()),
                 logs,
@@ -519,6 +600,17 @@ fn install_bundled_runtime(steam: &Path) -> OperationResult {
 
 #[tauri::command]
 pub fn millennium_install_bundled(steam_path: Option<String>) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path) else {
         return OperationResult::error("Папка Steam не найдена", vec![]);
     };

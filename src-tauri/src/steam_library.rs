@@ -377,7 +377,10 @@ pub(crate) async fn steam_library_cover(
     .map_err(|error| format!("Чтение обложки прервано: {error}"))?
 }
 
-pub(crate) fn read_local_cover(steam: &Path, appid: u64) -> Result<Option<SteamLibraryCover>, String> {
+pub(crate) fn read_local_cover(
+    steam: &Path,
+    appid: u64,
+) -> Result<Option<SteamLibraryCover>, String> {
     let root = steam.join("appcache/librarycache").join(appid.to_string());
     if !root.is_dir() {
         return Ok(None);

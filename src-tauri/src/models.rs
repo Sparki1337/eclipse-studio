@@ -45,12 +45,23 @@ pub struct GameDetails {
     pub dlcs: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone)]
 pub struct OperationResult {
     pub success: bool,
     pub message: String,
     pub logs: Vec<String>,
+}
+
+impl Serialize for OperationResult {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::operation_outcome::serialize(
+            self.success,
+            &self.message,
+            &self.logs,
+            None,
+            serializer,
+        )
+    }
 }
 
 impl OperationResult {

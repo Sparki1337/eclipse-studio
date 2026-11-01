@@ -5,17 +5,42 @@ use tauri::{AppHandle, Manager};
 
 /// Получение пути к папке кэша пользовательских звуков программы
 pub fn custom_sounds_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app
+    let base = app
         .path()
         .app_local_data_dir()
-        .map_err(|e| format!("Не удалось получить путь к директории данных приложения: {e}"))?
-        .join("custom_sounds");
+        .map_err(|e| format!("Не удалось получить путь к директории данных приложения: {e}"))?;
+    fs::create_dir_all(&base).map_err(|e| e.to_string())?;
+    let dir = crate::safe_path::join(&base, "custom_sounds")?;
 
     if !dir.exists() {
         fs::create_dir_all(&dir)
             .map_err(|e| format!("Не удалось создать директорию кэша звуков: {e}"))?;
     }
     Ok(dir)
+}
+
+fn validate_sound_name(name: &str) -> Result<(), String> {
+    crate::safe_path::validate_component(name)?;
+    let extension = PathBuf::from(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if !matches!(
+        extension.as_str(),
+        "mp3" | "ogg" | "wav" | "m4a" | "aac" | "flac" | "webm"
+    ) {
+        return Err("Неподдерживаемый формат звука".into());
+    }
+    Ok(())
+}
+
+fn sound_name_from_id(id: &str) -> Result<&str, String> {
+    let name = id
+        .strip_prefix("custom_")
+        .ok_or("Некорректный идентификатор звука")?;
+    validate_sound_name(name)?;
+    Ok(name)
 }
 
 /// Метаданные сохраненного звукового файла
@@ -56,8 +81,12 @@ pub async fn audio_save_custom_sound(
             clean_name.to_string()
         };
 
-        let file_path = dir.join(&safe_name);
-        fs::write(&file_path, &bytes)
+        if bytes.len() > 64 * 1024 * 1024 {
+            return Err("Звук превышает допустимый размер 64 МБ".into());
+        }
+        validate_sound_name(&safe_name)?;
+        let file_path = crate::safe_path::join(&dir, &safe_name)?;
+        crate::durable::write(&file_path, &bytes)
             .map_err(|e| format!("Не удалось записать аудиофайл в кэш: {e}"))?;
 
         let size = bytes.len() as u64;
@@ -83,7 +112,11 @@ pub async fn audio_list_custom_sounds(app: AppHandle) -> Result<Vec<CustomSoundM
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.is_file() {
+                if path.is_file()
+                    && fs::symlink_metadata(&path)
+                        .map(|m| !crate::safe_path::is_link(&m))
+                        .unwrap_or(false)
+                {
                     let ext = path
                         .extension()
                         .and_then(|e| e.to_str())
@@ -108,7 +141,7 @@ pub async fn audio_list_custom_sounds(app: AppHandle) -> Result<Vec<CustomSoundM
         }
 
         // Сортировка по имени для аккуратного отображения
-        list.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        list.sort_by_key(|a| a.name.to_lowercase());
         Ok(list)
     })
     .await
@@ -120,8 +153,8 @@ pub async fn audio_list_custom_sounds(app: AppHandle) -> Result<Vec<CustomSoundM
 pub async fn audio_delete_custom_sound(app: AppHandle, id: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let dir = custom_sounds_dir(&app)?;
-        let raw_name = id.strip_prefix("custom_").unwrap_or(&id);
-        let path = dir.join(raw_name);
+        let raw_name = sound_name_from_id(&id)?;
+        let path = crate::safe_path::join(&dir, raw_name)?;
 
         if path.exists() && path.is_file() {
             fs::remove_file(&path)
@@ -138,8 +171,8 @@ pub async fn audio_delete_custom_sound(app: AppHandle, id: String) -> Result<(),
 pub async fn audio_read_custom_sound(app: AppHandle, id: String) -> Result<Vec<u8>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let dir = custom_sounds_dir(&app)?;
-        let raw_name = id.strip_prefix("custom_").unwrap_or(&id);
-        let path = dir.join(raw_name);
+        let raw_name = sound_name_from_id(&id)?;
+        let path = crate::safe_path::join(&dir, raw_name)?;
 
         if !path.exists() || !path.is_file() {
             return Err("Файл звука не найден в кэше программы".into());
@@ -169,6 +202,22 @@ mod tests {
             })
             .collect();
         assert_eq!(clean, "My Super Sound _1_.mp3");
+    }
+
+    #[test]
+    fn sound_ids_never_accept_paths_or_streams() {
+        for id in [
+            "custom_../secret.wav",
+            "custom_..\\secret.wav",
+            "custom_C:\\secret.wav",
+            "custom_a.wav:stream",
+            "custom_CON.wav",
+            "sound.wav",
+            "custom_..",
+        ] {
+            assert!(sound_name_from_id(id).is_err(), "{id}");
+        }
+        assert_eq!(sound_name_from_id("custom_click.wav").unwrap(), "click.wav");
     }
 
     #[test]

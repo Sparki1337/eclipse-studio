@@ -36,7 +36,7 @@ description: Автоматическое фоновое обновление в
 1. **Запуск скрипта захвата скриншотов**:
    Запустите Node.js скрипт из корня репозитория:
    ```powershell
-   node tools/capture_all_screenshots.js
+   node scripts/capture_all_screenshots.js
    ```
 
 2. **Проверка результатов**:

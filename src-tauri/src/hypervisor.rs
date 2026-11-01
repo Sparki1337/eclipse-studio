@@ -40,7 +40,8 @@ const LAUNCHER_PROFILE: LauncherProfile = LauncherProfile {
     badge: "HV",
     batch_name: "Eclipse-HV.exe",
     helper_label: "Eclipse-HV.exe",
-    description: "Автономный высокопроизводительный лаунчер с обходом DSE в памяти и поддержкой Secure Boot.",
+    description:
+        "Автономный высокопроизводительный лаунчер с обходом DSE в памяти и поддержкой Secure Boot.",
 };
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -401,9 +402,20 @@ fn spawn_eclipse_hv(hv_exe: &Path, game_exe: &str, dir: &Path) -> Result<(), Str
         Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
     };
 
-    let executable: Vec<u16> = hv_exe.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-    let parameters: Vec<u16> = format!("\"{}\"", game_exe).encode_utf16().chain(std::iter::once(0)).collect();
-    let directory: Vec<u16> = dir.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+    let executable: Vec<u16> = hv_exe
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let parameters: Vec<u16> = format!("\"{}\"", game_exe)
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let directory: Vec<u16> = dir
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
     let verb: Vec<u16> = "runas".encode_utf16().chain(std::iter::once(0)).collect();
 
     let result = unsafe {
@@ -435,7 +447,8 @@ fn spawn_eclipse_hv(hv_exe: &Path, game_exe: &str, dir: &Path) -> Result<(), Str
     let mut cmd = Command::new(hv_exe);
     cmd.arg(game_exe);
     cmd.current_dir(dir);
-    cmd.spawn().map_err(|e| format!("Не удалось запустить Eclipse-HV: {e}"))?;
+    cmd.spawn()
+        .map_err(|e| format!("Не удалось запустить Eclipse-HV: {e}"))?;
     Ok(())
 }
 
@@ -445,54 +458,31 @@ fn prepare_game_files(app: &tauri::AppHandle, game_id: &str, dir: &Path) -> Resu
         return Err(format!("Папка игры не найдена: {}", dir.display()));
     }
 
-    let target = dir.join("Eclipse-HV.exe");
-    let needs_write = match fs::metadata(&target) {
-        Ok(m) => m.len() != EMBEDDED_ECLIPSE_HV.len() as u64,
-        Err(_) => true,
-    };
-
-    if needs_write {
-        fs::write(&target, EMBEDDED_ECLIPSE_HV)
-            .map_err(|e| format!("Не удалось записать Eclipse-HV.exe в {}: {e}", target.display()))?;
-        emit(
-            app,
-            "success",
-            "Лаунчер Eclipse-HV.exe успешно развернут в папке игры.".to_string(),
-            Some(3),
-            Some(game_id.to_string()),
-        );
-    }
-
-    // Удаление остатков старых батников и сторонних загрузчиков, если они были ранее скопированы
-    cleanup_legacy_hypervisor_files(dir);
-
-    Ok(())
-}
-
-// Полная очистка устаревших файлов прежних версий (старые bat-файлы, kvc.exe и папки)
-fn cleanup_legacy_hypervisor_files(dir: &Path) {
-    let legacy_files = [
-        "HV-Launcher.bat",
-        "HV-PlugNPlay.bat",
-        "kvc.exe",
-        "kvc.7z",
-        "7zr.exe",
-    ];
-
-    for file in &legacy_files {
-        let p = dir.join(file);
-        if p.exists() {
-            let _ = fs::remove_file(p);
-        }
-    }
-
-    let legacy_dirs = ["KVC Installing", "DenuvOwO"];
-    for folder in &legacy_dirs {
-        let p = dir.join(folder);
-        if p.exists() {
-            let _ = fs::remove_dir_all(p);
-        }
-    }
+    crate::jobs::run(
+        &[dir.to_path_buf()],
+        "Проверить встроенный лаунчер",
+        || -> Result<(), String> {
+            use sha2::{Digest, Sha256};
+            let target = crate::safe_path::join(dir, "Eclipse-HV.exe")?;
+            let hash = format!("{:x}", Sha256::digest(EMBEDDED_ECLIPSE_HV));
+            if crate::durable::hash_file(&target).ok().as_deref() != Some(hash.as_str()) {
+                crate::backup::protect(dir, "Eclipse-HV.exe", "embedded-launcher")?;
+                crate::durable::write(&target, EMBEDDED_ECLIPSE_HV)?;
+                if crate::durable::hash_file(&target)? != hash {
+                    return Err("Проверка лаунчера после записи не пройдена".into());
+                }
+                emit(
+                    app,
+                    "success",
+                    "Встроенный лаунчер записан и проверен SHA-256.".into(),
+                    Some(3),
+                    Some(game_id.into()),
+                );
+            }
+            // Не удаляем kvc.exe, 7zr.exe и сторонние папки по одному лишь имени.
+            Ok(())
+        },
+    )?
 }
 
 // Валидация пути к исполняемому файлу
@@ -620,7 +610,6 @@ fn emit(
     );
 }
 
-
 // Проверка наличия прав администратора
 fn is_admin() -> bool {
     let mut command = Command::new("net.exe");
@@ -679,7 +668,9 @@ pub(crate) struct EclipseHvStatus {
 }
 
 #[tauri::command]
-pub(crate) async fn eclipse_hv_status(target_dir: Option<String>) -> Result<EclipseHvStatus, String> {
+pub(crate) async fn eclipse_hv_status(
+    target_dir: Option<String>,
+) -> Result<EclipseHvStatus, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let dest = resolve_eclipse_hv_dest(target_dir.as_deref());
         let exe_path = dest.join("Eclipse-HV.exe");
@@ -702,9 +693,17 @@ pub(crate) async fn eclipse_hv_status(target_dir: Option<String>) -> Result<Ecli
 
         Ok(EclipseHvStatus {
             installed,
-            path: if installed { Some(exe_path.to_string_lossy().to_string()) } else { None },
+            path: if installed {
+                Some(exe_path.to_string_lossy().to_string())
+            } else {
+                None
+            },
             size_bytes,
-            version: if installed { "1.1.0".to_string() } else { "не установлен".to_string() },
+            version: if installed {
+                "1.1.0".to_string()
+            } else {
+                "не установлен".to_string()
+            },
             remote_version: Some("1.1.0".to_string()),
             update_available,
             destination_dir: dest.to_string_lossy().to_string(),
@@ -716,7 +715,9 @@ pub(crate) async fn eclipse_hv_status(target_dir: Option<String>) -> Result<Ecli
 
 /// Проверка обновлений автономного лаунчера Eclipse-HV через сеть и встроенные ресурсы
 #[tauri::command]
-pub(crate) async fn eclipse_hv_check_update(target_dir: Option<String>) -> Result<EclipseHvStatus, String> {
+pub(crate) async fn eclipse_hv_check_update(
+    target_dir: Option<String>,
+) -> Result<EclipseHvStatus, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let dest = resolve_eclipse_hv_dest(target_dir.as_deref());
         let exe_path = dest.join("Eclipse-HV.exe");
@@ -791,21 +792,33 @@ pub(crate) async fn eclipse_hv_download(target_dir: Option<String>) -> Result<St
 
         // 1. Устанавливаем из встроенных ресурсов лаунчера (100% надёжность без внешних запросов)
         if !EMBEDDED_ECLIPSE_HV.is_empty() {
-            fs::write(&target_exe, EMBEDDED_ECLIPSE_HV)
-                .map_err(|e| format!("Не удалось записать Eclipse-HV.exe в {}: {e}", target_exe.display()))?;
-            return Ok(format!("Eclipse-HV.exe успешно развернут в {}", dest.display()));
+            fs::write(&target_exe, EMBEDDED_ECLIPSE_HV).map_err(|e| {
+                format!(
+                    "Не удалось записать Eclipse-HV.exe в {}: {e}",
+                    target_exe.display()
+                )
+            })?;
+            return Ok(format!(
+                "Eclipse-HV.exe успешно развернут в {}",
+                dest.display()
+            ));
         }
 
         // 2. Резервный поиск в локальной папке Hypervisor
-        let local_path = PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-HV.exe");
+        let local_path =
+            PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-HV.exe");
         if local_path.is_file() {
             fs::copy(&local_path, &target_exe)
                 .map_err(|e| format!("Не удалось скопировать Eclipse-HV.exe: {e}"))?;
-            return Ok(format!("Eclipse-HV.exe успешно скопирован в {}", dest.display()));
+            return Ok(format!(
+                "Eclipse-HV.exe успешно скопирован в {}",
+                dest.display()
+            ));
         }
 
         // 3. Прямая загрузка с GitHub при отсутствии локальных бинарников
-        let download_url = "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
+        let download_url =
+            "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(30))
             .user_agent("Eclipse-Studio/8.0.0")
@@ -815,10 +828,15 @@ pub(crate) async fn eclipse_hv_download(target_dir: Option<String>) -> Result<St
         let response = client.get(download_url).send();
         match response {
             Ok(resp) if resp.status().is_success() => {
-                let bytes = resp.bytes().map_err(|e| format!("Ошибка загрузки данных: {e}"))?;
+                let bytes = resp
+                    .bytes()
+                    .map_err(|e| format!("Ошибка загрузки данных: {e}"))?;
                 fs::write(&target_exe, bytes)
                     .map_err(|e| format!("Не удалось записать файл: {e}"))?;
-                Ok(format!("Eclipse-HV.exe успешно загружен с GitHub в {}", dest.display()))
+                Ok(format!(
+                    "Eclipse-HV.exe успешно загружен с GitHub в {}",
+                    dest.display()
+                ))
             }
             _ => Err("Не удалось скачать Eclipse-HV.exe с GitHub.".into()),
         }

@@ -3,7 +3,6 @@ use crate::{
     models::{InstallRequest, OperationResult, ScanResult},
     steam,
 };
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -67,27 +66,7 @@ const FIX_FILES: &[&str] = &[
 const BACKUP_DIR_NAME: &str = ".backup_orig";
 const BACKUP_MANIFEST_NAME: &str = "cgs-backup.json";
 
-#[derive(Debug, Serialize, Deserialize)]
-struct BackupManifest {
-    version: u8,
-    #[serde(default)]
-    originals: BTreeMap<String, String>,
-    #[serde(default)]
-    created: BTreeMap<String, String>,
-    #[serde(default)]
-    legacy_import: bool,
-}
-
-impl Default for BackupManifest {
-    fn default() -> Self {
-        Self {
-            version: 2,
-            originals: BTreeMap::new(),
-            created: BTreeMap::new(),
-            legacy_import: false,
-        }
-    }
-}
+type BackupManifest = crate::backup::Manifest;
 
 #[derive(Default)]
 struct RestoreReport {
@@ -103,11 +82,14 @@ fn is_hidden_backup(entry: &DirEntry) -> bool {
             .eq_ignore_ascii_case(BACKUP_DIR_NAME)
 }
 
-pub(crate) fn walk(path: &Path) -> impl Iterator<Item = DirEntry> {
+pub(crate) fn walk(path: &Path) -> impl Iterator<Item = DirEntry> + '_ {
     WalkDir::new(path)
         .follow_links(false)
         .into_iter()
-        .filter_entry(|entry| !is_hidden_backup(entry))
+        .filter_entry(move |entry| {
+            !is_hidden_backup(entry)
+                && (entry.path() == path || crate::safe_path::child(path, entry.path()).is_ok())
+        })
         .filter_map(Result::ok)
 }
 
@@ -153,10 +135,18 @@ pub(crate) fn display_relative(path: &Path, game_dir: &Path) -> String {
         .unwrap_or_else(|| ".".into())
 }
 
+// На Windows снимается только readonly; Unix-ветка добавляет лишь запись владельцу.
+#[allow(clippy::permissions_set_readonly_false)]
 pub(crate) fn make_writable(path: &Path) {
     if let Ok(metadata) = fs::metadata(path) {
         let mut permissions = metadata.permissions();
+        #[cfg(windows)]
         permissions.set_readonly(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(permissions.mode() | 0o200);
+        }
         let _ = fs::set_permissions(path, permissions);
     }
 }
@@ -165,29 +155,8 @@ fn backup_manifest_path(backup_dir: &Path) -> PathBuf {
     backup_dir.join(BACKUP_MANIFEST_NAME)
 }
 
-fn load_backup_manifest(backup_dir: &Path) -> BackupManifest {
-    fs::read(backup_manifest_path(backup_dir))
-        .ok()
-        .and_then(|data| serde_json::from_slice(&data).ok())
-        .unwrap_or_default()
-}
-
-fn save_backup_manifest(backup_dir: &Path, manifest: &BackupManifest) -> Result<(), String> {
-    fs::create_dir_all(backup_dir)
-        .map_err(|error| format!("Не удалось создать папку бэкапа: {error}"))?;
-    let target = backup_manifest_path(backup_dir);
-    let temporary = backup_dir.join("cgs-backup.tmp");
-    let data = serde_json::to_vec_pretty(manifest)
-        .map_err(|error| format!("Не удалось сформировать манифест бэкапа: {error}"))?;
-    fs::write(&temporary, data)
-        .map_err(|error| format!("Не удалось записать манифест бэкапа: {error}"))?;
-    if target.exists() {
-        make_writable(&target);
-        fs::remove_file(&target)
-            .map_err(|error| format!("Не удалось обновить манифест бэкапа: {error}"))?;
-    }
-    fs::rename(&temporary, &target)
-        .map_err(|error| format!("Не удалось зафиксировать манифест бэкапа: {error}"))
+fn load_backup_manifest(backup_dir: &Path) -> Result<BackupManifest, String> {
+    crate::backup::load(backup_dir)
 }
 
 pub(crate) fn files_equal(first: &Path, second: &Path) -> bool {
@@ -229,57 +198,13 @@ pub(crate) fn files_equal(first: &Path, second: &Path) -> bool {
 }
 
 fn backup_file(path: &Path, logs: &mut Vec<String>) -> Result<(), String> {
-    let Some(parent) = path.parent() else {
-        return Ok(());
-    };
-    let Some(name) = path.file_name() else {
-        return Ok(());
-    };
-    let backup_dir = parent.join(BACKUP_DIR_NAME);
-    let backup = backup_dir.join(name);
-    let manifest_existed = backup_manifest_path(&backup_dir).is_file();
-    let backup_dir_existed = backup_dir.is_dir();
-    let mut manifest = load_backup_manifest(&backup_dir);
-    if backup_dir_existed && !manifest_existed {
-        manifest.legacy_import = true;
-    }
-    let key = name.to_string_lossy().to_lowercase();
-    if manifest.originals.contains_key(&key) || manifest.created.contains_key(&key) {
-        return Ok(());
-    }
-
-    if backup.is_file() {
-        manifest
-            .originals
-            .insert(key, name.to_string_lossy().into_owned());
-        return save_backup_manifest(&backup_dir, &manifest);
-    }
-
-    if path.is_file() {
-        fs::create_dir_all(&backup_dir)
-            .map_err(|error| format!("Не удалось создать бэкап: {error}"))?;
-        fs::copy(path, &backup).map_err(|error| {
-            let message = format!("Ошибка бэкапа {}: {error}", path.display());
-            logs.push(format!("⚠ {message}"));
-            message
-        })?;
-        if !files_equal(path, &backup) {
-            let message = format!("Проверка бэкапа не пройдена: {}", path.display());
-            logs.push(format!("⚠ {message}"));
-            return Err(message);
-        }
-        if let Ok(metadata) = fs::metadata(path) {
-            let _ = fs::set_permissions(&backup, metadata.permissions());
-        }
-        manifest
-            .originals
-            .insert(key, name.to_string_lossy().into_owned());
-    } else {
-        manifest
-            .created
-            .insert(key, name.to_string_lossy().into_owned());
-    }
-    save_backup_manifest(&backup_dir, &manifest)
+    let parent = path.parent().ok_or("У файла нет родительского каталога")?;
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Некорректное имя файла")?;
+    crate::backup::protect(parent, name, "engine")
+        .inspect_err(|error| logs.push(format!("⚠ {error}")))
 }
 
 fn safe_copy(source: &Path, target: &Path, logs: &mut Vec<String>) -> Result<(), String> {
@@ -295,7 +220,7 @@ fn safe_copy(source: &Path, target: &Path, logs: &mut Vec<String>) -> Result<(),
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    fs::copy(source, target).map_err(|error| {
+    crate::durable::copy(source, target).map_err(|error| {
         let message = format!("Не удалось скопировать {}: {error}", target.display());
         logs.push(format!("⚠ {message}"));
         message
@@ -330,7 +255,7 @@ pub(crate) fn write_with_backup(
     logs: &mut Vec<String>,
 ) -> Result<(), String> {
     backup_file(path, logs)?;
-    fs::write(path, content).map_err(|error| {
+    crate::durable::write(path, content.as_bytes()).map_err(|error| {
         let message = format!("Не удалось записать {}: {error}", path.display());
         logs.push(format!("⚠ {message}"));
         message
@@ -617,7 +542,10 @@ pub async fn install_fix(app: AppHandle, request: InstallRequest) -> OperationRe
     }
 }
 
-pub(crate) fn install_fix_blocking(app: AppHandle, request: InstallRequest) -> OperationResult {
+pub(crate) fn install_fix_blocking_unlocked(
+    app: AppHandle,
+    request: InstallRequest,
+) -> OperationResult {
     let game_dir = PathBuf::from(&request.game_dir);
     if !game_dir.is_dir() {
         return OperationResult::error("Папка игры не найдена", vec![]);
@@ -662,18 +590,25 @@ pub(crate) fn install_fix_blocking(app: AppHandle, request: InstallRequest) -> O
             target.file_stem().unwrap_or_default().to_string_lossy()
         );
         let backup = target.with_file_name(backup_name);
-        if !backup.exists()
-            || fs::metadata(&backup)
-                .map(|item| item.len() < 100_000)
-                .unwrap_or(true)
-        {
-            if safe_copy(&target, &backup, &mut logs).is_ok() {
-                logs.push(format!(
-                    "Сохранён оригинальный EOS: {}",
-                    display_relative(&backup, &game_dir)
-                ));
-            }
+        // Размер не доказывает подлинность оригинала. Существующий _o не заменяем;
+        // сохраняем и проверяем его через общий сервис до изменения основного DLL.
+        let backup_result = if backup.exists() {
+            crate::safe_path::child(&game_dir, &backup)
+                .and_then(|_| backup_file(&backup, &mut logs))
+                .and_then(|_| crate::durable::hash_file(&backup).map(|_| ()))
+        } else {
+            safe_copy(&target, &backup, &mut logs)
+        };
+        if let Err(error) = backup_result {
+            logs.push(format!(
+                "⚠ EOS не изменён: резервная копия не проверена: {error}"
+            ));
+            continue;
         }
+        logs.push(format!(
+            "Резервная копия EOS проверена: {}",
+            display_relative(&backup, &game_dir)
+        ));
         if safe_copy(&core_eos, &target, &mut logs).is_ok() {
             logs.push(format!(
                 "Установлен EOS-модуль: {}",
@@ -799,59 +734,43 @@ fn looks_like_generated_backup(backup: &Path, name: &str, core: &Path) -> bool {
 }
 
 fn restore_one_file(backup: &Path, target: &Path) -> Result<(), String> {
-    let Some(parent) = target.parent() else {
-        return Err(format!(
-            "Некорректный путь восстановления: {}",
-            target.display()
-        ));
-    };
-    let temporary = parent.join(format!(
-        ".cgs-restore-{}",
-        target.file_name().unwrap_or_default().to_string_lossy()
-    ));
-    if temporary.exists() {
-        make_writable(&temporary);
-        let _ = fs::remove_file(&temporary);
-    }
-    fs::copy(backup, &temporary)
-        .map_err(|error| format!("Не удалось подготовить {}: {error}", target.display()))?;
-    if !files_equal(backup, &temporary) {
-        let _ = fs::remove_file(&temporary);
-        return Err(format!("Проверка копии не пройдена: {}", target.display()));
-    }
-    if target.exists() {
-        make_writable(target);
-        fs::remove_file(target)
-            .map_err(|error| format!("Не удалось заменить {}: {error}", target.display()))?;
-    }
-    fs::rename(&temporary, target)
-        .map_err(|error| format!("Не удалось вернуть {} на место: {error}", target.display()))?;
-    if !files_equal(backup, target) {
-        return Err(format!(
-            "Файл после восстановления повреждён: {}",
-            target.display()
-        ));
-    }
+    crate::durable::copy(backup, target)?;
     if let Ok(metadata) = fs::metadata(backup) {
-        let _ = fs::set_permissions(target, metadata.permissions());
+        fs::set_permissions(target, metadata.permissions()).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
 fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> RestoreReport {
     let mut report = RestoreReport::default();
-    let backup_dir = directory.join(BACKUP_DIR_NAME);
+    let backup_dir = match crate::safe_path::join(directory, BACKUP_DIR_NAME) {
+        Ok(path) => path,
+        Err(error) => {
+            report.errors.push(error);
+            return report;
+        }
+    };
     if !backup_dir.is_dir() {
         return report;
     }
 
     let manifest_path = backup_manifest_path(&backup_dir);
     let manifest_exists = manifest_path.is_file();
-    let mut manifest = load_backup_manifest(&backup_dir);
+    let mut manifest = match load_backup_manifest(&backup_dir) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            report.errors.push(error);
+            return report;
+        }
+    };
 
     if let Ok(items) = fs::read_dir(&backup_dir) {
         for item in items.flatten() {
-            if !item.path().is_file() {
+            if !item.path().is_file()
+                || fs::symlink_metadata(item.path())
+                    .map(|m| crate::safe_path::is_link(&m))
+                    .unwrap_or(true)
+            {
                 continue;
             }
             let name = item.file_name().to_string_lossy().into_owned();
@@ -868,12 +787,30 @@ fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> Res
         }
     }
 
+    if let Err(error) = crate::backup::validate(&manifest) {
+        report.errors.push(error);
+        return report;
+    }
+    for name in manifest.originals.values().chain(manifest.created.values()) {
+        if let Err(error) = crate::safe_path::join(directory, name)
+            .and_then(|_| crate::safe_path::join(&backup_dir, name))
+        {
+            report.errors.push(error);
+            return report;
+        }
+    }
     let legacy_mode = !manifest_exists || manifest.legacy_import || manifest.version < 2;
     let originals = manifest.originals.clone();
     let mut created = manifest.created.clone();
 
     for (key, name) in originals {
-        let backup = backup_dir.join(&name);
+        let backup = match crate::safe_path::join(&backup_dir, &name) {
+            Ok(path) => path,
+            Err(e) => {
+                report.errors.push(e);
+                continue;
+            }
+        };
         if legacy_mode && backup.is_file() && looks_like_generated_backup(&backup, &name, core) {
             created.insert(key, name);
             continue;
@@ -884,7 +821,23 @@ fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> Res
                 .push(format!("В бэкапе отсутствует оригинал: {name}"));
             continue;
         }
-        let target = directory.join(&name);
+        let target = match crate::safe_path::join(directory, &name) {
+            Ok(path) => path,
+            Err(e) => {
+                report.errors.push(e);
+                continue;
+            }
+        };
+        if manifest
+            .hashes
+            .get(&key)
+            .is_some_and(|expected| crate::durable::hash_file(&backup).as_ref() != Ok(expected))
+        {
+            report
+                .errors
+                .push(format!("Контрольная сумма оригинала не совпадает: {name}"));
+            continue;
+        }
         match restore_one_file(&backup, &target) {
             Ok(()) => {
                 report.restored.insert(key);
@@ -899,7 +852,13 @@ fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> Res
 
     if report.errors.is_empty() {
         for (key, name) in created {
-            let target = directory.join(&name);
+            let target = match crate::safe_path::join(directory, &name) {
+                Ok(path) => path,
+                Err(e) => {
+                    report.errors.push(e);
+                    continue;
+                }
+            };
             if target.exists() {
                 make_writable(&target);
                 if let Err(error) = fs::remove_file(&target) {
@@ -971,7 +930,7 @@ pub async fn uninstall_fix(app: AppHandle, game_dir: String) -> OperationResult 
     }
 }
 
-fn uninstall_fix_blocking(app: AppHandle, game_dir: String) -> OperationResult {
+fn uninstall_fix_blocking_unlocked(app: AppHandle, game_dir: String) -> OperationResult {
     let game_dir = PathBuf::from(game_dir);
     if !game_dir.is_dir() {
         return OperationResult::error("Папка игры не найдена", vec![]);
@@ -1095,7 +1054,7 @@ pub async fn install_epicfix_only(app: AppHandle, game_dir: String) -> Operation
     }
 }
 
-fn install_epicfix_only_blocking(app: AppHandle, game_dir: String) -> OperationResult {
+fn install_epicfix_only_blocking_unlocked(app: AppHandle, game_dir: String) -> OperationResult {
     let game_dir = PathBuf::from(game_dir);
     if !game_dir.is_dir() {
         return OperationResult::error("Папка игры не найдена", vec![]);
@@ -1162,7 +1121,7 @@ pub async fn restore_eos_only(game_dir: String) -> OperationResult {
     }
 }
 
-fn restore_eos_only_blocking(game_dir: String) -> OperationResult {
+fn restore_eos_only_blocking_unlocked(game_dir: String) -> OperationResult {
     let game_dir = PathBuf::from(game_dir);
     if !game_dir.is_dir() {
         return OperationResult::error("Папка игры не найдена", vec![]);
@@ -1203,6 +1162,42 @@ fn restore_eos_only_blocking(game_dir: String) -> OperationResult {
     } else {
         OperationResult::ok(format!("Восстановлено файлов EOS: {count}"), logs)
     }
+}
+
+fn install_fix_blocking(app: AppHandle, request: InstallRequest) -> OperationResult {
+    let resource = PathBuf::from(&request.game_dir);
+    crate::jobs::run(&[resource], "Установка Online Fix", || {
+        install_fix_blocking_unlocked(app, request)
+    })
+    .unwrap_or_else(|e| OperationResult::error(e, vec![]))
+}
+
+fn uninstall_fix_blocking(app: AppHandle, game_dir: String) -> OperationResult {
+    let resource = PathBuf::from(&game_dir);
+    crate::jobs::run(
+        &[resource],
+        "Возврат оригинальных файлов",
+        || uninstall_fix_blocking_unlocked(app, game_dir),
+    )
+    .unwrap_or_else(|e| OperationResult::error(e, vec![]))
+}
+
+fn install_epicfix_only_blocking(app: AppHandle, game_dir: String) -> OperationResult {
+    let resource = PathBuf::from(&game_dir);
+    crate::jobs::run(
+        &[resource],
+        "Установка EOS-компонентов",
+        || install_epicfix_only_blocking_unlocked(app, game_dir),
+    )
+    .unwrap_or_else(|e| OperationResult::error(e, vec![]))
+}
+
+fn restore_eos_only_blocking(game_dir: String) -> OperationResult {
+    let resource = PathBuf::from(&game_dir);
+    crate::jobs::run(&[resource], "Возврат EOS", || {
+        restore_eos_only_blocking_unlocked(game_dir)
+    })
+    .unwrap_or_else(|e| OperationResult::error(e, vec![]))
 }
 
 #[cfg(test)]

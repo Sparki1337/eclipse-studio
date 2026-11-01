@@ -95,13 +95,24 @@ fn now_unix() -> u64 {
         .unwrap_or(0)
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone)]
 pub struct LuaInstallResult {
     pub success: bool,
     pub message: String,
     pub logs: Vec<String>,
     pub added_appids: Vec<String>,
+}
+
+impl Serialize for LuaInstallResult {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::operation_outcome::serialize(
+            self.success,
+            &self.message,
+            &self.logs,
+            Some(&self.added_appids),
+            serializer,
+        )
+    }
 }
 
 fn hidden_command(program: &str) -> Command {
@@ -222,8 +233,6 @@ fn save_settings(app: &AppHandle, settings: &LuatoolsSettings) {
     }
 }
 
-
-
 // Определение активной версии OpenSteamTool в папке Steam с учётом Schema 2
 pub fn detect_active_loader_in_steam(steam: &Path) -> (String, String) {
     if let Ok(Some(selection)) = crate::lua_loader::read_selection(steam) {
@@ -243,13 +252,13 @@ pub fn detect_active_loader_in_steam(steam: &Path) -> (String, String) {
     };
 
     // Сверяем с версией 2 (альтернативная сборка)
-    let v2_bytes = include_bytes!("assets/ost_desktop/OpenSteamTool.dll");
+    let v2_bytes = include_bytes!("../resources/opensteamtool/v2/OpenSteamTool.dll");
     if steam_bytes == v2_bytes || steam.join("bin/dwmapi.dll").is_file() {
         return ("v2".into(), "Версия 2 (Альтернативная)".into());
     }
 
     // Сверяем с версией 1 (основная сборка)
-    let v1_bytes = include_bytes!("assets/OpenSteamTool.dll");
+    let v1_bytes = include_bytes!("../resources/opensteamtool/v1/OpenSteamTool.dll");
     if steam_bytes == v1_bytes {
         return ("v1".into(), "Версия 1 (Основная)".into());
     }
@@ -260,14 +269,19 @@ pub fn detect_active_loader_in_steam(steam: &Path) -> (String, String) {
 // Настройка рабочей папки [lua] paths = ["config/lua"] в opensteamtool.toml
 pub(crate) fn configure_lua_folder(existing: &str) -> Result<String, String> {
     let source = if existing.trim().is_empty() {
-        include_str!("assets/opensteamtool.toml")
+        include_str!("../resources/opensteamtool/v1/opensteamtool.toml")
     } else {
         existing
     };
     let mut config = source.parse::<toml_edit::DocumentMut>()
         .map_err(|error| format!("Не удалось обновить opensteamtool.toml: {error}. Существующий конфиг сохранён без изменений."))?;
-    if config.get("lua").is_some_and(|item| !item.is_table() && !item.is_inline_table()) {
-        return Err("В opensteamtool.toml секция lua имеет неверный формат. Файлы не изменены.".into());
+    if config
+        .get("lua")
+        .is_some_and(|item| !item.is_table() && !item.is_inline_table())
+    {
+        return Err(
+            "В opensteamtool.toml секция lua имеет неверный формат. Файлы не изменены.".into(),
+        );
     }
     let mut paths = toml_edit::Array::new();
     paths.push("config/lua");
@@ -277,23 +291,31 @@ pub(crate) fn configure_lua_folder(existing: &str) -> Result<String, String> {
 
 // Атомарная запись файла во временный файл с последующим переименованием
 fn atomic_loader_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    use std::io::Write;
-    let parent = path.parent().ok_or("Нет папки назначения загрузчика")?;
-    let mut temporary = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
-    temporary.write_all(bytes).and_then(|_| temporary.as_file().sync_all()).map_err(|e| e.to_string())?;
-    temporary.persist(path).map_err(|e| e.error.to_string())?;
-    Ok(())
+    crate::durable::write(path, bytes)
 }
 
 // Транзакционное применение изменений в файлах загрузчика с бэкапом и откатом
-pub(crate) fn install_loader_changes(steam: &Path, files: &[(&str, Option<&[u8]>)]) -> Result<(), String> {
-    let read = |path: &Path| -> Result<Option<Vec<u8>>, String> {
-        crate::lua_loader::read_optional(path)
+pub(crate) fn install_loader_changes(
+    steam: &Path,
+    files: &[(&str, Option<&[u8]>)],
+) -> Result<(), String> {
+    let _resource_guard = match crate::resource_lock::Guard::scope(&[steam.to_path_buf()]) {
+        Ok(guard) => guard,
+        Err(error) => {
+            return Err(error);
+        }
     };
+
+    let read =
+        |path: &Path| -> Result<Option<Vec<u8>>, String> { crate::lua_loader::read_optional(path) };
     let mut changes = Vec::new();
     for &(name, desired) in files {
         let relative = Path::new(name);
-        if relative.is_absolute() || relative.components().any(|c| !matches!(c, std::path::Component::Normal(_))) {
+        if relative.is_absolute()
+            || relative
+                .components()
+                .any(|c| !matches!(c, std::path::Component::Normal(_)))
+        {
             return Err("Недопустимый путь загрузчика".into());
         }
         let destination = steam.join(relative);
@@ -315,14 +337,18 @@ pub(crate) fn install_loader_changes(steam: &Path, files: &[(&str, Option<&[u8]>
     if changes.is_empty() {
         return Ok(());
     }
-    let backup = steam.join("config/cgs-luatools-backups").join(uuid::Uuid::new_v4().to_string());
+    let backup = steam
+        .join("config/cgs-luatools-backups")
+        .join(uuid::Uuid::new_v4().to_string());
     for (name, _, previous) in &changes {
         if let Some(bytes) = previous {
             let output = backup.join(name);
             if let Some(parent) = output.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            fs::write(output, bytes).map_err(|e| format!("Не удалось сохранить резервную копию: {e}. DLL не изменены."))?;
+            crate::durable::write(&output, bytes).map_err(|e| {
+                format!("Не удалось сохранить резервную копию: {e}. DLL не изменены.")
+            })?;
         }
     }
     for (index, (name, desired, previous)) in changes.iter().enumerate() {
@@ -408,7 +434,9 @@ pub async fn luatools_update_loader(
         };
         let variant = match variant {
             Some(v) => v,
-            None => crate::lua_loader::selected_variant(&steam).unwrap_or_else(|_| "standard".into()),
+            None => {
+                crate::lua_loader::selected_variant(&steam).unwrap_or_else(|_| "standard".into())
+            }
         };
         crate::loader_github::update(&steam, &variant)
     })
@@ -826,10 +854,8 @@ pub fn luatools_status(app: AppHandle, steam_path: Option<String>) -> LuaStatus 
             games: Vec::new(),
         };
     };
-    // Автоматическая миграция файлов из старых версий
-    let _ = migrate_legacy_manifests(&steam);
+    // Просмотр состояния не изменяет Steam. Миграция выполняется при явной установке.
     let stplugin = stplugin_dir(&steam);
-    let _ = migrate_legacy_lua(&steam, &stplugin);
     let cache = manifest_cache_dir(&app);
     let games = registry_games(
         &load_registry(&app),
@@ -855,6 +881,17 @@ pub fn luatools_status(app: AppHandle, steam_path: Option<String>) -> LuaStatus 
 
 #[tauri::command]
 pub fn luatools_restore_manifests(app: AppHandle, steam_path: Option<String>) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path) else {
         return OperationResult::error("Папка Steam не найдена", vec![]);
     };
@@ -945,8 +982,29 @@ fn install_lua_bytes(
     };
     let target = context.stplugin.join(format!("{appid}.lua"));
     let disabled = context.stplugin.join(format!("{appid}.lua.disabled"));
-    let _ = fs::remove_file(&disabled);
-    match fs::write(&target, content) {
+    let prepare = (|| -> Result<(), String> {
+        crate::safe_path::join(&context.stplugin, &format!("{appid}.lua"))?;
+        crate::backup::protect(&context.stplugin, &format!("{appid}.lua"), "lua-install")?;
+        if disabled.exists() {
+            crate::backup::protect(
+                &context.stplugin,
+                &format!("{appid}.lua.disabled"),
+                "lua-install",
+            )?;
+        }
+        Ok(())
+    })();
+    if let Err(e) = prepare {
+        logs.push(format!("⚠ {e}; Lua не изменён"));
+        return;
+    }
+    if disabled.exists() {
+        if let Err(e) = fs::remove_file(&disabled) {
+            logs.push(format!("⚠ Не удалось убрать отключённую Lua: {e}"));
+            return;
+        }
+    }
+    match crate::durable::write(&target, content.as_bytes()) {
         Ok(()) => {
             logs.push(format!("Добавлен lua: {appid}.lua"));
             if !added.contains(&appid) {
@@ -963,13 +1021,22 @@ fn install_manifest_bytes(
     bytes: &[u8],
     logs: &mut Vec<String>,
 ) {
-    let target = context.depotcache.join(file_name);
-    match fs::write(&target, bytes) {
+    let target = match crate::safe_path::join(&context.depotcache, file_name).and_then(|path| {
+        crate::backup::protect(&context.depotcache, file_name, "manifest-install")?;
+        Ok(path)
+    }) {
+        Ok(path) => path,
+        Err(e) => {
+            logs.push(format!("⚠ Манифест не изменён: {e}"));
+            return;
+        }
+    };
+    match crate::durable::write(&target, bytes) {
         Ok(()) => {
             logs.push(format!("Добавлен манифест: {file_name}"));
             if let Some(cache) = &context.manifest_cache {
                 if fs::create_dir_all(cache).is_ok() {
-                    if let Err(error) = fs::write(cache.join(file_name), bytes) {
+                    if let Err(error) = crate::durable::write(&cache.join(file_name), bytes) {
                         logs.push(format!(
                             "⚠ Не удалось сохранить резервную копию {file_name}: {error}"
                         ));
@@ -1002,35 +1069,65 @@ fn install_zip_reader<R: std::io::Read + std::io::Seek>(
     logs: &mut Vec<String>,
     added: &mut Vec<String>,
 ) {
-    let mut archive = match zip::ZipArchive::new(reader) {
-        Ok(archive) => archive,
-        Err(error) => {
-            logs.push(format!("⚠ Архив повреждён или не ZIP: {error}"));
-            return;
+    let result = (|| -> Result<(), String> {
+        let stage = tempfile::tempdir().map_err(|e| e.to_string())?;
+        let archive_path = stage.path().join("source.zip");
+        let output = stage.path().join("out");
+        let mut source = reader;
+        let mut file = fs::File::create(&archive_path).map_err(|e| e.to_string())?;
+        use std::io::Read;
+        let copied = std::io::copy(
+            &mut std::io::Read::by_ref(&mut source).take(crate::archive_policy::MAX_BYTES + 1),
+            &mut file,
+        )
+        .map_err(|e| e.to_string())?;
+        if copied > crate::archive_policy::MAX_BYTES {
+            return Err("Слишком большой архив манифестов".into());
         }
-    };
-    use std::io::Read;
-    for index in 0..archive.len() {
-        let Ok(mut entry) = archive.by_index(index) else {
-            continue;
-        };
-        if entry.is_dir() {
-            continue;
+        file.sync_all().map_err(|e| e.to_string())?;
+        fs::create_dir(&output).map_err(|e| e.to_string())?;
+        crate::archive_policy::zip_extract(&archive_path, &output, None)?;
+        let mut names = std::collections::BTreeSet::new();
+        for entry in walkdir::WalkDir::new(&output).follow_links(false) {
+            let entry = entry.map_err(|e| e.to_string())?;
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !(name.to_lowercase().ends_with(".lua")
+                || name.to_lowercase().ends_with(".manifest"))
+            {
+                continue;
+            }
+            if !names.insert(name.to_lowercase()) {
+                return Err("Повторяющееся имя манифеста".into());
+            }
+            if entry.metadata().map_err(|e| e.to_string())?.len() > 32 * 1024 * 1024 {
+                return Err("Файл манифеста больше 32 МБ".into());
+            }
         }
-        let Some(name) = entry
-            .enclosed_name()
-            .and_then(|path| path.file_name().map(|n| n.to_string_lossy().into_owned()))
-        else {
-            continue;
-        };
-        let lower = name.to_lowercase();
-        if !(lower.ends_with(".lua") || lower.ends_with(".manifest")) {
-            continue;
+        for entry in walkdir::WalkDir::new(&output).follow_links(false) {
+            let entry = entry.map_err(|e| e.to_string())?;
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let name = entry.file_name().to_string_lossy().to_string();
+            let lower = name.to_lowercase();
+            if !(lower.ends_with(".lua") || lower.ends_with(".manifest")) {
+                continue;
+            }
+            install_bytes(
+                context,
+                &name,
+                &fs::read(entry.path()).map_err(|e| e.to_string())?,
+                logs,
+                added,
+            );
         }
-        let mut bytes = Vec::new();
-        if entry.read_to_end(&mut bytes).is_ok() {
-            install_bytes(context, &name, &bytes, logs, added);
-        }
+        Ok(())
+    })();
+    if let Err(e) = result {
+        logs.push(format!("⚠ Архив не установлен: {e}"));
     }
 }
 
@@ -1053,6 +1150,29 @@ pub(crate) fn install_zip_bytes(
     steam_path: Option<String>,
     auto_update: bool,
 ) -> LuaInstallResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => {
+                return LuaInstallResult {
+                    success: false,
+                    message: "Папка Steam не найдена".into(),
+                    logs: vec![],
+                    added_appids: vec![],
+                }
+            }
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return LuaInstallResult {
+                    success: false,
+                    message: error,
+                    logs: vec![],
+                    added_appids: vec![],
+                };
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path) else {
         return LuaInstallResult {
             success: false,
@@ -1157,6 +1277,29 @@ fn luatools_install_blocking(
     steam_path: Option<String>,
     auto_update: bool,
 ) -> LuaInstallResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => {
+                return LuaInstallResult {
+                    success: false,
+                    message: "Папка Steam не найдена".into(),
+                    logs: vec![],
+                    added_appids: vec![],
+                }
+            }
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return LuaInstallResult {
+                    success: false,
+                    message: error,
+                    logs: vec![],
+                    added_appids: vec![],
+                };
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path) else {
         return LuaInstallResult {
             success: false,
@@ -1267,6 +1410,17 @@ fn game_lua_paths(stplugin: &Path, appid: &str) -> (PathBuf, PathBuf) {
 
 #[tauri::command]
 pub fn luatools_toggle(appid: String, enable: bool, steam_path: Option<String>) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path) else {
         return OperationResult::error("Папка Steam не найдена", vec![]);
     };
@@ -1301,6 +1455,17 @@ pub fn luatools_remove(
     appid: String,
     steam_path: Option<String>,
 ) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let Some(steam) = resolve_steam_path(steam_path) else {
         return OperationResult::error("Папка Steam не найдена", vec![]);
     };
@@ -1689,8 +1854,23 @@ pub fn luatools_set_loader_source(
     source: String,
     steam_path: Option<String>,
 ) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let mut settings = load_settings(&app);
-    let valid_source = if source == "v2" || source == "desktop" { "v2" } else { "v1" };
+    let valid_source = if source == "v2" || source == "desktop" {
+        "v2"
+    } else {
+        "v1"
+    };
     settings.loader_source = valid_source.into();
     save_settings(&app, &settings);
 
@@ -1713,6 +1893,17 @@ pub fn luatools_set_loader_source(
 // Принудительное применение текущего загрузчика в папку Steam
 #[tauri::command]
 pub fn luatools_apply_loader(app: AppHandle, steam_path: Option<String>) -> OperationResult {
+    let _resource_guard =
+        match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
+            Some(p) => p,
+            None => return OperationResult::error("Папка Steam не найдена", vec![]),
+        }]) {
+            Ok(guard) => guard,
+            Err(error) => {
+                return OperationResult::error(error, vec![]);
+            }
+        };
+
     let settings = load_settings(&app);
     let Some(steam) = resolve_steam_path(steam_path) else {
         return OperationResult::error("Папка Steam не найдена — укажите её вручную", vec![]);
@@ -1805,10 +1996,7 @@ paths = ["ignore"]
             legacy_stplugin_dir(&steam),
             steam.join("config").join("stplug-in")
         );
-        assert_eq!(
-            default_lua_dir(&steam),
-            steam.join("config").join("lua")
-        );
+        assert_eq!(default_lua_dir(&steam), steam.join("config").join("lua"));
         assert_eq!(depotcache_dir(&steam), steam.join("depotcache"));
         assert_eq!(
             legacy_depotcache_dir(&steam),
@@ -1930,7 +2118,8 @@ paths = ["ignore"]
 
     #[test]
     fn detects_bundled_and_desktop_loader_files() {
-        let temp_steam = std::env::temp_dir().join(format!("cgs-loader-test-{}", std::process::id()));
+        let temp_steam =
+            std::env::temp_dir().join(format!("cgs-loader-test-{}", std::process::id()));
         let _ = fs::create_dir_all(&temp_steam);
 
         // Без файлов в Steam
@@ -1938,21 +2127,32 @@ paths = ["ignore"]
         assert_eq!(status, "none");
 
         // Записываем версию 1 (базовая)
-        fs::write(temp_steam.join("OpenSteamTool.dll"), include_bytes!("assets/OpenSteamTool.dll")).unwrap();
+        fs::write(
+            temp_steam.join("OpenSteamTool.dll"),
+            include_bytes!("../resources/opensteamtool/v1/OpenSteamTool.dll"),
+        )
+        .unwrap();
         let (status_v1, _) = detect_active_loader_in_steam(&temp_steam);
         assert_eq!(status_v1, "v1");
 
         // Записываем версию 2 (с десктопа)
-        fs::write(temp_steam.join("OpenSteamTool.dll"), include_bytes!("assets/ost_desktop/OpenSteamTool.dll")).unwrap();
+        fs::write(
+            temp_steam.join("OpenSteamTool.dll"),
+            include_bytes!("../resources/opensteamtool/v2/OpenSteamTool.dll"),
+        )
+        .unwrap();
         let (status_v2, _) = detect_active_loader_in_steam(&temp_steam);
         assert_eq!(status_v2, "v2");
 
         // Записываем сторонний файл
-        fs::write(temp_steam.join("OpenSteamTool.dll"), b"custom-dll-bytes-for-unit-test").unwrap();
+        fs::write(
+            temp_steam.join("OpenSteamTool.dll"),
+            b"custom-dll-bytes-for-unit-test",
+        )
+        .unwrap();
         let (status_custom, _) = detect_active_loader_in_steam(&temp_steam);
         assert_eq!(status_custom, "custom");
 
         let _ = fs::remove_dir_all(temp_steam);
     }
 }
-

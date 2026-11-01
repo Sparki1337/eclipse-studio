@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "algorithm": "SHA-256",
+  "sources": {
+    "frontend/index.tsx": "4367c04589abc0b0959fee5101aac54069a3b81f0c294707b8ab6da81e03b1ba",
+    "webkit/index.tsx": "f70b200ba68198091a7103c37661420b8ae199656a9b5a34a248dbc9ad8f5c6c",
+    "backend/main.lua": "9710fabf81610458e2ad6cabc525306948b6e8812383b8886bdcb40ef60aea29",
+    "backend/install-loader.ps1": "8ffd61ea6a0266e3937029bc17b64a1bcb1ede8ab5012fbb75522cfb8e0c0ef3",
+    "tsconfig.json": "043dd5ccb9530d62a1ed7bdc4d46c59ae3b15c4eec5f3b45245e2d3301b6a8ac",
+    "package.json": "8faea8c13022d442d1cfdd8b8dc0533a4be49c9f80acecde660f13bbd99d512e",
+    "package-lock.json": "409fd05877a85219e0969dfdebdc3748b99be7e23aabc474e70bdc4585eee2cd",
+    "plugin.json": "109cc7f85b2cfef8c26f29dfee82b1445e73dd360f52b8fec0208caec47169b1"
+  },
+  "outputs": {
+    ".millennium/Dist/index.js": "8262c4c1f38b0ef47cc3f0c5db0042126856b84e89fb906e0799ed88b44ae95b",
+    ".millennium/Dist/webkit.js": "039be13a072998d69249fc82b66ec87c3c6c11aa7a8bf933035fd07324dc7dd5"
+  }
+}

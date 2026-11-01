@@ -5,82 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#090a0d" />
   <title>Eclipse Studio</title>
-  <script>
-    (function () {
-      try {
-        var root = document.documentElement;
-        var theme = localStorage.getItem("cgs-theme") || "graphite";
-        root.dataset.theme = theme;
-        var themeBgMap = {
-          graphite: "#090a0d",
-          midnight: "#060a16",
-          oled: "#000000",
-          light: "#f8fafc",
-          forest: "#050c09",
-          cosmos: "#09061a",
-          wine: "#0d0609",
-          coffee: "#0c0907",
-          steel: "#11141a"
-        };
-        var bg = themeBgMap[theme] || "#090a0d";
-        root.style.setProperty("--theme-bg", bg);
-        root.style.backgroundColor = bg;
-        var meta = document.querySelector('meta[name="theme-color"]');
-        if (meta) meta.setAttribute("content", bg);
-        if (localStorage.getItem("cgs-compact") === "1") root.classList.add("compact");
-        var motion = localStorage.getItem("cgs-motion");
-        if (motion === "0" || (motion === null && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) root.classList.add("no-motion");
-        var font = parseInt(localStorage.getItem("cgs-font-scale") || "120", 10);
-        if (font >= 85 && font <= 140) root.style.setProperty("--fs", String(font / 100));
-        var side = parseInt(localStorage.getItem("cgs-sidebar-width") || "", 10);
-        if (side >= 180 && side <= 380) { root.style.setProperty("--sidebar-w", side + "px"); root.classList.add("sidebar-sized"); }
-        if (localStorage.getItem("cgs-splash") === "0") root.classList.add("no-splash");
-        var accentMap = {
-          mint: ["#63f5c2", "99, 245, 194"],
-          violet: ["#a987ff", "169, 135, 255"],
-          blue: ["#5ca8ff", "92, 168, 255"],
-          rose: ["#ff739d", "255, 115, 157"],
-          cyan: ["#4fdfff", "79, 223, 255"],
-          pink: ["#f67ee6", "246, 126, 230"],
-          red: ["#ff6161", "255, 97, 97"],
-          orange: ["#ff9a4d", "255, 154, 77"],
-          amber: ["#ffc94d", "255, 201, 77"],
-          lime: ["#b8f25c", "184, 242, 92"],
-          gold: ["#e3c88a", "227, 200, 138"],
-          ice: ["#dfe7f2", "223, 231, 242"],
-          white: ["#ffffff", "255, 255, 255"]
-        };
-        var shape = localStorage.getItem("cgs-shape") || "soft";
-        root.dataset.shape = shape;
-        var fontKey = localStorage.getItem("cgs-font-family") || "system";
-        root.dataset.font = fontKey;
-        var fontMap = {
-          system: '"Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
-          jetbrains: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
-          minecraft: '"Minecraft", "Minecraftia", "Monocraft", monospace',
-          bahnschrift: 'Bahnschrift, "Segoe UI", system-ui, sans-serif',
-          verdana: 'Verdana, "Segoe UI", sans-serif',
-          tahoma: 'Tahoma, "Segoe UI", sans-serif',
-          consolas: 'Consolas, "Cascadia Mono", monospace'
-        };
-        if (fontMap[fontKey]) root.style.setProperty("--font", fontMap[fontKey]);
-        var weight = localStorage.getItem("cgs-text-weight") || "regular";
-        root.dataset.weight = weight;
-        if (localStorage.getItem("cgs-contrast") === "1") root.dataset.contrast = "high";
-        if (localStorage.getItem("cgs-glow") === "0") root.dataset.glow = "off";
-        else root.dataset.glow = "on";
-        var acc = accentMap[localStorage.getItem("accent") || "mint"] || accentMap.mint;
-        root.style.setProperty("--accent", acc[0]);
-        root.style.setProperty("--accent-rgb", acc[1]);
-        root.style.setProperty("--accent-2", acc[0]);
-        // Мгновенная предварительная загрузка логотипа заставки для исключения черного экрана
-        window.__splashLogo = new Image();
-        window.__splashLogo.src = "./icon-loader.png";
-      } catch (_) {}
-    })();
-  </script>
-  <link rel="preload" as="image" href="./icon-loader.png" />
-  <style>
+  <script src="./core/storage.js"></script>
+  <link rel="preload" as="image" href="./assets/images/icon-loader.png" />
+  <style id="splash-style" data-scale-skip>
     :root {
       background: var(--theme-bg, #090a0d);
     }
@@ -138,7 +65,7 @@
     }
     .s4-name {
       margin-top: 8px;
-      font-size: 22px;
+      font-size: 22px !important;
       font-weight: 300;
       letter-spacing: .08em;
       color: var(--accent, #63f5c2);
@@ -146,7 +73,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: var(--font, system-ui, sans-serif);
+      font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
     }
     .s4-name span {
       display: inline-block;
@@ -163,13 +90,13 @@
     }
     .s4-pct {
       margin-top: 10px;
-      font-size: 14px;
+      font-size: 14px !important;
       font-weight: 500;
       color: var(--accent, #63f5c2);
       letter-spacing: .15em;
       font-variant-numeric: tabular-nums;
       user-select: none;
-      font-family: var(--font, system-ui, sans-serif);
+      font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
       text-shadow: 0 0 14px rgba(var(--accent-rgb, 99, 245, 194), 0.55);
     }
     .app-splash, .s4 {
@@ -212,12 +139,11 @@
       --theme-bg: #11141a !important;
     }
   </style>
-  <link rel="stylesheet" href="./styles-base.css" />
-  <link rel="stylesheet" href="./styles-modules.css" />
-  <link rel="stylesheet" href="./hypervisor-artwork.css" />
-  <link rel="stylesheet" href="./styles-themes.css" />
-  <link rel="stylesheet" href="./styles-appearance.css" />
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles/base.css" />
+  <link rel="stylesheet" href="./styles/modules.css" />
+  <link rel="stylesheet" href="./styles/hypervisor-artwork.css" />
+  <link rel="stylesheet" href="./styles/themes.css" />
+  <link rel="stylesheet" href="./styles/appearance.css" />
 </head>
 <body>
   <div class="ambient ambient-a"></div>
@@ -233,15 +159,13 @@
     </div>
     <div class="pct s4-pct" id="splash-percent" data-pct>0%</div>
   </aside>
-  <script src="./audio.js"></script>
-  <script src="./splash.js"></script>
 
   <div class="app-shell">
     <header class="titlebar" data-tauri-drag-region>
       <div class="titlebar-brand" data-tauri-drag-region>
-        <div class="mini-mark" data-tauri-drag-region><img src="./app-icon.png" alt="" data-tauri-drag-region /></div>
+        <div class="mini-mark" data-tauri-drag-region><img src="./assets/images/app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>8.1.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>8.2.0</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -258,7 +182,7 @@
 
     <aside class="sidebar">
       <div class="brand-block">
-        <div class="brand-mark"><img src="./app-icon.png" alt="" /></div>
+        <div class="brand-mark"><img src="./assets/images/app-icon.png" alt="" /></div>
         <div>
           <div class="brand-name">Eclipse Studio</div>
           <div class="brand-caption">by Пиратская Станция <span aria-hidden="true"></span></div>
@@ -329,23 +253,49 @@
       </div>
 
       <section class="view active" id="view-home" data-view-panel="home">
-        <div class="home-hero premium-panel">
-          <div class="home-glow"></div>
-          <div class="hero-copy">
-            <span class="hero-kicker">ECLIPSE STUDIO 8.1.0</span>
-            <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
-            <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
+        <div class="home-layout">
+          <div class="home-hero premium-panel">
+            <div class="home-glow"></div>
+            <div class="hero-copy">
+              <span class="hero-kicker">ECLIPSE STUDIO 8.2.0</span>
+              <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
+              <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
+            </div>
+            <div class="hero-artwork"><img src="./assets/images/hero-crocodile.png" alt="" /></div>
           </div>
-          <div class="hero-artwork"><img src="./hero-crocodile.png" alt="" /></div>
-        </div>
-        <div class="home-grid">
-          <article class="metric-card module-card" data-open-view="fix"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><div><small>Фикс</small><strong>Online Fix</strong><p>Готов к установке и восстановлению</p></div></article>
-          <article class="metric-card module-card" data-open-view="saves"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span><div><small>Сохранения</small><strong>Менеджер сохранений</strong><p>Поиск и резервное копирование прогресса</p></div></article>
-          <article class="metric-card module-card" data-open-view="dlc"><span class="metric-icon"><svg viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></span><div><small>DLC</small><strong>DLC Unlocker</strong><p>Выборочная разблокировка дополнений</p></div></article>
-          <article class="metric-card module-card" data-open-view="lua"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></span><div><small>Манифесты</small><strong>Eclipse Manifest</strong><p>Игры в библиотеку Steam через манифесты</p></div></article>
-          <article class="metric-card module-card" data-open-view="hypervisor"><span class="metric-icon"><svg viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg></span><div><small>Виртуализация</small><strong>Гипервизор</strong><p>Библиотека и изолированный запуск игр с защитой ядра</p></div></article>
-          <article class="metric-card module-card" data-open-view="files"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span><div><small>Релизы</small><strong>Кряки</strong><p>Актуальные кряки с билдом, паролем и загрузкой</p></div></article>
-          <article class="metric-card module-card" data-open-view="utilities"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M2 11h20"/><path d="M10 11v2a2 2 0 0 0 4 0v-2"/></svg></span><div><small>Инструменты</small><strong>Утилиты</strong><p>Полезные программы и сетевые инструменты</p></div></article>
+          <div class="home-status-grid" aria-label="Текущее состояние" data-count="4">
+            <section class="premium-panel home-status-panel" data-kind="games" aria-labelledby="home-recent-games-title">
+              <header class="home-status-head"><span class="home-status-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><line x1="6" x2="10" y1="11" y2="11"/><line x1="8" x2="8" y1="9" y2="13"/><line x1="15" x2="15.01" y1="12" y2="12"/><line x1="18" x2="18.01" y1="10" y2="10"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg></span><h3 id="home-recent-games-title">Недавние игры</h3><span class="home-status-count" id="home-recent-games-count"></span></header>
+              <ul class="home-list" id="home-recent-games"></ul>
+            </section>
+            <section class="premium-panel home-status-panel" data-kind="backups" aria-labelledby="home-recent-backups-title">
+              <header class="home-status-head"><span class="home-status-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg></span><h3 id="home-recent-backups-title">Последние резервные копии</h3><span class="home-status-count" id="home-recent-backups-count"></span></header>
+              <ul class="home-list" id="home-recent-backups"></ul>
+            </section>
+            <section class="premium-panel home-status-panel" data-kind="pending" aria-labelledby="home-pending-jobs-title">
+              <header class="home-status-head"><span class="home-status-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg></span><h3 id="home-pending-jobs-title">Незавершённые операции</h3><span class="home-status-count" id="home-pending-jobs-count"></span></header>
+              <ul class="home-list" id="home-pending-jobs" aria-live="polite"></ul>
+            </section>
+            <section class="premium-panel home-status-panel" data-kind="attention" aria-labelledby="home-attention-title">
+              <header class="home-status-head"><span class="home-status-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span><h3 id="home-attention-title">Требует внимания</h3><span class="home-status-count" id="home-attention-count"></span></header>
+              <ul class="home-list" id="home-attention" aria-live="polite"></ul>
+            </section>
+          </div>
+          <div class="home-grid" aria-label="Модули">
+            <article class="metric-card module-card" tabindex="0" role="button" data-open-view="fix"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span><div><small>Фикс</small><strong>Online Fix</strong><p>Готов к установке и восстановлению</p></div><span class="module-card-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></article>
+            <article class="metric-card module-card" tabindex="0" role="button" data-open-view="saves"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span><div><small>Сохранения</small><strong>Менеджер сохранений</strong><p>Поиск и резервное копирование прогресса</p></div><span class="module-card-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></article>
+            <article class="metric-card module-card" tabindex="0" role="button" data-open-view="dlc"><span class="metric-icon"><svg viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></span><div><small>DLC</small><strong>DLC Unlocker</strong><p>Выборочная разблокировка дополнений</p></div><span class="module-card-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></article>
+            <article class="metric-card module-card" tabindex="0" role="button" data-open-view="lua"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg></span><div><small>Манифесты</small><strong>Eclipse Manifest</strong><p>Игры в библиотеку Steam через манифесты</p></div><span class="module-card-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></article>
+            <article class="metric-card module-card" tabindex="0" role="button" data-open-view="hypervisor"><span class="metric-icon"><svg viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg></span><div><small>Виртуализация</small><strong>Гипервизор</strong><p>Библиотека и изолированный запуск игр с защитой ядра</p></div><span class="module-card-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></article>
+            <article class="metric-card module-card" tabindex="0" role="button" data-open-view="files"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span><div><small>Релизы</small><strong>Кряки</strong><p>Актуальные кряки с билдом, паролем и загрузкой</p></div><span class="module-card-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></article>
+            <article class="metric-card module-card" tabindex="0" role="button" data-open-view="utilities"><span class="metric-icon"><svg viewBox="0 0 24 24"><path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><rect width="20" height="14" x="2" y="6" rx="2"/><path d="M2 11h20"/><path d="M10 11v2a2 2 0 0 0 4 0v-2"/></svg></span><div><small>Инструменты</small><strong>Утилиты</strong><p>Полезные программы и сетевые инструменты</p></div><span class="module-card-arrow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span></article>
+          </div>
+          <div class="home-footer">
+            <button type="button" class="home-customize" id="home-customize" title="Блоки главной, карточки модулей и раздел при запуске">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="4" x2="4" y1="21" y2="14"/><line x1="4" x2="4" y1="10" y2="3"/><line x1="12" x2="12" y1="21" y2="12"/><line x1="12" x2="12" y1="8" y2="3"/><line x1="20" x2="20" y1="21" y2="16"/><line x1="20" x2="20" y1="12" y2="3"/><line x1="2" x2="6" y1="14" y2="14"/><line x1="10" x2="14" y1="8" y2="8"/><line x1="18" x2="22" y1="16" y2="16"/></svg>
+              <span>Настроить главную</span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -559,7 +509,7 @@
           <section class="premium-panel save-browser">
             <div class="save-browser-header">
               <div><span class="coming-label">НАЙДЕННЫЕ ДАННЫЕ</span><h3>Папки сохранений</h3><p>Снимите отметку с папок, которые не нужно добавлять в архив.</p></div>
-              <div class="save-selection-actions"><button class="ghost-button" id="save-toggle-selection">Выделить все</button></div>
+              <div class="save-selection-actions"><button class="ghost-button" id="save-add-location" type="button">Добавить папку</button><button class="ghost-button" id="save-reset-exclusions" type="button">Вернуть исключённые</button><button class="ghost-button" id="save-toggle-selection">Выделить все</button></div>
             </div>
             <div class="save-empty" id="save-empty">
               <span><svg viewBox="0 0 32 32"><rect width="26" height="7" x="3" y="6" rx="2"/><path d="M5 13v12a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V13M12 18h8"/></svg></span>
@@ -573,7 +523,7 @@
             <div class="save-archive-copy"><span class="action-ready"><i></i>РЕЗЕРВНОЕ КОПИРОВАНИЕ</span><p>Создайте архив или восстановите его — сохранения автоматически попадут в исходные папки.</p></div>
             <label class="archive-format"><span>Формат</span><select id="save-format"><option value="zip">ZIP · рекомендуется</option><option value="rar">RAR · требуется WinRAR</option></select></label>
             <div class="save-archive-actions">
-              <button class="ghost-button" id="restore-save-archive"><span>Восстановить архив</span></button>
+              <button class="ghost-button" id="save-undo-restore" type="button">Вернуть как было</button><button class="ghost-button" id="save-discard-rollback" type="button">Удалить копию отката</button><button class="ghost-button" id="restore-save-archive"><span>Восстановить архив</span></button>
               <button class="install-button" id="create-save-archive" disabled><span>Создать архив</span><svg viewBox="0 0 20 20"><path d="M15.5 17.5H4.5a1.5 1.5 0 0 1-1.5-1.5V4a1.5 1.5 0 0 1 1.5-1.5h8l4.5 4.5v9a1.5 1.5 0 0 1-1.5 1.5z"/><path d="M13.5 17.5v-6h-7v6M6.5 2.5v4h6"/></svg></button>
             </div>
           </section>
@@ -736,6 +686,10 @@
             <svg class="hv-tab-icon" viewBox="0 0 24 24"><path d="M12 2 3.5 6v6c0 5.5 3.8 10 8.5 11.5 4.7-1.5 8.5-6 8.5-11.5V6L12 2z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/></svg>
             <span>VBS 2.0</span>
           </button>
+          <button data-hv-tab="protections" role="tab" aria-selected="false">
+            <svg class="hv-tab-icon" viewBox="0 0 24 24"><path d="M21 4H3"/><path d="M21 12H3"/><path d="M21 20H3"/><circle cx="8" cy="4" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="12" cy="20" r="2"/></svg>
+            <span>Управление защитами</span>
+          </button>
         </div>
         <div class="hv-tab-panel active" data-hv-tab-panel="hypervisor">
           <div class="hv-layout">
@@ -888,6 +842,10 @@
                   <svg viewBox="0 0 20 20" style="width:15px;height:15px"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg>
                   <span>Сканировать</span>
                 </button>
+                <button class="ac-restore-button" id="ac-restore-button" type="button" title="Восстановить службы, драйверы и записи реестра из резервной копии Eclipse-AntiCheat-Backup">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                  <span>Вернуть как было</span>
+                </button>
                 <button class="ac-remove-all hidden" id="ac-remove-all"><span><svg viewBox="0 0 16 16" style="width:14px;height:14px;stroke-width:1.8;vertical-align:-2px"><path d="M2.5 4.5h11m-9.5 0v8.5a1.5 1.5 0 0 0 1.5 1.5h6a1.5 1.5 0 0 0 1.5-1.5v-8.5m-6 0V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5"/></svg></span>Удалить найденные <b id="ac-remove-count">0</b></button>
               </div>
             </section>
@@ -948,6 +906,10 @@
                   <span class="coming-label">БЕЗОПАСНОСТЬ BITLOCKER</span>
                   <h3 id="vbs-bitlocker-label">BitLocker Safe Guard</h3>
                   <p id="vbs-bitlocker-detail">Проверка статуса защиты диска C: перед перезагрузкой.</p>
+                  <button class="vbs-card-action hidden" id="vbs-bitlocker-admin" type="button">
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2 3.5 5v4.5c0 4.5 2.8 8 6.5 9.5 3.7-1.5 6.5-5 6.5-9.5V5L10 2z"/><path d="m7.5 10 2 2 3.5-3.5"/></svg>
+                    <span>Перезапустить от имени администратора</span>
+                  </button>
                 </div>
                 <span class="vbs-badge" id="vbs-bitlocker-badge">ПРОВЕРКА</span>
               </section>
@@ -969,11 +931,11 @@
               <div class="vbs-uefi-copy">
                 <span class="coming-label danger-label">UEFI LOCK ОБНАРУЖЕН</span>
                 <h3>Блокировка Device Guard в микрокоде UEFI</h3>
-                <p>Параметры изоляции ядра закреплены прошивкой материнской платы. Чтобы снять защиту, подготовьте модуль SecConfig.efi на системном EFI-разделе.</p>
+                <p>Параметры изоляции ядра закреплены прошивкой. Автоматическое изменение EFI отключено: для него пока нет проверенного симметричного отката.</p>
               </div>
               <button class="vbs-uefi-button" id="vbs-uefi-optout-btn" type="button">
                 <svg viewBox="0 0 20 20"><path d="M10 2 3.5 5v4.5c0 4.5 2.8 8 6.5 9.5 3.7-1.5 6.5-5 6.5-9.5V5L10 2z"/><path d="m8.5 10 3 3 5-5"/></svg>
-                <span>Снять блокировку UEFI</span>
+                <span>Почему изменение недоступно</span>
               </button>
             </section>
 
@@ -1008,6 +970,11 @@
                 <p id="vbs-dse-detail">Нажмите «Сканировать», чтобы проверить Code Integrity.</p>
               </div>
               <span class="vbs-dse-badge" id="vbs-dse-badge">DSE TEST</span>
+            </section>
+
+            <section class="premium-panel vbs-warning-panel hidden" id="vbs-warning-panel">
+              <div class="vbs-warning-icon"><svg viewBox="0 0 24 24" style="width:17px;height:17px;stroke-width:1.9"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+              <div><span class="coming-label">ВАЖНО</span><h3>Перед изменением параметров</h3><div id="vbs-warnings"></div></div>
             </section>
 
             <section class="premium-panel vbs-components-panel">
@@ -1050,14 +1017,50 @@
               </div>
             </section>
 
-            <section class="premium-panel vbs-warning-panel hidden" id="vbs-warning-panel">
-              <div class="vbs-warning-icon"><svg viewBox="0 0 20 20"><path d="M10 2.5 1.5 17h17L10 2.5z"/><path d="M10 8v4m0 3h.01"/></svg></div>
-              <div><span class="coming-label">ВАЖНО</span><h3>Перед изменением параметров</h3><div id="vbs-warnings"></div></div>
-            </section>
-
             <section class="premium-panel vbs-log-panel hidden" id="vbs-log-panel">
               <div><span class="coming-label">ОТЧЁТ</span><h3>Результат операции</h3></div>
               <pre id="vbs-log"></pre>
+            </section>
+          </div>
+        </div>
+
+        <div class="hv-tab-panel" data-hv-tab-panel="protections">
+          <div class="vbs-layout">
+            <section class="premium-panel vbs-hero">
+              <div class="vbs-hero-icon">
+                <svg viewBox="0 0 24 24"><path d="M21 4H3"/><path d="M21 12H3"/><path d="M21 20H3"/><circle cx="8" cy="4" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="12" cy="20" r="2"/></svg>
+              </div>
+              <div class="vbs-hero-copy">
+                <h2>Управление защитами</h2>
+                <p>Тонкая настройка каждого компонента безопасности ядра Windows, целостности драйверов и масок процессора по отдельности.</p>
+              </div>
+              <div class="vbs-hero-actions">
+                <button class="vbs-scan-button" id="protections-scan-btn" type="button">
+                  <svg viewBox="0 0 20 20" style="width:15px;height:15px"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg>
+                  <span>Обновить статус</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="premium-panel protections-panel">
+              <div class="protections-header">
+                <div>
+                  <span class="coming-label">ИНДИВИДУАЛЬНОЕ УПРАВЛЕНИЕ</span>
+                  <h3>Компоненты и маски безопасности</h3>
+                  <p>Каждый параметр переключается отдельно с сохранением состояния для безопасного отката.</p>
+                </div>
+                <span class="vbs-scan-time" id="protections-scan-time">Проверка ещё не выполнялась</span>
+              </div>
+              <div class="vbs-loading hidden" id="protections-loading">
+                <span></span><strong>Опрашиваем подсистемы</strong>
+                <p>Читаем Device Guard, параметры BCD и конфигурацию безопасности ядра...</p>
+              </div>
+              <div class="protections-list" id="protections-list"></div>
+            </section>
+
+            <section class="premium-panel vbs-log-panel hidden" id="protections-log-panel">
+              <div><span class="coming-label">ОТЧЁТ</span><h3>Результат операции</h3></div>
+              <pre id="protections-log"></pre>
             </section>
           </div>
         </div>
@@ -1179,6 +1182,10 @@
               <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm4 12V4"/></svg>
               <span>Интерфейс</span>
             </button>
+            <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="home">
+              <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 9.2 10 3l7 6.2V16a1 1 0 0 1-1 1h-3.6v-4.8H7.6V17H4a1 1 0 0 1-1-1z"/></svg>
+              <span>Главная и запуск</span>
+            </button>
             <button type="button" class="settings-tab-btn" role="tab" aria-selected="false" data-settings-tab="sidebar">
               <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm5 0v12"/></svg>
               <span>Боковая панель</span>
@@ -1262,6 +1269,7 @@
                     <button class="accent" data-accent="pink" style="--swatch:#f768b7" title="Розовый" aria-label="Розовый"></button>
                     <button class="accent" data-accent="rose" style="--swatch:#ff6987" title="Малиновый" aria-label="Малиновый"></button>
                   </div>
+                  <p class="accent-light-note">В светлой теме акцент автоматически затемняется, чтобы текст и значки оставались читаемыми. Белый становится графитовым.</p>
                 </div>
               </details>
 
@@ -1579,6 +1587,142 @@
             </section>
           </div>
 
+          <!-- Раздел: Главная и запуск -->
+          <div class="settings-tab-panel hidden" id="settings-panel-home" role="tabpanel" data-tab-panel="home">
+            <section class="premium-panel settings-card home-settings-card">
+              <h2>Главная и запуск</h2>
+              <p>Раздел при запуске программы, состав и порядок блоков главной страницы</p>
+
+              <details class="settings-collapsible" id="collapse-startup" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M10 2.8v6.4M5.4 5.4a6.4 6.4 0 1 0 9.2 0"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Запуск программы</strong>
+                      <small>Какой раздел открывать при старте</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="settings-group">
+                    <div class="pref-row pref-row-start-view">
+                      <div><strong>Открывать при запуске</strong><small>Раздел, который Eclipse Studio показывает сразу после старта</small></div>
+                      <div class="font-select-wrap">
+                        <select id="start-view" class="ui-font-select" aria-label="Раздел при запуске">
+                          <option value="home">Главная</option>
+                          <option value="last">Последний открытый раздел</option>
+                          <option value="fix">Online Fix</option>
+                          <option value="saves">Менеджер сохранений</option>
+                          <option value="dlc">DLC Unlocker</option>
+                          <option value="lua">Eclipse Manifest</option>
+                          <option value="hypervisor">Гипервизор</option>
+                          <option value="hypervisor:anticheat">Гипервизор · Античиты</option>
+                          <option value="hypervisor:vbs">Гипервизор · VBS 2.0</option>
+                          <option value="files">Кряки</option>
+                          <option value="utilities">Утилиты</option>
+                          <option value="settings">Настройки</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="start-view-note" id="start-view-note" role="status" hidden></p>
+                </div>
+              </details>
+
+              <details class="settings-collapsible" id="collapse-home-blocks" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3.5 3.5h13v4.5h-13zM3.5 10.5h5.5v6h-5.5zM11 10.5h5.5v6H11z"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Блоки главной</strong>
+                      <small>Порядок и видимость блоков — стрелками меняйте место, переключателем скрывайте</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="sidebar-modules-list home-blocks-list" id="home-blocks-list" aria-label="Блоки главной"></div>
+                  <div class="sidebar-settings-actions">
+                    <button type="button" class="secondary-button" id="home-blocks-show-all">Показать все блоки</button>
+                    <button type="button" class="ghost-button" id="home-blocks-reset">Сбросить порядок</button>
+                  </div>
+                </div>
+              </details>
+
+              <details class="settings-collapsible" id="collapse-home-modules" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3.5 3.5h5v5h-5zM11.5 3.5h5v5h-5zM3.5 11.5h5v5h-5zM11.5 11.5h5v5h-5z"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Карточки модулей</strong>
+                      <small>Какие модули показывать в быстром доступе на главной</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="home-module-chips" id="home-module-chips" role="group" aria-label="Карточки модулей на главной"></div>
+                  <p class="home-settings-note">Порядок карточек повторяет боковую панель. Если выключить все карточки, блок модулей не показывается.</p>
+                </div>
+              </details>
+
+              <details class="settings-collapsible" id="collapse-home-lists" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M7 5h10M7 10h10M7 15h10M3.5 5h.01M3.5 10h.01M3.5 15h.01"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Списки и уведомления</strong>
+                      <small>Длина списков, номера операций, скрытые записи и история</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="settings-group">
+                    <div class="pref-row">
+                      <div><strong>Строк в списке</strong><small>Сколько записей показывать в каждом блоке до кнопки «Ещё»</small></div>
+                      <div class="personalization-segment" role="group" aria-label="Строк в списке" id="home-rows-picker">
+                        <button type="button" data-home-rows="3">3</button>
+                        <button type="button" class="active" data-home-rows="4">4</button>
+                        <button type="button" data-home-rows="6">6</button>
+                        <button type="button" data-home-rows="8">8</button>
+                      </div>
+                    </div>
+                    <label class="pref-row" for="home-show-ids">
+                      <div><strong>Номера операций</strong><small>Показывать ID задания рядом с названием операции</small></div>
+                      <span class="switch"><input type="checkbox" id="home-show-ids" checked /><i></i></span>
+                    </label>
+                    <div class="pref-row">
+                      <div><strong>Скрытые уведомления</strong><small id="home-dismissed-info">Скрытых записей нет</small></div>
+                      <button type="button" class="secondary-button home-settings-button" id="home-restore-dismissed" disabled>Вернуть</button>
+                    </div>
+                    <div class="pref-row">
+                      <div><strong>История главной</strong><small id="home-history-info">Недавние игры и резервные копии</small></div>
+                      <button type="button" class="ghost-button home-settings-button" id="home-clear-history">Очистить</button>
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </section>
+          </div>
+
           <!-- Раздел: Боковая панель -->
           <div class="settings-tab-panel hidden" id="settings-panel-sidebar" role="tabpanel" data-tab-panel="sidebar">
             <section class="premium-panel settings-card sidebar-settings-card">
@@ -1867,7 +2011,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.1.0</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.2.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -1910,7 +2054,7 @@
   </div>
 
   <div class="modal-backdrop hidden" id="modal-backdrop">
-    <div class="modal premium-panel"><div class="modal-symbol" id="modal-symbol">!</div><h3 id="modal-title">Подтверждение</h3><p id="modal-message"></p><div class="modal-actions"><button class="secondary-button" id="modal-cancel">Отмена</button><button class="install-button" id="modal-confirm">Продолжить</button></div></div>
+    <div class="modal premium-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-message" tabindex="-1"><div class="modal-symbol" id="modal-symbol">!</div><h3 id="modal-title">Подтверждение</h3><p id="modal-message"></p><div class="modal-actions"><button class="secondary-button" id="modal-cancel">Отмена</button><button class="install-button" id="modal-confirm">Продолжить</button></div></div>
   </div>
 
   <div class="modal-backdrop hidden" id="app-update-backdrop">
@@ -2188,17 +2332,7 @@
     </div>
   </div>
 
-  <div class="toast-stack" id="toast-stack"></div>
-  <script src="./scale.js"></script>
-  <script src="./i18n.js"></script>
-  <script src="./app.js"></script>
-  <script src="./hypervisor.js"></script>
-  <script src="./anticheat.js"></script>
-  <script src="./vbs.js"></script>
-  <script src="./files.js"></script>
-  <script src="./utilities.js"></script>
-  <script src="./appearance.js"></script>
-  <script src="./custom-select.js"></script>
-  <script src="./motion.js"></script>
+  <div class="toast-stack" id="toast-stack" role="status" aria-live="polite"></div>
+  <script src="./core/loader.js"></script>
 </body>
 </html>

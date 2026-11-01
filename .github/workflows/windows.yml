@@ -1,0 +1,39 @@
+name: Windows verification
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri
+            tests/safety-core
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: npm test
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - run: npm run test:safety
+      - run: npm ci --prefix eclipse-manifest
+      - run: npm --prefix eclipse-manifest run typecheck
+      - run: npm run check:plugin
+      - run: npm run build:plugin
+      - run: npm run check:plugin
+      - run: npm audit --audit-level=moderate --prefix eclipse-manifest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-results
+          path: test-results/

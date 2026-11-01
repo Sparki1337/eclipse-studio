@@ -2,22 +2,16 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
-    io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, Mutex, OnceLock,
-    },
-    thread,
-    time::{Duration, Instant},
+    sync::{atomic::Ordering, Arc, Mutex, OnceLock},
+    time::Duration,
 };
 use tauri::{Emitter, Manager};
 
 const GIST_ID: &str = "b314de5f9a3e2293b7e3c22136d49889";
 const GIST_OWNER: &str = "LeoBanned";
-const DOWNLOAD_BUFFER_SIZE: usize = 1024 * 1024;
-const PARALLEL_DOWNLOAD_PARTS: u64 = 6;
-static DOWNLOAD_CANCELLATIONS: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
+static DOWNLOAD_CANCELLATIONS: OnceLock<Mutex<HashMap<String, Arc<crate::download::Control>>>> =
+    OnceLock::new();
 
 #[derive(Deserialize)]
 struct RemoteCatalog {
@@ -37,6 +31,8 @@ struct RemoteFile {
     password: String,
     #[serde(default)]
     pinned: bool,
+    #[serde(default)]
+    sha256: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -46,6 +42,7 @@ pub(crate) struct FileItem {
     url: String,
     password: String,
     pinned: bool,
+    sha256: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -62,14 +59,10 @@ struct DownloadProgress {
     downloaded: u64,
     total: Option<u64>,
     percent: Option<u8>,
+    resumable: bool,
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct DownloadResult {
-    path: String,
-    file_name: String,
-}
+type DownloadResult = crate::download::Downloaded;
 
 #[tauri::command]
 pub(crate) async fn files_catalog(app: tauri::AppHandle) -> Result<FilesCatalog, String> {
@@ -84,22 +77,36 @@ pub(crate) async fn files_download(
     url: String,
     suggested_name: String,
     target_dir: Option<String>,
+    expected_sha256: Option<String>,
 ) -> Result<DownloadResult, String> {
-    let cancellation = Arc::new(AtomicBool::new(false));
-    cancellation_registry()
-        .lock()
-        .map_err(|_| "Не удалось запустить загрузку".to_string())?
-        .insert(url.clone(), Arc::clone(&cancellation));
+    let cancellation = Arc::new(crate::download::Control::default());
+    {
+        let mut registry = cancellation_registry()
+            .lock()
+            .map_err(|_| "Не удалось запустить загрузку")?;
+        if registry.contains_key(&url) {
+            return Err("Эта загрузка уже выполняется".into());
+        }
+        registry.insert(url.clone(), Arc::clone(&cancellation));
+    }
+
     let registry_url = url.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        download_file(&app, &url, &suggested_name, target_dir.as_deref(), &cancellation)
+        download_file(
+            &app,
+            &url,
+            &suggested_name,
+            target_dir.as_deref(),
+            &cancellation,
+            expected_sha256.as_deref(),
+        )
     })
     .await
-    .map_err(|error| format!("Загрузка файла прервана: {error}"))?;
+    .map_err(|error| format!("Загрузка файла прервана: {error}"));
     if let Ok(mut registry) = cancellation_registry().lock() {
         registry.remove(&registry_url);
     }
-    result
+    result?
 }
 
 #[tauri::command]
@@ -108,7 +115,7 @@ pub(crate) fn files_cancel_download(url: String) -> Result<bool, String> {
         .lock()
         .map_err(|_| "Не удалось отменить загрузку".to_string())?;
     if let Some(cancellation) = registry.get(&url) {
-        cancellation.store(true, Ordering::Relaxed);
+        cancellation.cancelled.store(true, Ordering::Relaxed);
         Ok(true)
     } else {
         Ok(false)
@@ -153,11 +160,16 @@ pub(crate) fn files_reveal(path: String) -> Result<(), String> {
 }
 
 // Определение папки загрузки (пользовательская или системная)
-fn resolve_download_dir(app: &tauri::AppHandle, target_dir: Option<&str>) -> Result<PathBuf, String> {
+fn resolve_download_dir(
+    app: &tauri::AppHandle,
+    target_dir: Option<&str>,
+) -> Result<PathBuf, String> {
     if let Some(custom) = target_dir.map(str::trim).filter(|value| !value.is_empty()) {
         let path = PathBuf::from(custom);
         if !path.is_absolute() {
-            return Err("Папка для загрузки указана неверно. Выберите её заново в настройках".into());
+            return Err(
+                "Папка для загрузки указана неверно. Выберите её заново в настройках".into(),
+            );
         }
         return Ok(path);
     }
@@ -190,7 +202,10 @@ pub(crate) async fn files_pick_download_dir(
 }
 
 #[tauri::command]
-pub(crate) fn files_open_download_dir(app: tauri::AppHandle, path: Option<String>) -> Result<(), String> {
+pub(crate) fn files_open_download_dir(
+    app: tauri::AppHandle,
+    path: Option<String>,
+) -> Result<(), String> {
     let folder = resolve_download_dir(&app, path.as_deref())?;
     fs::create_dir_all(&folder)
         .map_err(|error| format!("Не удалось подготовить папку для загрузки: {error}"))?;
@@ -216,272 +231,81 @@ fn download_file(
     url: &str,
     suggested_name: &str,
     target_dir: Option<&str>,
-    cancellation: &Arc<AtomicBool>,
+    cancellation: &Arc<crate::download::Control>,
+    expected_hash: Option<&str>,
 ) -> Result<DownloadResult, String> {
-    if !url.starts_with("https://") {
-        return Err("Разрешены только безопасные HTTPS-ссылки".into());
-    }
-
-    let downloads = resolve_download_dir(app, target_dir)?;
-    fs::create_dir_all(&downloads)
-        .map_err(|error| format!("Не удалось подготовить папку для загрузки: {error}"))?;
-
-    let safe_name = safe_file_name(suggested_name);
-    let destination = available_path(&downloads, &safe_name);
-    let partial = destination.with_extension(format!(
-        "{}part",
-        destination
-            .extension()
-            .and_then(|value| value.to_str())
-            .map(|value| format!("{value}."))
-            .unwrap_or_default()
-    ));
-
-    let result = (|| {
-        let client = reqwest::blocking::Client::builder()
-            .connect_timeout(Duration::from_secs(15))
-            .timeout(Duration::from_secs(900))
-            .pool_max_idle_per_host(PARALLEL_DOWNLOAD_PARTS as usize)
-            .user_agent("EclipseStudio/8.1.0")
-            .build()
-            .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
-        let head = client
-            .head(url)
-            .send()
-            .and_then(reqwest::blocking::Response::error_for_status)
-            .ok();
-        let total = head
-            .as_ref()
-            .and_then(reqwest::blocking::Response::content_length);
-        let supports_ranges = head
-            .as_ref()
-            .and_then(|response| response.headers().get(reqwest::header::ACCEPT_RANGES))
-            .and_then(|value| value.to_str().ok())
-            .is_some_and(|value| value.eq_ignore_ascii_case("bytes"));
-        let resolved_url = head
-            .as_ref()
-            .map(|response| response.url().as_str())
-            .unwrap_or(url)
-            .to_string();
-
-        let downloaded = if supports_ranges && total.is_some_and(|size| size >= 4 * 1024 * 1024) {
-            download_parallel(
-                app,
-                &client,
-                url,
-                &resolved_url,
-                &partial,
-                total.unwrap_or_default(),
-                cancellation,
-            )?
-        } else {
-            download_sequential(app, &client, url, &partial, total, cancellation)?
-        };
-        ensure_not_cancelled(cancellation)?;
-        fs::rename(&partial, &destination)
-            .map_err(|error| format!("Не удалось сохранить загруженный файл: {error}"))?;
-        emit_progress(app, url, downloaded, total.or(Some(downloaded)));
-        Ok(())
-    })();
-
-    if let Err(error) = result {
-        let _ = fs::remove_file(&partial);
-        return Err(error);
-    }
-
-    Ok(DownloadResult {
-        file_name: destination
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or(&safe_name)
-            .to_string(),
-        path: destination.to_string_lossy().to_string(),
-    })
+    let directory = resolve_download_dir(app, target_dir)?;
+    let name = safe_file_name(suggested_name);
+    let resource = directory.join(crate::download::work_name(url, &name));
+    crate::jobs::run(&[resource], "Загрузка файла", || {
+        crate::download::fetch(
+            url,
+            &name,
+            &directory,
+            expected_hash,
+            cancellation,
+            |downloaded, total, resumable| {
+                let percent = total
+                    .filter(|n| *n > 0)
+                    .map(|n| ((downloaded.saturating_mul(100) / n).min(100)) as u8);
+                let _ = app.emit(
+                    "files-download-progress",
+                    DownloadProgress {
+                        url: url.into(),
+                        downloaded,
+                        total,
+                        percent,
+                        resumable,
+                    },
+                );
+            },
+        )
+    })?
 }
-
-fn cancellation_registry() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
+fn cancellation_registry() -> &'static Mutex<HashMap<String, Arc<crate::download::Control>>> {
     DOWNLOAD_CANCELLATIONS.get_or_init(|| Mutex::new(HashMap::new()))
 }
-
-fn ensure_not_cancelled(cancellation: &AtomicBool) -> Result<(), String> {
-    if cancellation.load(Ordering::Relaxed) {
-        Err("Загрузка отменена".into())
-    } else {
+#[tauri::command]
+pub(crate) fn files_pause_download(url: String) -> Result<bool, String> {
+    let registry = cancellation_registry()
+        .lock()
+        .map_err(|_| "Ошибка реестра загрузок")?;
+    let control = registry.get(&url).ok_or("Загрузка не выполняется")?;
+    if !control.resumable.load(Ordering::Relaxed) {
+        return Err("Сервер не поддерживает проверяемую докачку. Можно отменить загрузку.".into());
+    }
+    control.paused.store(true, Ordering::Relaxed);
+    Ok(true)
+}
+#[tauri::command]
+pub(crate) async fn files_discard_download(
+    app: tauri::AppHandle,
+    url: String,
+    suggested_name: String,
+    target_dir: Option<String>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if cancellation_registry()
+            .lock()
+            .map_err(|_| "Ошибка реестра")?
+            .contains_key(&url)
+        {
+            return Err("Сначала дождитесь остановки загрузки".into());
+        }
+        let directory = resolve_download_dir(&app, target_dir.as_deref())?;
+        let work = crate::safe_path::join(
+            &directory,
+            &crate::download::work_name(&url, &safe_file_name(&suggested_name)),
+        )?;
+        let _lock = crate::resource_lock::Guard::acquire(std::slice::from_ref(&work))?;
+        if work.exists() {
+            crate::archive_policy::validate_tree(&work)?;
+            fs::remove_dir_all(work).map_err(|e| e.to_string())?;
+        }
         Ok(())
-    }
-}
-
-fn download_sequential(
-    app: &tauri::AppHandle,
-    client: &reqwest::blocking::Client,
-    event_url: &str,
-    destination: &Path,
-    known_total: Option<u64>,
-    cancellation: &AtomicBool,
-) -> Result<u64, String> {
-    let mut response = client
-        .get(event_url)
-        .send()
-        .and_then(reqwest::blocking::Response::error_for_status)
-        .map_err(|error| format!("Сервер вернул ошибку: {error}"))?;
-    let total = known_total.or_else(|| response.content_length());
-    let mut output = fs::File::create(destination)
-        .map_err(|error| format!("Не удалось создать файл: {error}"))?;
-    let mut buffer = vec![0_u8; DOWNLOAD_BUFFER_SIZE];
-    let mut downloaded = 0_u64;
-    let mut last_emit = Instant::now() - Duration::from_secs(1);
-    emit_progress(app, event_url, 0, total);
-    loop {
-        ensure_not_cancelled(cancellation)?;
-        let read = response
-            .read(&mut buffer)
-            .map_err(|error| format!("Ошибка получения данных: {error}"))?;
-        if read == 0 {
-            break;
-        }
-        output
-            .write_all(&buffer[..read])
-            .map_err(|error| format!("Ошибка записи файла: {error}"))?;
-        downloaded += read as u64;
-        if last_emit.elapsed() >= Duration::from_millis(180) {
-            emit_progress(app, event_url, downloaded, total);
-            last_emit = Instant::now();
-        }
-    }
-    output
-        .flush()
-        .map_err(|error| format!("Не удалось завершить запись файла: {error}"))?;
-    Ok(downloaded)
-}
-
-fn download_parallel(
-    app: &tauri::AppHandle,
-    client: &reqwest::blocking::Client,
-    event_url: &str,
-    resolved_url: &str,
-    destination: &Path,
-    total: u64,
-    cancellation: &Arc<AtomicBool>,
-) -> Result<u64, String> {
-    let part_count = PARALLEL_DOWNLOAD_PARTS.min((total / (2 * 1024 * 1024)).max(2));
-    let downloaded = Arc::new(AtomicU64::new(0));
-    let last_emit = Arc::new(Mutex::new(Instant::now() - Duration::from_secs(1)));
-    let segment_paths = (0..part_count)
-        .map(|index| PathBuf::from(format!("{}.segment-{index}", destination.display())))
-        .collect::<Vec<_>>();
-
-    let results = thread::scope(|scope| {
-        let mut handles = Vec::new();
-        for index in 0..part_count {
-            let start = total * index / part_count;
-            let end = (total * (index + 1) / part_count).saturating_sub(1);
-            let client = client.clone();
-            let source = resolved_url.to_string();
-            let segment = segment_paths[index as usize].clone();
-            let cancellation = Arc::clone(cancellation);
-            let downloaded = Arc::clone(&downloaded);
-            let last_emit = Arc::clone(&last_emit);
-            let app = app.clone();
-            let event_url = event_url.to_string();
-            handles.push(scope.spawn(move || -> Result<(), String> {
-                let mut response = client
-                    .get(source)
-                    .header(reqwest::header::RANGE, format!("bytes={start}-{end}"))
-                    .send()
-                    .map_err(|error| format!("Не удалось получить часть файла: {error}"))?;
-                if response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
-                    return Err("Сервер не подтвердил ускоренную загрузку".into());
-                }
-                let mut output = fs::File::create(&segment)
-                    .map_err(|error| format!("Не удалось создать часть файла: {error}"))?;
-                let mut buffer = vec![0_u8; DOWNLOAD_BUFFER_SIZE];
-                loop {
-                    ensure_not_cancelled(&cancellation)?;
-                    let read = response
-                        .read(&mut buffer)
-                        .map_err(|error| format!("Ошибка получения части файла: {error}"))?;
-                    if read == 0 {
-                        break;
-                    }
-                    output
-                        .write_all(&buffer[..read])
-                        .map_err(|error| format!("Ошибка записи части файла: {error}"))?;
-                    let current =
-                        downloaded.fetch_add(read as u64, Ordering::Relaxed) + read as u64;
-                    if let Ok(mut emitted_at) = last_emit.lock() {
-                        if emitted_at.elapsed() >= Duration::from_millis(180) {
-                            emit_progress(&app, &event_url, current, Some(total));
-                            *emitted_at = Instant::now();
-                        }
-                    }
-                }
-                Ok(())
-            }));
-        }
-        handles
-            .into_iter()
-            .map(|handle| {
-                handle
-                    .join()
-                    .map_err(|_| "Поток ускоренной загрузки завершился с ошибкой".to_string())?
-            })
-            .collect::<Result<Vec<_>, String>>()
-    });
-
-    if let Err(error) = results {
-        for segment in &segment_paths {
-            let _ = fs::remove_file(segment);
-        }
-        return Err(error);
-    }
-    let assemble_result = (|| {
-        ensure_not_cancelled(cancellation)?;
-        let mut output = fs::File::create(destination)
-            .map_err(|error| format!("Не удалось собрать файл: {error}"))?;
-        let mut buffer = vec![0_u8; DOWNLOAD_BUFFER_SIZE];
-        for segment in &segment_paths {
-            ensure_not_cancelled(cancellation)?;
-            let mut input = fs::File::open(segment)
-                .map_err(|error| format!("Не удалось открыть часть файла: {error}"))?;
-            input
-                .seek(SeekFrom::Start(0))
-                .map_err(|error| format!("Не удалось прочитать часть файла: {error}"))?;
-            loop {
-                let read = input
-                    .read(&mut buffer)
-                    .map_err(|error| format!("Не удалось собрать часть файла: {error}"))?;
-                if read == 0 {
-                    break;
-                }
-                output
-                    .write_all(&buffer[..read])
-                    .map_err(|error| format!("Не удалось записать собранный файл: {error}"))?;
-            }
-        }
-        output
-            .flush()
-            .map_err(|error| format!("Не удалось завершить файл: {error}"))
-    })();
-    for segment in &segment_paths {
-        let _ = fs::remove_file(segment);
-    }
-    assemble_result?;
-    Ok(downloaded.load(Ordering::Relaxed))
-}
-
-fn emit_progress(app: &tauri::AppHandle, url: &str, downloaded: u64, total: Option<u64>) {
-    let percent = total
-        .filter(|value| *value > 0)
-        .map(|value| ((downloaded.saturating_mul(100) / value).min(100)) as u8);
-    let _ = app.emit(
-        "files-download-progress",
-        DownloadProgress {
-            url: url.to_string(),
-            downloaded,
-            total,
-            percent,
-        },
-    );
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 fn safe_file_name(value: &str) -> String {
@@ -504,29 +328,6 @@ fn safe_file_name(value: &str) -> String {
     } else {
         cleaned
     }
-}
-
-fn available_path(directory: &Path, file_name: &str) -> PathBuf {
-    let original = directory.join(file_name);
-    if !original.exists() {
-        return original;
-    }
-    let path = Path::new(file_name);
-    let stem = path
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or("download");
-    let extension = path.extension().and_then(|value| value.to_str());
-    for index in 1..10_000 {
-        let candidate = match extension {
-            Some(extension) => directory.join(format!("{stem} ({index}).{extension}")),
-            None => directory.join(format!("{stem} ({index})")),
-        };
-        if !candidate.exists() {
-            return candidate;
-        }
-    }
-    directory.join(format!("{stem}-new"))
 }
 
 fn load_catalog(app: &tauri::AppHandle) -> Result<FilesCatalog, String> {
@@ -554,8 +355,16 @@ fn load_catalog(app: &tauri::AppHandle) -> Result<FilesCatalog, String> {
 
     if !cached {
         if let Some(eclipse_item) = fetch_latest_eclipse_studio_file() {
-            if !catalog.files.iter().any(|f| f.name.eq_ignore_ascii_case("Eclipse Studio")) {
-                if let Some(croc_index) = catalog.files.iter().position(|f| f.name.to_ascii_lowercase().contains("crocodile gena studio")) {
+            if !catalog
+                .files
+                .iter()
+                .any(|f| f.name.eq_ignore_ascii_case("Eclipse Studio"))
+            {
+                if let Some(croc_index) = catalog.files.iter().position(|f| {
+                    f.name
+                        .to_ascii_lowercase()
+                        .contains("crocodile gena studio")
+                }) {
                     catalog.files.insert(croc_index + 1, eclipse_item);
                 } else {
                     catalog.files.insert(0, eclipse_item);
@@ -576,30 +385,44 @@ fn find_eclipse_release_asset(assets: &[serde_json::Value]) -> Option<&serde_jso
             .unwrap_or(false)
     };
 
-    assets.iter().rev().find(|a| {
-        is_match(a, |n| n.contains("eclipse") && n.ends_with(".exe") && !n.contains("setup") && !n.contains("installer"))
-    })
-    .or_else(|| {
-        assets.iter().rev().find(|a| {
-            is_match(a, |n| n.contains("eclipse") && !n.contains("setup") && !n.contains("installer"))
+    assets
+        .iter()
+        .rev()
+        .find(|a| {
+            is_match(a, |n| {
+                n.contains("eclipse")
+                    && n.ends_with(".exe")
+                    && !n.contains("setup")
+                    && !n.contains("installer")
+            })
         })
-    })
-    .or_else(|| {
-        assets.iter().rev().find(|a| {
-            is_match(a, |n| n.contains("eclipse"))
+        .or_else(|| {
+            assets.iter().rev().find(|a| {
+                is_match(a, |n| {
+                    n.contains("eclipse") && !n.contains("setup") && !n.contains("installer")
+                })
+            })
         })
-    })
-    .or_else(|| {
-        assets.iter().rev().find(|a| {
-            is_match(a, |n| n.ends_with(".exe") && !n.contains("setup") && !n.contains("installer"))
+        .or_else(|| {
+            assets
+                .iter()
+                .rev()
+                .find(|a| is_match(a, |n| n.contains("eclipse")))
         })
-    })
-    .or_else(|| {
-        assets.iter().rev().find(|a| {
-            is_match(a, |n| n.ends_with(".exe"))
+        .or_else(|| {
+            assets.iter().rev().find(|a| {
+                is_match(a, |n| {
+                    n.ends_with(".exe") && !n.contains("setup") && !n.contains("installer")
+                })
+            })
         })
-    })
-    .or_else(|| assets.last())
+        .or_else(|| {
+            assets
+                .iter()
+                .rev()
+                .find(|a| is_match(a, |n| n.ends_with(".exe")))
+        })
+        .or_else(|| assets.last())
 }
 
 fn fetch_latest_eclipse_studio_file() -> Option<FileItem> {
@@ -613,21 +436,21 @@ fn fetch_latest_eclipse_studio_file() -> Option<FileItem> {
     fetch_latest_eclipse_studio_file_via_web(&client)
 }
 
-fn fetch_latest_eclipse_studio_file_via_web(client: &reqwest::blocking::Client) -> Option<FileItem> {
+fn fetch_latest_eclipse_studio_file_via_web(
+    client: &reqwest::blocking::Client,
+) -> Option<FileItem> {
     let response = client
         .get("https://github.com/Sparki1337/eclipse-studio/releases/latest")
         .send()
         .ok()?;
     let final_url = response.url().as_str().to_string();
-    let tag = final_url
-        .split("/releases/tag/")
-        .nth(1)?
-        .trim();
+    let tag = final_url.split("/releases/tag/").nth(1)?.trim();
     if tag.is_empty() {
         return None;
     }
 
-    let assets_url = format!("https://github.com/Sparki1337/eclipse-studio/releases/expanded_assets/{tag}");
+    let assets_url =
+        format!("https://github.com/Sparki1337/eclipse-studio/releases/expanded_assets/{tag}");
     let assets_res = client.get(&assets_url).send().ok()?;
     let html = assets_res.text().ok()?;
     let prefix = format!("/Sparki1337/eclipse-studio/releases/download/{tag}/");
@@ -654,6 +477,7 @@ fn fetch_latest_eclipse_studio_file_via_web(client: &reqwest::blocking::Client) 
         url: download_url,
         password: String::new(),
         pinned: true,
+        sha256: None,
     })
 }
 
@@ -671,7 +495,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/8.1.0")
+        .user_agent("EclipseStudio/8.2.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -731,6 +555,7 @@ fn parse_catalog(content: &str, cached: bool) -> Result<FilesCatalog, String> {
                 url,
                 password: item.password.trim().to_string(),
                 pinned: item.pinned,
+                sha256: item.sha256,
             })
         })
         .collect::<Vec<_>>();
@@ -756,252 +581,16 @@ fn cache_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CrackInstallResult {
     pub success: bool,
+    pub status: String,
+    pub skipped: Vec<String>,
     pub message: String,
     pub installed_files: Vec<String>,
     pub backup_dir: Option<String>,
     pub archive_deleted: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ExtractorKind {
-    NanaZipOr7z,
-    UnRar,
-    WinRar,
-    Tar,
-}
-
-fn find_extractor() -> Option<(PathBuf, ExtractorKind)> {
-    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-        let app_path = PathBuf::from(local).join("Microsoft\\WindowsApps\\7z.exe");
-        if app_path.is_file() {
-            return Some((app_path, ExtractorKind::NanaZipOr7z));
-        }
-    }
-    let pf_roots = [
-        std::env::var_os("ProgramFiles").map(PathBuf::from),
-        std::env::var_os("ProgramFiles(x86)").map(PathBuf::from),
-    ];
-    for root in pf_roots.into_iter().flatten() {
-        let p7z = root.join("7-Zip\\7z.exe");
-        if p7z.is_file() {
-            return Some((p7z, ExtractorKind::NanaZipOr7z));
-        }
-        let unrar = root.join("WinRAR\\UnRAR.exe");
-        if unrar.is_file() {
-            return Some((unrar, ExtractorKind::UnRar));
-        }
-        let winrar = root.join("WinRAR\\WinRAR.exe");
-        if winrar.is_file() {
-            return Some((winrar, ExtractorKind::WinRar));
-        }
-    }
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        for exe_name in &["7z.exe", "UnRAR.exe"] {
-            let mut cmd = std::process::Command::new("where.exe");
-            cmd.arg(exe_name);
-            cmd.creation_flags(0x08000000);
-            if let Ok(output) = cmd.output() {
-                if output.status.success() {
-                    if let Some(line) = String::from_utf8_lossy(&output.stdout).lines().next() {
-                        let trimmed = line.trim();
-                        if !trimmed.is_empty() {
-                            let kind = if exe_name.starts_with("7z") {
-                                ExtractorKind::NanaZipOr7z
-                            } else {
-                                ExtractorKind::UnRar
-                            };
-                            return Some((PathBuf::from(trimmed), kind));
-                        }
-                    }
-                }
-            }
-        }
-    }
-    let tar = PathBuf::from("C:\\Windows\\System32\\tar.exe");
-    if tar.is_file() {
-        return Some((tar, ExtractorKind::Tar));
-    }
-    None
-}
-
-fn extract_archive_file(
-    archive: &Path,
-    dest: &Path,
-    password: Option<&str>,
-) -> Result<(), String> {
-    fs::create_dir_all(dest)
-        .map_err(|e| format!("Не удалось создать временную папку распаковки: {e}"))?;
-
-    let ext = archive
-        .extension()
-        .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-    let pass = password.map(str::trim).filter(|p| !p.is_empty());
-
-    // 1. Попытка нативной распаковки в Rust (не требует внешних архиваторов в системе)
-    if ext == "zip" {
-        match extract_zip_native(archive, dest, pass) {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                if find_extractor().is_none() {
-                    return Err(e);
-                }
-            }
-        }
-    } else if ext == "rar" {
-        match extract_rar_native(archive, dest, pass) {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                if find_extractor().is_none() {
-                    return Err(e);
-                }
-            }
-        }
-    }
-
-    // 2. Внешний CLI архиватор (7-Zip, WinRAR, NanaZip, tar), если нативный парсинг не удался
-    if let Some((exe, kind)) = find_extractor() {
-        let mut cmd = std::process::Command::new(&exe);
-        match kind {
-            ExtractorKind::NanaZipOr7z => {
-                cmd.arg("x");
-                if let Some(p) = pass {
-                    cmd.arg(format!("-p{p}"));
-                } else {
-                    cmd.arg("-p-");
-                }
-                cmd.arg("-y");
-                cmd.arg(archive);
-                cmd.arg(format!("-o{}", dest.display()));
-            }
-            ExtractorKind::UnRar => {
-                cmd.arg("x");
-                if let Some(p) = pass {
-                    cmd.arg(format!("-p{p}"));
-                } else {
-                    cmd.arg("-p-");
-                }
-                cmd.arg("-y");
-                cmd.arg(archive);
-                cmd.arg(format!("{}\\", dest.display()));
-            }
-            ExtractorKind::WinRar => {
-                cmd.args(["x", "-ibck", "-inul"]);
-                if let Some(p) = pass {
-                    cmd.arg(format!("-p{p}"));
-                }
-                cmd.arg("-y");
-                cmd.arg(archive);
-                cmd.arg(format!("{}\\", dest.display()));
-            }
-            ExtractorKind::Tar => {
-                if pass.is_some() {
-                    return Err("Архив защищён паролем, а системный tar.exe не поддерживает пароли. Установите WinRAR или 7-Zip.".into());
-                }
-                cmd.args(["-xf"]);
-                cmd.arg(archive);
-                cmd.args(["-C"]);
-                cmd.arg(dest);
-            }
-        }
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000);
-        }
-        let output = cmd
-            .output()
-            .map_err(|e| format!("Ошибка запуска архиватора {}: {e}", exe.display()))?;
-        if output.status.success() {
-            return Ok(());
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let details = if !stderr.is_empty() {
-                stderr
-            } else if !stdout.is_empty() {
-                stdout
-            } else {
-                format!("код выхода {:?}", output.status.code())
-            };
-            return Err(format!("Ошибка при распаковке архива: {details}"));
-        }
-    }
-
-    Err("Не удалось распаковать архив встроенным распаковщиком. Установите WinRAR или 7-Zip.".into())
-}
-
-fn extract_zip_native(archive: &Path, dest: &Path, password: Option<&str>) -> Result<(), String> {
-    let file = fs::File::open(archive)
-        .map_err(|e| format!("Не удалось открыть zip-архив: {e}"))?;
-    let mut zip = zip::ZipArchive::new(file)
-        .map_err(|e| format!("Не удалось прочитать zip-архив: {e}"))?;
-    let pass_bytes = password.map(str::trim).filter(|p| !p.is_empty()).map(str::as_bytes);
-
-    for i in 0..zip.len() {
-        let mut entry = if let Some(pw) = pass_bytes {
-            zip.by_index_decrypt(i, pw)
-                .map_err(|e| format!("Ошибка расшифровки zip (неверный пароль?): {e}"))?
-        } else {
-            zip.by_index(i)
-                .map_err(|e| format!("Ошибка чтения записи zip: {e}"))?
-        };
-
-        let outpath = match entry.enclosed_name() {
-            Some(path) => dest.join(path),
-            None => continue,
-        };
-        if entry.is_dir() {
-            fs::create_dir_all(&outpath)
-                .map_err(|e| format!("Не удалось создать папку: {e}"))?;
-        } else {
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    fs::create_dir_all(p)
-                        .map_err(|e| format!("Не удалось создать папку: {e}"))?;
-                }
-            }
-            let mut outfile = fs::File::create(&outpath)
-                .map_err(|e| format!("Не удалось создать файл: {e}"))?;
-            std::io::copy(&mut entry, &mut outfile)
-                .map_err(|e| format!("Ошибка записи файла: {e}"))?;
-        }
-    }
-    Ok(())
-}
-
-fn extract_rar_native(archive: &Path, dest: &Path, password: Option<&str>) -> Result<(), String> {
-    let pw = password.unwrap_or("");
-    let mut arc = unrar::Archive::with_password(archive, pw)
-        .open_for_processing()
-        .map_err(|e| format!("Не удалось открыть RAR-архив: {e}"))?;
-
-    while let Some(header) = arc.read_header().map_err(|e| format!("Ошибка чтения заголовка RAR: {e}"))? {
-        let entry = header.entry();
-        let filename = entry.filename.to_string_lossy();
-        let relative = PathBuf::from(filename.replace('\\', "/"));
-
-        // Защита от path traversal
-        if relative.is_absolute() || relative.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
-            arc = header.skip().map_err(|e| format!("Ошибка пропуска записи: {e}"))?;
-            continue;
-        }
-
-        let outpath = dest.join(&relative);
-        if entry.is_directory() {
-            let _ = fs::create_dir_all(&outpath);
-            arc = header.skip().map_err(|e| format!("Ошибка пропуска директории: {e}"))?;
-        } else {
-            if let Some(parent) = outpath.parent() {
-                let _ = fs::create_dir_all(parent);
-            }
-            arc = header.extract_to(&outpath).map_err(|e| format!("Ошибка распаковки {}: {e}", outpath.display()))?;
-        }
-    }
-    Ok(())
+fn extract_archive_file(archive: &Path, dest: &Path, password: Option<&str>) -> Result<(), String> {
+    crate::archive_policy::extract(archive, dest, password)
 }
 
 fn is_metadata_or_junk_file(path: &Path) -> bool {
@@ -1015,8 +604,10 @@ fn is_metadata_or_junk_file(path: &Path) -> bool {
         || name.ends_with(".desktop")
         || name == "readme.txt"
         || name == "vbs.cmd"
-        || (name.contains("source") && (name.ends_with(".7z") || name.ends_with(".zip") || name.ends_with(".rar")))
-        || (name.contains("src") && (name.ends_with(".7z") || name.ends_with(".zip") || name.ends_with(".rar")))
+        || (name.contains("source")
+            && (name.ends_with(".7z") || name.ends_with(".zip") || name.ends_with(".rar")))
+        || (name.contains("src")
+            && (name.ends_with(".7z") || name.ends_with(".zip") || name.ends_with(".rar")))
 }
 
 fn detect_crack_source_dir(extracted_root: &Path) -> PathBuf {
@@ -1049,8 +640,17 @@ fn detect_crack_source_dir(extracted_root: &Path) -> PathBuf {
 
     // 3. Папки релиз-групп (Razor1911 в RDR2, CODEX, RUNE, FLT, SKIDROW, PLAZA, Crack, Goldberg)
     let group_names = [
-        "Razor1911", "CODEX", "RUNE", "FLT", "SKIDROW", "PLAZA",
-        "Crack", "Crack.Only", "Goldberg", "SteamEmu", "Mr_Goldberg",
+        "Razor1911",
+        "CODEX",
+        "RUNE",
+        "FLT",
+        "SKIDROW",
+        "PLAZA",
+        "Crack",
+        "Crack.Only",
+        "Goldberg",
+        "SteamEmu",
+        "Mr_Goldberg",
     ];
     for entry in &entries {
         if entry.is_dir() {
@@ -1081,23 +681,20 @@ fn detect_crack_source_dir(extracted_root: &Path) -> PathBuf {
 }
 
 fn resolve_install_target_path(game_dir: &Path, rel_path: &Path) -> PathBuf {
-    let game_dir_str = game_dir
-        .to_string_lossy()
-        .replace('/', "\\")
-        .to_lowercase();
-    let rel_str = rel_path.to_string_lossy().replace('/', "\\");
-
-    let components: Vec<&str> = rel_str.split('\\').collect();
-    if components.len() > 1 {
-        for i in (1..components.len()).rev() {
-            let prefix = components[0..i].join("\\").to_lowercase();
-            if game_dir_str.ends_with(&prefix) {
-                let remaining = components[i..].join("\\");
-                return game_dir.join(remaining);
-            }
+    let game = game_dir
+        .components()
+        .map(|p| p.as_os_str().to_string_lossy().to_lowercase())
+        .collect::<Vec<_>>();
+    let relative = rel_path.components().collect::<Vec<_>>();
+    for length in (1..relative.len()).rev() {
+        let prefix = relative[..length]
+            .iter()
+            .map(|p| p.as_os_str().to_string_lossy().to_lowercase())
+            .collect::<Vec<_>>();
+        if game.ends_with(&prefix) {
+            return game_dir.join(relative[length..].iter().collect::<PathBuf>());
         }
     }
-
     game_dir.join(rel_path)
 }
 
@@ -1110,7 +707,13 @@ pub(crate) async fn files_install_crack(
     delete_archive: bool,
 ) -> Result<CrackInstallResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        perform_install_crack(&app, &archive_path, &game_dir, password.as_deref(), delete_archive)
+        perform_install_crack(
+            &app,
+            &archive_path,
+            &game_dir,
+            password.as_deref(),
+            delete_archive,
+        )
     })
     .await
     .map_err(|e| format!("Операция установки прервана: {e}"))?
@@ -1118,14 +721,18 @@ pub(crate) async fn files_install_crack(
 
 // Поиск локального или прямая загрузка актуального Eclipse-HV.exe с GitHub без API
 fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // 1. Проверяем локальные пути (папка Hypervisor, локальная сборка tools)
+    // 1. Проверяем локальные пути (папка Hypervisor, локальная сборка eclipse-hv)
     let candidates = [
         PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-HV.exe"),
-        PathBuf::from("tools/eclipse-hv/target/release/eclipse-hv.exe"),
+        PathBuf::from("eclipse-hv/target/release/eclipse-hv.exe"),
     ];
 
     for path in &candidates {
-        if path.is_file() && fs::metadata(path).map(|m| m.len() > 100_000).unwrap_or(false) {
+        if path.is_file()
+            && fs::metadata(path)
+                .map(|m| m.len() > 100_000)
+                .unwrap_or(false)
+        {
             return Ok(path.clone());
         }
     }
@@ -1137,12 +744,17 @@ fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, Str
         .map_err(|e| format!("Не удалось определить app_local_data_dir: {e}"))?
         .join("bin");
     let cached_exe = cache_dir.join("Eclipse-HV.exe");
-    if cached_exe.is_file() && fs::metadata(&cached_exe).map(|m| m.len() > 100_000).unwrap_or(false) {
+    if cached_exe.is_file()
+        && fs::metadata(&cached_exe)
+            .map(|m| m.len() > 100_000)
+            .unwrap_or(false)
+    {
         return Ok(cached_exe);
     }
 
     // 3. Прямая загрузка с GitHub без использования GitHub API
-    let download_url = "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
+    let download_url =
+        "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(30))
         .user_agent("Eclipse-Studio/8.0.0")
@@ -1179,182 +791,105 @@ fn perform_install_crack(
 ) -> Result<CrackInstallResult, String> {
     let archive_path = PathBuf::from(archive_path_str.trim());
     if !archive_path.is_file() {
-        return Err("Файл архива не найден на диске".into());
+        return Err("Файл архива не найден".into());
     }
-
-    let game_dir = PathBuf::from(game_dir_str.trim());
-    if !game_dir.is_dir() {
-        return Err("Выбранная папка с игрой не существует".into());
-    }
-
-    let temp_root = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| format!("Не удалось определить папку данных: {e}"))?
-        .join("temp_crack_extract");
-    let extract_dir = temp_root.join(format!(
-        "cgs_inst_{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis()
-    ));
-
-    // 1. Распаковка архива
-    extract_archive_file(&archive_path, &extract_dir, password)?;
-
-    // 2. Определение корневой папки кряка
-    let source_dir = detect_crack_source_dir(&extract_dir);
-
-    // 3. Обход файлов и установка
-    let mut installed_files = Vec::new();
-    let mut backed_up_files = Vec::new();
-    let mut created_files = Vec::new();
-
-    let backup_dir = game_dir.join(".backup_orig");
-
-    for entry in walkdir::WalkDir::new(&source_dir)
-        .follow_links(false)
-        .into_iter()
-        .flatten()
-    {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-
-        let source_file = entry.path();
-        let rel_path = match source_file.strip_prefix(&source_dir) {
-            Ok(p) => p,
-            Err(_) => continue,
-        };
-
-        // Пропуск мусорных файлов верхнего уровня
-        if rel_path.parent().map(|p| p.as_os_str().is_empty()).unwrap_or(true)
-            && is_metadata_or_junk_file(source_file)
-        {
-            continue;
-        }
-
-        let target_file = resolve_install_target_path(&game_dir, rel_path);
-
-        // Создаем родительскую папку в игре
-        if let Some(parent) = target_file.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Не удалось создать папку {}: {e}", parent.display()))?;
-        }
-
-        // Бэкап существующего файла
-        if target_file.is_file() {
-            let backup_target = backup_dir.join(rel_path);
-            if let Some(b_parent) = backup_target.parent() {
-                let _ = fs::create_dir_all(b_parent);
+    let game_dir = crate::safe_path::root(Path::new(game_dir_str.trim()))?;
+    crate::jobs::run(
+        &[game_dir.clone(), archive_path.clone()],
+        "Установка файлов игры",
+        || -> Result<CrackInstallResult, String> {
+            let stage = tempfile::tempdir().map_err(|e| e.to_string())?;
+            extract_archive_file(&archive_path, stage.path(), password)?;
+            let source_dir = detect_crack_source_dir(stage.path());
+            let operation = uuid::Uuid::new_v4().to_string();
+            let mut files = Vec::new();
+            let mut targets = std::collections::BTreeSet::new();
+            for entry in walkdir::WalkDir::new(&source_dir).follow_links(false) {
+                let entry = entry.map_err(|e| e.to_string())?;
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let relative = entry
+                    .path()
+                    .strip_prefix(&source_dir)
+                    .map_err(|e| e.to_string())?;
+                if relative.parent().is_none_or(|p| p.as_os_str().is_empty())
+                    && is_metadata_or_junk_file(entry.path())
+                {
+                    continue;
+                }
+                let resolved = resolve_install_target_path(&game_dir, relative);
+                let target = crate::safe_path::child(&game_dir, &resolved)?;
+                let name = target
+                    .strip_prefix(&game_dir)
+                    .map_err(|e| e.to_string())?
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                crate::backup::validate_name(&name)?;
+                if !targets.insert(name.to_lowercase()) {
+                    return Err(format!("Несколько записей направлены в один файл: {name}"));
+                }
+                files.push((entry.path().to_path_buf(), target, name));
             }
-            if !backup_target.is_file() {
-                let _ = fs::copy(&target_file, &backup_target);
+            if files.is_empty() {
+                return Err("В архиве нет файлов для установки".into());
             }
-            backed_up_files.push(rel_path.to_string_lossy().to_string());
-        } else {
-            created_files.push(rel_path.to_string_lossy().to_string());
-        }
-
-        // Копирование файла кряка в целевую папку
-        fs::copy(source_file, &target_file)
-            .map_err(|e| format!("Не удалось скопировать файл {}: {e}", target_file.display()))?;
-
-        installed_files.push(target_file.to_string_lossy().to_string());
-    }
-
-    if installed_files.is_empty() {
-        let _ = fs::remove_dir_all(&extract_dir);
-        return Err("В распакованном архиве не обнаружены файлы кряка для установки".into());
-    }
-
-    // Размещение автономного лаунчера Eclipse-HV.exe в корне игры
-    let eclipse_hv_target = game_dir.join("Eclipse-HV.exe");
-    let mut hv_installed = false;
-
-    match resolve_or_download_eclipse_hv(app) {
-        Ok(source_path) => {
-            if let Err(e) = fs::copy(&source_path, &eclipse_hv_target) {
-                eprintln!("Предупреждение: не удалось скопировать Eclipse-HV.exe в {}: {e}", eclipse_hv_target.display());
-            } else {
-                hv_installed = true;
-                created_files.push("Eclipse-HV.exe".to_string());
-                installed_files.push(eclipse_hv_target.to_string_lossy().to_string());
+            let mut skipped = Vec::new();
+            let hv_target = crate::safe_path::join(&game_dir, "Eclipse-HV.exe")?;
+            if !targets.contains("eclipse-hv.exe") {
+                match resolve_or_download_eclipse_hv(app) {
+                    Ok(source) => files.push((source, hv_target, "Eclipse-HV.exe".into())),
+                    Err(e) => skipped.push(format!("Дополнительный лаунчер не установлен: {e}")),
+                }
             }
-        }
-        Err(e) => {
-            eprintln!("Предупреждение: не удалось подготовить Eclipse-HV.exe: {e}");
-        }
-    }
-
-    // Сохранение манифеста бэкапа (совместимо с cgs-backup.json)
-    if !backed_up_files.is_empty() || !created_files.is_empty() {
-        let _ = fs::create_dir_all(&backup_dir);
-        let manifest_path = backup_dir.join("cgs-backup.json");
-        let originals_map: std::collections::BTreeMap<String, String> = backed_up_files
-            .iter()
-            .map(|f| (f.to_lowercase(), f.clone()))
-            .collect();
-        let created_map: std::collections::BTreeMap<String, String> = created_files
-            .iter()
-            .map(|f| (f.to_lowercase(), f.clone()))
-            .collect();
-        let manifest_json = serde_json::json!({
-            "version": 2,
-            "originals": originals_map,
-            "created": created_map,
-            "legacy_import": false
-        });
-        if let Ok(bytes) = serde_json::to_vec_pretty(&manifest_json) {
-            let _ = fs::write(manifest_path, bytes);
-        }
-    }
-
-    // 4. Удаление скачанного архива при необходимости
-    let mut archive_was_deleted = false;
-    if delete_archive {
-        if let Err(e) = fs::remove_file(&archive_path) {
-            eprintln!("Не удалось удалить архив {}: {e}", archive_path.display());
-        } else {
-            archive_was_deleted = true;
-        }
-    }
-
-    // 5. Удаление временной папки распаковки
-    let _ = fs::remove_dir_all(&extract_dir);
-
-    let message = format!(
-        "Успешно установлено файлов: {}.{}{}{}",
-        installed_files.len(),
-        if !backed_up_files.is_empty() {
-            format!(" Создан бэкап оригиналов ({} файлов).", backed_up_files.len())
-        } else {
-            "".to_string()
+            // Все бэкапы и записи манифеста фиксируются до первой перезаписи в игре.
+            for (_, _, name) in &files {
+                crate::backup::protect(&game_dir, name, &operation)?;
+            }
+            let mut installed_files = Vec::new();
+            for (source, target, name) in files {
+                let result = crate::safe_path::join(&game_dir, &name).and_then(|checked| {
+                    if checked != target {
+                        return Err("Целевой путь изменился во время задания".into());
+                    }
+                    crate::durable::copy(&source, &checked)
+                });
+                match result {
+                    Ok(()) => installed_files.push(target.display().to_string()),
+                    Err(e) => skipped.push(format!("{name}: {e}")),
+                }
+            }
+            let success = skipped.is_empty();
+            let mut archive_deleted = false;
+            if success && delete_archive {
+                match fs::remove_file(&archive_path) {
+                    Ok(()) => archive_deleted = true,
+                    Err(e) => skipped.push(format!("Файлы установлены, но архив не удалён: {e}")),
+                }
+            }
+            let success = skipped.is_empty();
+            Ok(CrackInstallResult {
+                success,
+                status: if success {
+                    "success"
+                } else if installed_files.is_empty() {
+                    "failed"
+                } else {
+                    "partial"
+                }
+                .into(),
+                message: if success {
+                    format!("Установлено и проверено файлов: {}", installed_files.len())
+                } else {
+                    format!("Выполнено частично: установлено {}, замечаний {}. Архив и бэкапы сохранены.", installed_files.len(), skipped.len())
+                },
+                installed_files,
+                backup_dir: Some(game_dir.join(crate::backup::DIR).display().to_string()),
+                archive_deleted,
+                skipped,
+            })
         },
-        if hv_installed {
-            " В корень игры добавлен лаунчер Eclipse-HV.exe (обход DSE)."
-        } else {
-            ""
-        },
-        if archive_was_deleted {
-            " Скачанный архив удалён."
-        } else {
-            ""
-        }
-    );
-
-    Ok(CrackInstallResult {
-        success: true,
-        message,
-        installed_files,
-        backup_dir: if backed_up_files.is_empty() {
-            None
-        } else {
-            Some(backup_dir.to_string_lossy().to_string())
-        },
-        archive_deleted: archive_was_deleted,
-    })
+    )?
 }
 
 #[cfg(test)]
@@ -1446,7 +981,10 @@ mod tests {
 
     #[test]
     fn detects_artifact_folder() {
-        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let temp = std::env::temp_dir().join(format!("test_cgs_artifact_{ts}"));
         let artifact = temp.join("ARTIFACT");
         let _ = std::fs::create_dir_all(&artifact);
@@ -1459,7 +997,10 @@ mod tests {
 
     #[test]
     fn detects_razor1911_folder() {
-        let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let temp = std::env::temp_dir().join(format!("test_cgs_razor_{ts}"));
         let razor = temp.join("Razor1911");
         let _ = std::fs::create_dir_all(&razor);

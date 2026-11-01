@@ -386,14 +386,13 @@ fn ensure_catalog(app: &AppHandle, auth: Option<&str>) -> Result<(), String> {
 
 // Поиск игр в каталоге
 #[tauri::command]
-pub async fn ryuu_search(
-    app: AppHandle,
-    query: String,
-    api_key: String,
-) -> Result<Vec<RyuuGame>, String> {
-    tauri::async_runtime::spawn_blocking(move || ryuu_search_blocking(app, query, api_key))
-        .await
-        .map_err(|error| format!("Поиск прервался: {error}"))?
+pub async fn ryuu_search(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let api_key = crate::secure_state::secret(&app, "ryuu")?;
+        ryuu_search_blocking(app, query, api_key)
+    })
+    .await
+    .map_err(|error| format!("Поиск прервался: {error}"))?
 }
 
 fn ryuu_search_blocking(
@@ -474,12 +473,19 @@ fn ryuu_search_blocking(
 pub async fn ryuu_get(
     app: AppHandle,
     appid: String,
-    api_key: String,
     steam_path: Option<String>,
     auto_update: bool,
 ) -> LuaInstallResult {
     match tauri::async_runtime::spawn_blocking(move || {
-        ryuu_get_blocking(app, appid, api_key, steam_path, auto_update)
+        match crate::secure_state::secret(&app, "ryuu") {
+            Ok(api_key) => ryuu_get_blocking(app, appid, api_key, steam_path, auto_update),
+            Err(error) => LuaInstallResult {
+                success: false,
+                message: error,
+                logs: vec![],
+                added_appids: vec![],
+            },
+        }
     })
     .await
     {
@@ -541,10 +547,13 @@ fn ryuu_get_blocking(
 
 // Запрос статистики использования и лимитов Ryuu
 #[tauri::command]
-pub async fn ryuu_usage(app: AppHandle, api_key: String) -> Result<RyuuUsage, String> {
-    tauri::async_runtime::spawn_blocking(move || ryuu_usage_blocking(app, api_key))
-        .await
-        .map_err(|error| format!("Ошибка получения квоты Ryuu: {error}"))?
+pub async fn ryuu_usage(app: AppHandle) -> Result<RyuuUsage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let api_key = crate::secure_state::secret(&app, "ryuu")?;
+        ryuu_usage_blocking(app, api_key)
+    })
+    .await
+    .map_err(|error| format!("Ошибка получения квоты Ryuu: {error}"))?
 }
 
 fn ryuu_usage_blocking(app: AppHandle, api_key: String) -> Result<RyuuUsage, String> {
@@ -588,8 +597,8 @@ fn ryuu_usage_blocking(app: AppHandle, api_key: String) -> Result<RyuuUsage, Str
                                 stored.daily_usage
                             }
                         });
-                        let remaining =
-                            remaining_opt.unwrap_or_else(|| daily_limit.saturating_sub(daily_usage));
+                        let remaining = remaining_opt
+                            .unwrap_or_else(|| daily_limit.saturating_sub(daily_usage));
 
                         stored.daily_limit = daily_limit;
                         stored.daily_usage = daily_usage;

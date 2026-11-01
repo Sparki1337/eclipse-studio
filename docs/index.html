@@ -13,8 +13,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./style.css?v=8.1.0" />
-  <script>document.documentElement.classList.add('js');</script>
+  <link rel="stylesheet" href="./style.css?v=8.2.0" />
+  <script>
+    (function (d) {
+      d.classList.add('js');
+      // Повторный визит или «меньше движения»: заставку прячем ещё до первого кадра, без мигания
+      try { if (sessionStorage.getItem('es-visited') === '1' || matchMedia('(prefers-reduced-motion: reduce)').matches) d.classList.add('no-loader'); } catch (_) {}
+    })(document.documentElement);
+  </script>
 </head>
 <body class="is-loading">
 
@@ -33,13 +39,14 @@
   </div>
 
   <div class="grain" aria-hidden="true"></div>
+  <div class="progress" id="progress" aria-hidden="true"></div>
 
   <header class="header" id="header">
     <div class="wrap header-in">
       <a href="#top" class="brand" aria-label="Eclipse Studio">
         <img src="./assets/app-icon.png" alt="" class="brand-icon" />
         <span class="brand-name">Eclipse Studio</span>
-        <span class="brand-ver" data-version>v8.1.0</span>
+        <span class="brand-ver" data-version>v8.2.0</span>
       </a>
       <nav class="nav" id="nav">
         <a href="#modules" data-i18n="nav.modules">Модули</a>
@@ -50,15 +57,15 @@
       </nav>
       <div class="header-cta">
         <div class="lang-switch" id="langSwitch" role="group" aria-label="Выбор языка">
-          <button type="button" class="lang-btn is-active" data-lang="ru" title="Русский">RU</button>
+          <button type="button" class="lang-btn is-active" data-lang="ru" title="Русский" aria-pressed="true">RU</button>
           <span class="lang-divider">/</span>
-          <button type="button" class="lang-btn" data-lang="en" title="English">EN</button>
+          <button type="button" class="lang-btn" data-lang="en" title="English" aria-pressed="false">EN</button>
         </div>
         <a href="https://github.com/Sparki1337/eclipse-studio" target="_blank" rel="noopener noreferrer" class="icon-link" aria-label="GitHub">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
         </a>
         <a href="#download" class="btn btn-light btn-sm"><span data-i18n="header.download">Скачать</span></a>
-        <button class="burger" id="burger" aria-label="Меню"><span></span><span></span></button>
+        <button type="button" class="burger" id="burger" aria-label="Меню" aria-controls="nav" aria-expanded="false"><span></span><span></span></button>
       </div>
     </div>
   </header>
@@ -69,41 +76,52 @@
     <section class="hero">
       <div class="hero-bg" aria-hidden="true">
         <div class="hero-grid"></div>
-        <img src="./assets/hero-crocodile.png" alt="" class="hero-croc" id="heroCroc" />
+        <picture>
+          <source srcset="./assets/optimized/hero-crocodile.webp" type="image/webp" />
+          <img src="./assets/hero-crocodile.png" alt="" class="hero-croc" id="heroCroc" width="1625" height="968" decoding="async" />
+        </picture>
         <div class="hero-orb"></div>
       </div>
 
       <div class="wrap hero-in">
-        <div class="hero-tag reveal" style="--d:0">
-          <span class="dot"></span>
-          <span data-i18n="hero.tag">Eclipse Studio</span>
-          <span class="sep"></span>
-          <span class="mono" data-version>v8.1.0</span>
-        </div>
+        <div class="hero-copy">
+          <div class="hero-tag reveal" style="--d:0">
+            <span class="dot"></span>
+            <span data-i18n="hero.tag">Eclipse Studio</span>
+            <span class="sep"></span>
+            <span class="mono" data-version>v8.2.0</span>
+          </div>
 
-        <h1 class="hero-title" data-split>
-          <span class="line" data-i18n="hero.title1">Игровая лаборатория</span>
-          <span class="line muted" data-i18n="hero.title2">для Steam.</span>
-        </h1>
+          <h1 class="hero-title" data-split>
+            <span class="line" data-i18n="hero.title1">Игровая лаборатория</span>
+            <span class="line muted" data-i18n="hero.title2">для Steam.</span>
+          </h1>
 
-        <p class="hero-lead reveal" style="--d:4" data-i18n="hero.lead">
-          Приложение на Rust и Tauri v2: фиксы онлайна, DLC, сохранения, манифесты Eclipse Manifest и гипервизор взломы — в одном окне.
-        </p>
+          <p class="hero-lead reveal" style="--d:4" data-i18n="hero.lead">
+            Приложение на Rust и Tauri v2: фиксы онлайна, DLC, сохранения, манифесты Eclipse Manifest и гипервизор взломы — в одном окне.
+          </p>
 
-        <div class="hero-actions reveal" style="--d:5">
-          <a href="#download" class="btn btn-light btn-lg">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-            <span><span data-i18n="hero.download">Скачать</span> <span data-version>v8.1.0</span></span>
-          </a>
-          <a href="#modules" class="btn btn-line btn-lg">
-            <span data-i18n="hero.modules">Смотреть модули</span>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          </a>
+          <div class="hero-actions reveal" style="--d:5">
+            <a href="#download" class="btn btn-light btn-lg">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+              <span><span data-i18n="hero.download">Скачать</span> <span data-version>v8.2.0</span></span>
+            </a>
+            <a href="#modules" class="btn btn-line btn-lg">
+              <span data-i18n="hero.modules">Смотреть модули</span>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </a>
+          </div>
+
+          <ul class="hero-meta mono reveal" style="--d:5">
+            <li><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span data-i18n="hero.meta1">Windows 10 / 11 · 64-bit</span></li>
+            <li><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span data-i18n="hero.meta2">Процессор с AVX2</span></li>
+            <li><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span data-i18n="hero.meta3">Portable — без установки</span></li>
+          </ul>
         </div>
 
         <div class="hero-window reveal" style="--d:6" id="heroWindow">
           <div class="window" data-tilt>
-            <img src="./screenshots/Главная.png" alt="Главный экран Eclipse Studio" />
+            <img src="./screenshots/Главная.png" alt="Главный экран Eclipse Studio" width="1440" height="900" fetchpriority="high" />
             <div class="window-shine"></div>
           </div>
         </div>
@@ -157,7 +175,7 @@
 
         <div class="showcase">
           <ol class="showcase-list" id="showcaseList">
-            <li class="sc-item is-active" data-img="./screenshots/Главная.png" data-title="Главная страница" data-desc="Стартовый экран со сводкой состояния компонентов и быстрым переходом к активным модулям.">
+            <li class="sc-item is-active" data-img="./screenshots/Главная.png" data-title="Главная страница" data-desc="Недавние игры, резервные копии, незавершённые операции и предупреждения с переходом в нужный раздел. Блоки и карточки модулей настраиваются.">
               <span class="sc-num mono">01</span><div><h3>Главная</h3><p>Сводка состояния и быстрый доступ к модулям.</p></div>
             </li>
             <li class="sc-item" data-img="./screenshots/Online_Fix.png" data-title="Universal Online Fix" data-desc="Анализ исполняемых файлов, эмуляторы Steam, лобби Spacewar и фиксы Epic Online Services.">
@@ -187,8 +205,8 @@
             <li class="sc-item" data-img="./screenshots/Утилиты.png" data-title="Утилиты" data-desc="Хаб внешних инструментов: CirnoDownloader, Sigma, Zapret2 и инструкции по настройке.">
               <span class="sc-num mono">10</span><div><h3>Утилиты</h3><p>CirnoDownloader, Sigma, Zapret2.</p></div>
             </li>
-            <li class="sc-item" data-img="./screenshots/Настройки.png" data-title="Настройки" data-desc="14 тем, 12 акцентов, масштабирование шрифта и мультиязычность.">
-              <span class="sc-num mono">11</span><div><h3>Настройки</h3><p>Темы, акценты, масштаб и язык.</p></div>
+            <li class="sc-item" data-img="./screenshots/Настройки.png" data-title="Настройки" data-desc="14 тем, 12 акцентов (в светлой теме — с читаемым контрастом), настройка главной и раздела при запуске, масштаб шрифта и мультиязычность.">
+              <span class="sc-num mono">11</span><div><h3>Настройки</h3><p>Темы, акценты, главная, масштаб и язык.</p></div>
             </li>
             <li class="sc-item" data-img="./screenshots/Telegram_Каналы.png" data-title="Telegram Hub" data-desc="Все официальные сообщества, канал обновлений и поддержка в одном окне.">
               <span class="sc-num mono">12</span><div><h3>Telegram Hub</h3><p>Каналы проекта и поддержка.</p></div>
@@ -204,7 +222,7 @@
               </button>
               <div class="showcase-caption">
                 <span class="mono" id="showcaseCount">01 / 12</span>
-                <p id="showcaseDesc">Стартовый экран со сводкой состояния компонентов и быстрым переходом к активным модулям.</p>
+                <p id="showcaseDesc">Недавние игры, резервные копии, незавершённые операции и предупреждения с переходом в нужный раздел. Блоки и карточки модулей настраиваются.</p>
               </div>
             </div>
           </div>
@@ -221,13 +239,13 @@
           <p class="section-lead reveal" data-i18n="compare.lead">Потяните разделитель, чтобы сравнить оригинальный Crocodile Gena Studio и Eclipse Studio.</p>
         </div>
 
-        <div class="compare-box reveal" id="compareBox">
-          <img src="./assets/compare-gena.png" alt="Crocodile Gena Studio" class="compare-img" />
+        <div class="compare-box reveal" id="compareBox" tabindex="0" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-label="Сравнение: оригинал и Eclipse Studio" data-i18n-attr="aria-label:compare.aria">
+          <img src="./assets/compare-eclipse.png" alt="Eclipse Studio" class="compare-img" loading="lazy" decoding="async" />
           <div class="compare-after" id="compareAfter">
-            <img src="./assets/compare-eclipse.png" alt="Eclipse Studio" class="compare-img" id="compareAfterImg" />
+            <img src="./assets/compare-gena.png" alt="Crocodile Gena Studio" class="compare-img" id="compareAfterImg" loading="lazy" decoding="async" />
           </div>
-          <span class="compare-label left mono" data-i18n="compare.new">Eclipse Studio</span>
-          <span class="compare-label right mono" data-i18n="compare.orig">Оригинал</span>
+          <span class="compare-label left mono" data-i18n="compare.orig">Оригинал</span>
+          <span class="compare-label right mono" data-i18n="compare.new">Eclipse Studio</span>
           <div class="compare-handle" id="compareHandle">
             <span class="compare-knob">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18-6-6 6-6M15 6l6 6-6 6"/></svg>
@@ -278,7 +296,10 @@
           <article class="dl-card is-main reveal" data-tilt-soft>
             <div class="dl-top">
               <img src="./assets/app-icon.png" alt="" class="dl-icon" />
-              <span class="badge mono" id="eclipseVersion" data-version>v8.1.0</span>
+              <div class="dl-badges">
+                <span class="badge mono badge-accent" data-i18n="dl.recommended">Рекомендуем</span>
+                <span class="badge mono" id="eclipseVersion" data-version>v8.2.0</span>
+              </div>
             </div>
             <h3>Eclipse Studio</h3>
             <p class="dl-desc" data-i18n="dl.eclipseDesc">Актуальная ветка: форк с самыми быстрыми обновлениями и улучшениями.</p>
@@ -293,7 +314,7 @@
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
                 <span data-i18n="dl.btnDownload">Скачать</span>
               </a>
-              <button type="button" class="link-arrow btn-toggle-archive" id="eclipseToggleVersions" aria-expanded="false">
+              <button type="button" class="link-arrow btn-toggle-archive" id="eclipseToggleVersions" aria-expanded="false" aria-controls="eclipseVersionsAccordion">
                 <span><span data-i18n="dl.archive">Архив версий</span> (<span id="eclipseCount">…</span>)</span> <i>↓</i>
               </button>
               <div class="versions-accordion" id="eclipseVersionsAccordion">
@@ -305,7 +326,7 @@
 
           <article class="dl-card reveal" style="--d:1">
             <div class="dl-top">
-              <img src="./assets/icon-crocodil-gena-studio.png" alt="Crocodile Gena Studio" class="dl-icon" />
+              <img src="./assets/icon-crocodil-gena-studio.png" alt="Crocodile Gena Studio" class="dl-icon" loading="lazy" decoding="async" />
               <span class="badge mono" id="genaVersion">—</span>
             </div>
             <h3>Crocodile Gena Studio</h3>
@@ -318,7 +339,7 @@
             </dl>
             <div class="dl-actions">
               <a href="https://github.com/LeoBanned/crocodile-gena-studio-releases/releases/latest" id="genaBtn" target="_blank" rel="noopener noreferrer" class="btn btn-line btn-block"><span data-i18n="dl.btnDownloadOrig">Скачать оригинал</span></a>
-              <button type="button" class="link-arrow btn-toggle-archive" id="genaToggleVersions" aria-expanded="false">
+              <button type="button" class="link-arrow btn-toggle-archive" id="genaToggleVersions" aria-expanded="false" aria-controls="genaVersionsAccordion">
                 <span><span data-i18n="dl.archive">Архив версий</span> (<span id="genaCount">…</span>)</span> <i>↓</i>
               </button>
               <div class="versions-accordion" id="genaVersionsAccordion">
@@ -330,6 +351,24 @@
         </div>
 
         <p class="sync mono reveal" id="syncStatus"><span class="dot"></span><span data-i18n="sync.load">Синхронизация с GitHub API…</span></p>
+
+        <div class="dl-start reveal">
+          <span class="dl-start-k mono" data-i18n="dl.startK">Быстрый старт</span>
+          <ol class="dl-steps">
+            <li>
+              <span class="dl-step-n mono">01</span>
+              <div><strong data-i18n="dl.step1T">Скачайте EXE</strong><p data-i18n="dl.step1P">Один портативный файл из последнего релиза на GitHub.</p></div>
+            </li>
+            <li>
+              <span class="dl-step-n mono">02</span>
+              <div><strong data-i18n="dl.step2T">Положите в любую папку</strong><p data-i18n="dl.step2P">Установка не нужна — можно запускать даже с флешки.</p></div>
+            </li>
+            <li>
+              <span class="dl-step-n mono">03</span>
+              <div><strong data-i18n="dl.step3T">Запустите от администратора</strong><p data-i18n="dl.step3P">Нужно для VBS, Test Mode и записи в реестр Steam.</p></div>
+            </li>
+          </ol>
+        </div>
       </div>
     </section>
 
@@ -347,33 +386,81 @@
           </p>
         </div>
 
-        <div class="games-toolbar reveal">
+        <div class="games-toolbar" id="gamesToolbar">
           <div class="games-search-box">
-            <svg class="games-search-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg class="games-search-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <input type="text" id="gamesSearch" class="games-search-input" placeholder="Поиск по названию (например, Persona, Sonic, FC 27)..." autocomplete="off" spellcheck="false" data-i18n-attr="placeholder:games.searchPlaceholder" />
-            <button type="button" class="games-search-clear" id="gamesSearchClear" aria-label="Очистить поиск" title="Очистить" hidden>&times;</button>
+            <input type="search" id="gamesSearch" class="games-search-input" placeholder="Найти игру, например Persona" aria-label="Поиск по каталогу" autocomplete="off" spellcheck="false" enterkeyhint="search" data-i18n-attr="placeholder:games.searchPlaceholder;aria-label:games.searchAria" />
+            <button type="button" class="games-search-clear" id="gamesSearchClear" aria-label="Очистить поиск" title="Очистить" data-i18n-attr="aria-label:games.clear;title:games.clear" hidden>&times;</button>
+            <kbd class="games-search-kbd" aria-hidden="true">/</kbd>
           </div>
-          <div class="games-stats mono">
-            <span id="gamesCountBadge">152 релиза</span>
+          <div class="games-filters" role="group" aria-label="Фильтр каталога" data-i18n-attr="aria-label:games.filterAria">
+            <button type="button" class="games-chip games-chip-token" id="gamesGroupChip" title="Снять фильтр по взломщику" data-i18n-attr="title:games.groupClearTitle" hidden><span class="games-chip-name"></span><span class="sr-only" data-i18n="games.groupClear">— снять фильтр</span><span class="games-chip-x" aria-hidden="true">&times;</span></button>
+            <button type="button" class="games-chip is-active" data-filter="all" aria-pressed="true"><span data-i18n="games.fAll">Все</span><b class="mono" data-count-for="all"></b></button>
+            <button type="button" class="games-chip" data-filter="pinned" aria-pressed="false"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg><span data-i18n="games.fPinned">Основные</span><b class="mono" data-count-for="pinned"></b></button>
+            <button type="button" class="games-chip" data-filter="nopass" aria-pressed="false"><span data-i18n="games.fNoPass">Без пароля</span><b class="mono" data-count-for="nopass"></b></button>
+          </div>
+          <div class="games-tools">
+            <span class="games-stats mono" id="gamesCountBadge" aria-live="polite"></span>
+            <!-- Сортировка и фильтр по взломщику -->
+            <div class="games-sort" id="gamesSort">
+              <button type="button" class="games-sort-btn" id="gamesSortBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="gamesSortMenu">
+                <svg class="games-sort-ico" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>
+                <span class="games-sort-label" id="gamesSortLabel">По умолчанию</span>
+                <span class="games-sort-group mono" id="gamesSortGroup" hidden></span>
+                <svg class="games-sort-chev" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+              <div class="games-sort-menu" id="gamesSortMenu" role="menu" aria-labelledby="gamesSortBtn" hidden>
+                <div class="games-sort-sec" role="group" aria-labelledby="gamesSortTitle">
+                  <p class="games-sort-title" id="gamesSortTitle" data-i18n="games.sortTitle">Сортировка</p>
+                <button type="button" class="games-sort-item" role="menuitemradio" aria-checked="true" data-sort="default"><span data-i18n="games.sort.default">По умолчанию</span></button>
+                <button type="button" class="games-sort-item" role="menuitemradio" aria-checked="false" data-sort="new"><span data-i18n="games.sort.new">Сначала новые</span></button>
+                <button type="button" class="games-sort-item" role="menuitemradio" aria-checked="false" data-sort="old"><span data-i18n="games.sort.old">Сначала старые</span></button>
+                <button type="button" class="games-sort-item" role="menuitemradio" aria-checked="false" data-sort="popular"><span data-i18n="games.sort.popular">Популярные</span></button>
+                <button type="button" class="games-sort-item" role="menuitemradio" aria-checked="false" data-sort="name"><span data-i18n="games.sort.name">По названию</span></button>
+                <button type="button" class="games-sort-item" role="menuitemradio" aria-checked="false" data-sort="cracker"><span data-i18n="games.sort.cracker">По взломщику</span></button>
+                </div>
+                <div class="games-sort-sec" id="gamesCrackerSec" role="group" aria-labelledby="gamesCrackerTitle" hidden>
+                  <p class="games-sort-title" id="gamesCrackerTitle" data-i18n="games.crackerTitle">Взломщик</p>
+                  <div class="games-sort-list" id="gamesCrackerList"></div>
+                </div>
+                <p class="games-sort-note" id="gamesSortNote"></p>
+              </div>
+            </div>
+            <div class="games-view" role="group" aria-label="Вид каталога" data-i18n-attr="aria-label:games.viewAria">
+              <button type="button" class="games-view-btn is-active" data-view="grid" aria-pressed="true" aria-label="Плиткой" title="Плиткой" data-i18n-attr="aria-label:games.viewGrid;title:games.viewGrid">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+              </button>
+              <button type="button" class="games-view-btn" data-view="list" aria-pressed="false" aria-label="Списком" title="Списком" data-i18n-attr="aria-label:games.viewList;title:games.viewList">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+              </button>
+            </div>
           </div>
         </div>
 
-        <div class="games-grid" id="gamesGrid" aria-live="polite">
+        <p class="games-hint" id="gamesHint" hidden></p>
+
+        <div class="games-grid" id="gamesGrid" data-view="grid" aria-busy="true">
           <!-- Рендерится через app.js -->
         </div>
 
         <div class="games-empty" id="gamesEmpty" hidden>
-          <p data-i18n="games.empty">Игры по вашему запросу не найдены.</p>
+          <p data-i18n="games.empty">Ничего не нашлось. Проверьте название или сбросьте фильтр.</p>
+          <button type="button" class="btn btn-line btn-sm" id="gamesReset" data-i18n="games.reset">Сбросить поиск</button>
         </div>
 
-        <div class="games-footer reveal" id="gamesFooter">
-          <button type="button" class="btn btn-line btn-md" id="gamesLoadMore">
-            <span data-i18n="games.more">Показать ещё</span>
-            <span class="games-more-count mono" id="gamesMoreCount">(+16)</span>
-          </button>
+        <div class="games-footer" id="gamesFooter" hidden>
+          <div class="games-progress" aria-hidden="true"><i id="gamesProgress"></i></div>
+          <p class="games-shown mono" id="gamesShown"></p>
+          <div class="games-footer-actions">
+            <button type="button" class="btn btn-line" id="gamesLoadMore">
+              <span data-i18n="games.more">Показать ещё</span>
+              <span class="games-more-count mono" id="gamesMoreCount">+24</span>
+            </button>
+            <button type="button" class="link-arrow" id="gamesShowAll"><span data-i18n="games.showAll">Показать все</span> <i>↓</i></button>
+          </div>
         </div>
       </div>
     </section>
@@ -466,7 +553,7 @@
         <div class="footer-brand">
           <img src="./assets/app-icon.png" alt="" />
           <div>
-            <strong>Eclipse Studio <span data-version>v8.1.0</span></strong>
+            <strong>Eclipse Studio <span data-version>v8.2.0</span></strong>
             <span data-i18n="footer.sub">Форк Crocodile Gena Studio · автор оригинала LeoBanned\Крокодил Гена.</span>
           </div>
         </div>
@@ -477,28 +564,32 @@
           <a href="#top" class="to-top" data-i18n="footer.toTop">Наверх ↑</a>
         </nav>
       </div>
-      <div class="footer-word" aria-hidden="true">ECLIPSE</div>
+      <div class="footer-word" aria-hidden="true"><span style="--i:3">E</span><span style="--i:2">C</span><span style="--i:1">L</span><span style="--i:0">I</span><span style="--i:1">P</span><span style="--i:2">S</span><span style="--i:3">E</span></div>
       <p class="footer-copy mono" data-i18n="footer.copy">© 2026 Eclipse Studio. Распространяется свободно в образовательных и исследовательских целях.</p>
     </div>
   </footer>
 
-  <div class="lightbox" id="lightbox" aria-hidden="true">
+  <div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="lightboxTitle">
     <div class="lightbox-bg" data-close></div>
     <figure class="lightbox-fig">
       <img src="" alt="" id="lightboxImg" />
       <figcaption>
-        <div><h3 id="lightboxTitle"></h3><p id="lightboxDesc"></p></div>
+        <div><span class="lightbox-count mono" id="lightboxCount"></span><h3 id="lightboxTitle"></h3><p id="lightboxDesc"></p></div>
         <div class="lightbox-nav">
-          <button id="lbPrev" aria-label="Предыдущий"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
-          <button id="lbNext" aria-label="Следующий"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-          <button data-close aria-label="Закрыть"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+          <button type="button" id="lbPrev" aria-label="Предыдущий снимок" data-i18n-attr="aria-label:ui.prev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></button>
+          <button type="button" id="lbNext" aria-label="Следующий снимок" data-i18n-attr="aria-label:ui.next"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          <button type="button" data-close aria-label="Закрыть" data-i18n-attr="aria-label:ui.close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </div>
       </figcaption>
     </figure>
   </div>
 
-  <div class="toast mono" id="toast">Ссылка скопирована</div>
+  <button type="button" class="to-top-fab" id="toTopFab" aria-label="Наверх" title="Наверх" data-i18n-attr="aria-label:ui.toTop;title:ui.toTop">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+  </button>
 
-  <script src="./app.js?v=8.1.0"></script>
+  <div class="toast mono" id="toast" role="status" aria-live="polite">Ссылка скопирована</div>
+
+  <script src="./app.js?v=8.2.0"></script>
 </body>
 </html>

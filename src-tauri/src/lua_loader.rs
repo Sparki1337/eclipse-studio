@@ -17,22 +17,31 @@ use std::{
 pub(crate) const STANDARD: &[(&str, &[u8])] = &[
     (
         "OpenSteamTool.dll",
-        include_bytes!("assets/OpenSteamTool.dll"),
+        include_bytes!("../resources/opensteamtool/v1/OpenSteamTool.dll"),
     ),
-    ("dwmapi.dll", include_bytes!("assets/dwmapi.dll")),
-    ("xinput1_4.dll", include_bytes!("assets/xinput1_4.dll")),
+    (
+        "dwmapi.dll",
+        include_bytes!("../resources/opensteamtool/v1/dwmapi.dll"),
+    ),
+    (
+        "xinput1_4.dll",
+        include_bytes!("../resources/opensteamtool/v1/xinput1_4.dll"),
+    ),
 ];
 
 // Встроенные файлы альтернативной версии (compatibility / v2)
 const COMPATIBILITY: &[(&str, &[u8])] = &[
     (
         "OpenSteamTool.dll",
-        include_bytes!("assets/ost_desktop/OpenSteamTool.dll"),
+        include_bytes!("../resources/opensteamtool/v2/OpenSteamTool.dll"),
     ),
-    ("dwmapi.dll", include_bytes!("assets/ost_desktop/dwmapi.dll")),
+    (
+        "dwmapi.dll",
+        include_bytes!("../resources/opensteamtool/v2/dwmapi.dll"),
+    ),
     (
         "xinput1_4.dll",
-        include_bytes!("assets/ost_desktop/xinput1_4.dll"),
+        include_bytes!("../resources/opensteamtool/v2/xinput1_4.dll"),
     ),
 ];
 
@@ -135,11 +144,13 @@ pub(crate) fn embedded_bundle(variant: &str, schema: u32) -> Result<Bundle, Stri
         files: resources(variant)?
             .iter()
             .map(|(name, b)| {
-                let target = if schema == 2 && canonical_variant == "compatibility" && *name == "dwmapi.dll" {
-                    "bin/dwmapi.dll"
-                } else {
-                    *name
-                };
+                let target =
+                    if schema == 2 && canonical_variant == "compatibility" && *name == "dwmapi.dll"
+                    {
+                        "bin/dwmapi.dll"
+                    } else {
+                        *name
+                    };
                 (target.into(), b.to_vec())
             })
             .collect(),
@@ -628,4 +639,3 @@ mod tests {
         assert_bundle(steam, "compatibility");
     }
 }
-

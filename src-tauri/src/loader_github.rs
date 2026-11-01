@@ -2,9 +2,9 @@
 // Выполняет проверку удалённых коммитов, валидацию PE-заголовков DLL и гибридный фоллбэк на встроенные ресурсы.
 use crate::{lua_loader, models::OperationResult};
 use reqwest::blocking::Client;
-use serde::Serialize;
 #[cfg(test)]
 use serde::Deserialize;
+use serde::Serialize;
 use sha1::{Digest, Sha1};
 use std::{
     collections::BTreeMap,
@@ -109,9 +109,7 @@ fn download(client: &Client, url: &str, limit: usize) -> Result<Vec<u8>, String>
         "Не удалось подключиться к GitHub. Установленные DLL не изменены.".to_string()
     })?;
     if matches!(response.status().as_u16(), 403 | 429) {
-        return Err(
-            "GitHub временно ограничил частоту запросов. Повторите попытку позже.".into(),
-        );
+        return Err("GitHub временно ограничил частоту запросов. Повторите попытку позже.".into());
     }
     if !response.status().is_success() {
         return Err(format!(
@@ -225,13 +223,16 @@ fn parse_head_revision(advertisement: &str) -> Option<&str> {
 }
 
 fn fetch_commit_sha(client: &Client) -> Result<String, String> {
-    let url = "https://github.com/LeoBanned/pirate-station-hv.git/info/refs?service=git-upload-pack";
+    let url =
+        "https://github.com/LeoBanned/pirate-station-hv.git/info/refs?service=git-upload-pack";
     let resp = client
         .get(url)
         .header(reqwest::header::CACHE_CONTROL, "no-cache")
         .send()
         .map_err(|e| format!("Не удалось связаться с репозиторием Git: {e}"))?;
-    let text = resp.text().map_err(|e| format!("Ошибка чтения данных Git: {e}"))?;
+    let text = resp
+        .text()
+        .map_err(|e| format!("Ошибка чтения данных Git: {e}"))?;
     parse_head_revision(&text)
         .map(|s| s.to_string())
         .ok_or_else(|| "Не удалось определить ревизию репозитория GitHub".into())
@@ -578,4 +579,3 @@ mod tests {
         assert!(file_current(dir.path(), &file).unwrap());
     }
 }
-

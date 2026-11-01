@@ -7,8 +7,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const SOURCE64: &[u8] = include_bytes!("../../SmokeAPI/SmokeAPI64.dll");
-const SOURCE32: &[u8] = include_bytes!("../../SmokeAPI/SmokeAPI86.dll");
+const SOURCE64: &[u8] = include_bytes!("../resources/smokeapi/SmokeAPI64.dll");
+const SOURCE32: &[u8] = include_bytes!("../resources/smokeapi/SmokeAPI86.dll");
 const CONFIG: &str = "SmokeAPI.config.json";
 const JOURNAL: &str = ".cgs-smaki.json";
 const PROXIES: &[&str] = &["version.dll", "winhttp.dll", "winmm.dll"];
@@ -448,7 +448,15 @@ fn uninstall(game_dir: &str, exe_path: &str) -> Result<String, String> {
 
 #[tauri::command]
 pub(crate) async fn install_smaki(request: SmakiRequest) -> OperationResult {
-    match tauri::async_runtime::spawn_blocking(move || install(&request)).await {
+    match tauri::async_runtime::spawn_blocking(move || {
+        crate::jobs::run(
+            &[PathBuf::from(&request.game_dir)],
+            "Установка SmokeAPI",
+            || install(&request),
+        )?
+    })
+    .await
+    {
         Ok(Ok(message)) => OperationResult::ok(message, vec![]),
         Ok(Err(error)) => OperationResult::error(error, vec![]),
         Err(error) => OperationResult::error(error.to_string(), vec![]),
@@ -457,7 +465,15 @@ pub(crate) async fn install_smaki(request: SmakiRequest) -> OperationResult {
 
 #[tauri::command]
 pub(crate) async fn uninstall_smaki(game_dir: String, exe_path: String) -> OperationResult {
-    match tauri::async_runtime::spawn_blocking(move || uninstall(&game_dir, &exe_path)).await {
+    match tauri::async_runtime::spawn_blocking(move || {
+        crate::jobs::run(
+            &[PathBuf::from(&game_dir)],
+            "Удаление SmokeAPI",
+            || uninstall(&game_dir, &exe_path),
+        )?
+    })
+    .await
+    {
         Ok(Ok(message)) => OperationResult::ok(message, vec![]),
         Ok(Err(error)) => OperationResult::error(error, vec![]),
         Err(error) => OperationResult::error(error.to_string(), vec![]),

@@ -18,7 +18,7 @@ description: Сборка строго портативной версии Eclip
    - **СТРОГО** `C:\Users\Sparki\Desktop\Programms\Hypervisor` (папка Hypervisor).
    - Запрещено сохранять бинарники в другие папки или на рабочий стол напрямую.
 3. **Имя выходного файла**:
-   - **СТРОГО** `Eclipse-Studio-vX.X.X.exe` (где `X.X.X` — актуальная версия из `tauri.conf.json`, например `Eclipse-Studio-v8.1.0.exe`).
+   - **СТРОГО** `Eclipse-Studio-vX.X.X.exe` (где `X.X.X` — актуальная версия из `tauri.conf.json`, например `Eclipse-Studio-v8.2.0.exe`).
    - Запрещено использовать суффиксы `-Portable`, `-Setup` и любые другие.
 4. **Протокол безопасности Git**:
    - **НИКОГДА** не выполнять `git commit` или `git push` без явного подтверждения пользователя.
@@ -31,11 +31,11 @@ description: Сборка строго портативной версии Eclip
 ### Вариант 1. Автоматический запуск (рекомендуется)
 Выполните вспомогательный скрипт релиза:
 ```powershell
-python tools/build_release_helper.py
+python scripts/release.py
 ```
 *Скрипт автоматически:*
 1. Определит текущую версию из `src-tauri/tauri.conf.json`.
-2. Запустит `build.py --type portable --out "C:\Users\Sparki\Desktop\Programms\Hypervisor" --no-open`.
+2. Запустит `scripts/build.py --type portable --out "C:\Users\Sparki\Desktop\Programms\Hypervisor" --no-open`.
 3. Проверит создание файла `C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-Studio-vX.X.X.exe`.
 4. Вычислит точную контрольную сумму SHA-256.
 5. Проанализирует недавние git-коммиты и сгенерирует готовый блок релиза для GitHub.
@@ -50,9 +50,9 @@ python tools/build_release_helper.py
    cargo test --manifest-path src-tauri/Cargo.toml
    ```
 
-2. **Запуск сборщика build.py**:
+2. **Запуск сборщика scripts/build.py**:
    ```powershell
-   python build.py --type portable --out "C:\Users\Sparki\Desktop\Programms\Hypervisor" --no-open
+   python scripts/build.py --type portable --out "C:\Users\Sparki\Desktop\Programms\Hypervisor" --no-open
    ```
 
 3. **Проверка выходного файла и расчёт SHA-256**:
@@ -61,7 +61,7 @@ python tools/build_release_helper.py
    ```
 
 4. **Формирование релиза GitHub**:
-   - **Tag**: `X.X.X` (например `8.1.0`)
+   - **Tag**: `X.X.X` (например `8.2.0`)
    - **Title**: `Eclipse Studio - X.X.X`
    - **Release Notes**:
      ```markdown
