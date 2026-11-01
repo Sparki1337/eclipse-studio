@@ -48,5 +48,5 @@ const commandPaths=(text,base,where)=>{
 };
 commandPaths(JSON.stringify(JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).scripts),root,'package.json');
 commandPaths(JSON.stringify(JSON.parse(fs.readFileSync(path.join(root,'eclipse-manifest/package.json'),'utf8')).scripts),path.join(root,'eclipse-manifest'),'eclipse-manifest/package.json');
-for(const file of files(path.join(root,'.github/workflows'),'.yml'))commandPaths(fs.readFileSync(file,'utf8'),root,rel(file));
+if(fs.existsSync(path.join(root,'.github/workflows')))for(const file of files(path.join(root,'.github/workflows'),'.yml'))commandPaths(fs.readFileSync(file,'utf8'),root,rel(file));
 console.log(`Контракты: ${commands.length} команд Rust; ${count} вызовов; синтаксис JS; уникальные id; изоляция хранилища; ${pathCount} путей ресурсов и подключений — OK`);

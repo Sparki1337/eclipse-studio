@@ -65,7 +65,6 @@
 ```text
 E:\Projects\eclipse-studio\
 ├── .agents\skills\                     # Agent skills build, docsupd, ui-dev (SKILL.md only; scripts live in scripts\)
-├── .github\workflows\                  # CI (windows.yml): npm test, cargo fmt/clippy/test, plugin integrity
 ├── .git\                               # Git version control metadata
 ├── .gitignore                          # Build artifacts & local config exclusions
 ├── AGENTS.md                           # This developer and AI agent guide
