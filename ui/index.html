@@ -165,7 +165,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./assets/images/app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>8.3.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>8.4.0</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -257,7 +257,7 @@
           <div class="home-hero premium-panel">
             <div class="home-glow"></div>
             <div class="hero-copy">
-              <span class="hero-kicker">ECLIPSE STUDIO 8.3.0</span>
+              <span class="hero-kicker">ECLIPSE STUDIO 8.4.0</span>
               <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
               <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
             </div>
@@ -750,6 +750,38 @@
               </div>
             </section>
 
+            <section class="premium-panel hv-steam-panel">
+              <div class="hv-steam-copy">
+                <div class="hv-steam-header">
+                  <span class="coming-label">STEAM · ИНТЕГРАЦИЯ</span>
+                  <h3>Запуск кнопкой «Играть»</h3>
+                </div>
+                <p>Прямой запуск через гипервизор из библиотеки Steam. Приложение настроит параметры запуска и перезапустит Steam.</p>
+                <div class="hv-steam-meta">
+                  <p id="hv-steam-status" role="status">Выберите игру из библиотеки Steam.</p>
+                  <code id="hv-steam-command"></code>
+                </div>
+              </div>
+              <div class="hv-steam-actions">
+                <label class="hv-steam-account">
+                  <span>Аккаунт Steam</span>
+                  <select id="hv-steam-account" aria-label="Аккаунт Steam">
+                    <option value="">Выберите аккаунт</option>
+                  </select>
+                </label>
+                <div class="hv-steam-buttons">
+                  <button class="primary-button" id="hv-steam-enable" disabled type="button">
+                    <svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                    <span>Включить для Steam</span>
+                  </button>
+                  <button class="ghost-button" id="hv-steam-disable" disabled type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    <span>Вернуть обычный запуск</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+
             <section class="premium-panel hv-selected-panel">
               <div class="hv-selected-icon hv-cover hv-selected-cover" id="hv-selected-cover" aria-hidden="true"></div>
               <div class="hv-selected-copy">
@@ -988,8 +1020,8 @@
 
             <section class="premium-panel vbs-troubleshoot-panel" id="vbs-troubleshoot-panel">
               <div class="vbs-troubleshoot-header">
-                <span class="coming-label">СИСТЕМНАЯ ДИАГНОСТИКА</span>
-                <h3>Устранение неполадок Windows</h3>
+                <span class="coming-label">СИСТЕМНОЕ ВОССТАНОВЛЕНИЕ</span>
+                <h3>Восстановление компонентов Windows</h3>
                 <p>Инструменты для восстановления повреждённых подсистем WMI, системных файлов и хранилища компонентов Windows.</p>
               </div>
               <div class="vbs-troubleshoot-grid">
@@ -998,14 +1030,10 @@
                     <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
                     <div>
                       <strong>Репозиторий WMI</strong>
-                      <small>Проверка целостности /verifyrepository или полный сброс, перерегистрация DLL и перезапуск службы winmgmt</small>
+                      <small>Полный сброс, перерегистрация DLL и перезапуск службы winmgmt</small>
                     </div>
                   </div>
                   <div class="vbs-tool-card-actions">
-                    <button class="vbs-tool-diag-btn" id="vbs-diag-wmi" type="button" title="Проверка репозитория без изменений">
-                      <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m10.5 10.5 3.5 3.5"/></svg>
-                      <span>Диагностика</span>
-                    </button>
                     <button class="vbs-tool-fix-btn" id="vbs-fix-wmi" type="button" title="Сброс и восстановление WMI">
                       <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m9.5 2.5 4 4-8.5 8.5H1v-4l8.5-8.5z"/></svg>
                       <span>Ремонт WMI</span>
@@ -1018,14 +1046,10 @@
                     <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                     <div>
                       <strong>Системные файлы (SFC)</strong>
-                      <small>Проверка системных файлов Windows /verifyonly без замены или полный ремонт через sfc /scannow</small>
+                      <small>Проверка и автоматическое восстановление системных файлов через sfc /scannow</small>
                     </div>
                   </div>
                   <div class="vbs-tool-card-actions">
-                    <button class="vbs-tool-diag-btn" id="vbs-diag-sfc" type="button" title="Проверка целостности без замены">
-                      <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m10.5 10.5 3.5 3.5"/></svg>
-                      <span>Диагностика</span>
-                    </button>
                     <button class="vbs-tool-fix-btn" id="vbs-fix-sfc" type="button" title="Автоматическое исправление файлов">
                       <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5l-8 8L2 9"/></svg>
                       <span>Ремонт SFC</span>
@@ -1038,14 +1062,10 @@
                     <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
                     <div>
                       <strong>Хранилище компонентов (DISM)</strong>
-                      <small>Диагностика образа Windows /scanhealth или восстановление повреждений через Windows Update (/restorehealth)</small>
+                      <small>Восстановление повреждённого образа через Windows Update (/restorehealth)</small>
                     </div>
                   </div>
                   <div class="vbs-tool-card-actions">
-                    <button class="vbs-tool-diag-btn" id="vbs-diag-dism" type="button" title="Проверка хранилища без восстановления">
-                      <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m10.5 10.5 3.5 3.5"/></svg>
-                      <span>Диагностика</span>
-                    </button>
                     <button class="vbs-tool-fix-btn" id="vbs-fix-dism" type="button" title="Восстановление хранилища компонентов">
                       <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2 8a6 6 0 0 1 10.24-4.24L14 5M14 2v3h-3M14 8a6 6 0 0 1-10.24 4.24L2 11M2 14v-3h3"/></svg>
                       <span>Ремонт DISM</span>
@@ -1053,11 +1073,6 @@
                   </div>
                 </div>
               </div>
-            </section>
-
-            <section class="premium-panel vbs-log-panel hidden" id="vbs-log-panel">
-              <div><span class="coming-label">ОТЧЁТ</span><h3>Результат операции</h3></div>
-              <pre id="vbs-log"></pre>
             </section>
           </div>
         </div>
@@ -2098,7 +2113,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.3.0</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.4.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -2127,7 +2142,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">8.3.0</b></div>
+                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">8.4.0</b></div>
                   <div class="about-row"><span>Версия Eclipse HV</span><b id="about-hv-version">Проверка…</b></div>
                   <div class="about-row"><span>Права доступа</span><b id="about-admin-rights">Проверка…</b></div>
                   <div class="about-row"><span>Путь к Steam</span><b id="about-steam-path" class="about-path">Определение…</b></div>

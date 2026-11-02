@@ -37,6 +37,88 @@ const ECLIPSE_HV_LAUNCHER_ID: &str = "eclipse_hv";
 
 // Встроенный исполняемый файл автономного лаунчера Eclipse-HV
 const EMBEDDED_ECLIPSE_HV: &[u8] = include_bytes!("../resources/hypervisor/Eclipse-HV.exe");
+const HELPER_NAME: &str = "Eclipse-HV.exe";
+
+// Проверка, что Steam закрыт перед операцией настройки параметров запуска
+pub(crate) fn require_steam_closed() -> Result<(), String> {
+    if process_name_running("steam.exe")? {
+        return Err("Полностью закройте Steam через «Steam → Выход», затем повторите. Окно Steam, свёрнутое в трей, всё ещё работает.".into());
+    }
+    Ok(())
+}
+
+// Определение папки Steam, AppID установленной игры и пути к лаунчеру Eclipse-HV
+fn steam_target(id: &str) -> Result<(PathBuf, u64, PathBuf), String> {
+    let library = load_library()?;
+    let game = library.games.iter().find(|g| g.id == id).ok_or("Игра не найдена")?;
+    let exe = validate_exe_path(&game.exe_path)?;
+    let installed = exe.parent().into_iter().flat_map(Path::ancestors)
+        .find_map(crate::steam_library::installed_game_for_path)
+        .ok_or("Игра не найдена среди установленных игр Steam. Установите её через Steam и выберите EXE из её папки.")?;
+    let steam = crate::luatools::resolve_steam_path(None).ok_or("Папка Steam не найдена")?;
+    Ok((steam, installed.appid, exe.parent().unwrap().join(HELPER_NAME)))
+}
+
+// Развёртывание лаунчера Eclipse-HV в папке с игрой при его отсутствии
+fn ensure_helper(dir: &Path) -> Result<(), String> {
+    let target = dir.join(HELPER_NAME);
+    if target.is_file() {
+        return Ok(());
+    }
+    fs::write(&target, EMBEDDED_ECLIPSE_HV)
+        .map_err(|e| format!("Не удалось разместить {HELPER_NAME}: {e}"))?;
+    Ok(())
+}
+
+// Получение списка сохранённых аккаунтов Steam
+#[tauri::command]
+pub(crate) fn steam_launch_accounts() -> Result<Vec<crate::steam_hv::Account>, String> {
+    let steam = crate::luatools::resolve_steam_path(None).ok_or("Папка Steam не найдена")?;
+    crate::steam_hv::accounts(&steam)
+}
+
+// Запрос статуса интеграции запуска для выбранной игры
+#[tauri::command]
+pub(crate) fn steam_launch_status(id: String, account: Option<String>) -> Result<crate::steam_hv::Status, String> {
+    let (steam, appid, helper) = steam_target(&id)?;
+    crate::steam_hv::status_for(&steam, appid, &helper, account.as_deref())
+}
+
+// Включение или возврат запуска игры через гипервизор в Steam
+#[tauri::command]
+pub(crate) async fn set_steam_launch(id: String, enabled: bool, account: Option<String>) -> Result<crate::steam_hv::Status, String> {
+    tauri::async_runtime::spawn_blocking(move || set_steam_launch_inner(id, enabled, account))
+        .await
+        .map_err(|error| format!("Настройка Steam прервана: {error}"))?
+}
+
+fn set_steam_launch_inner(id: String, enabled: bool, account: Option<String>) -> Result<crate::steam_hv::Status, String> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = LOCK.lock().map_err(|_| "Настройка Steam прервана")?;
+    let (steam, appid, helper) = steam_target(&id)?;
+    let before = crate::steam_hv::status_for(&steam, appid, &helper, account.as_deref())?;
+    if enabled { ensure_helper(helper.parent().unwrap())?; }
+    let client = steam.join("steam.exe");
+    if !client.is_file() { return Err("Не найден steam.exe".into()); }
+    let was_running = process_name_running("steam.exe")?;
+    crate::steam_hv::restart_around(was_running, || {
+        let mut cmd = Command::new(&client);
+        cmd.arg("-shutdown").current_dir(&steam);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd.spawn().map_err(|error| format!("Не удалось завершить Steam: {error}"))?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            if !process_name_running("steam.exe")? { return Ok(()); }
+            if std::time::Instant::now() >= deadline {
+                return Err("Steam не завершился за 30 секунд. Параметры не изменены; проверьте, не ожидает ли Steam завершения игры.".into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(400));
+        }
+    }, || crate::steam_hv::set(&steam, appid, &helper, enabled, Some(&before.account)), || {
+        Command::new(&client).current_dir(&steam).spawn().map(|_| ()).map_err(|error| error.to_string())
+    })
+}
 
 // Профиль гипервизорного лаунчера Eclipse-HV
 #[derive(Clone, Copy)]
@@ -525,6 +607,11 @@ pub(crate) fn set_selected_game(id: String) -> Result<LibraryView, String> {
 // Удаление игры из библиотеки гипервизора
 #[tauri::command]
 pub(crate) fn remove_game(id: String) -> Result<LibraryView, String> {
+    if steam_launch_accounts().unwrap_or_default().into_iter().any(|account| {
+        steam_launch_status(id.clone(), Some(account.id)).is_ok_and(|status| status.managed)
+    }) {
+        return Err("Сначала нажмите «Вернуть обычный запуск» для этой игры, затем удалите её из библиотеки.".into());
+    }
     let mut library = load_library()?;
     if let Some(pos) = library.games.iter().position(|game| game.id == id) {
         let game = library.games.remove(pos);

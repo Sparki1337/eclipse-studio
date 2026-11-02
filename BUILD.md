@@ -74,7 +74,7 @@ Copy-Item eclipse-hv/target/release/eclipse-hv.exe src-tauri/resources/hyperviso
 python scripts/bump_version.py
 
 # Или передача версии аргументом:
-python scripts/bump_version.py 8.3.0
+python scripts/bump_version.py 8.4.0
 ```
 Скрипт автоматически:
 * Обновляет `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `package.json` и `package-lock.json`.
@@ -186,5 +186,5 @@ npm test
 ---
 
 <div align="center">
-  <sub>Eclipse Studio v8.3.0 • Инструкция по сборке</sub>
+  <sub>Eclipse Studio v8.4.0 • Инструкция по сборке</sub>
 </div>

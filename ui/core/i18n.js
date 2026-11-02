@@ -1351,7 +1351,7 @@
     ["Резервная копия:", "Backup:"],
     ["Удалено компонентов:", "Components removed:"],
     ["Системный модуль недоступен", "System module is unavailable"],
-    ["Eclipse Studio 8.3.0 инициализирован", "Eclipse Studio 8.3.0 initialized"],
+    ["Eclipse Studio 8.4.0 инициализирован", "Eclipse Studio 8.4.0 initialized"],
     ["Доступна версия", "Version available:"],
     ["Осталось", "Remaining"],
     ["локальная копия", "local copy"]

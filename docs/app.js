@@ -2494,7 +2494,7 @@
     };
 
     getJson(GIST_URL)
-      .catch(() => getJson(`${FALLBACK_URL}?v=8.3.0`))
+      .catch(() => getJson(`${FALLBACK_URL}?v=8.4.0`))
       .then(async (data) => {
         const cracks = Array.isArray(data) ? data : (data?.cracks || []);
         allGames = prepareGames(cracks.filter((c) => c && c.name && c.url));

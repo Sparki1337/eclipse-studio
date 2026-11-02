@@ -6,7 +6,7 @@
 
 **Автономный центр управления Steam-библиотекой, дополнениями, сетевыми фиксами и системной средой**
 
-[![Версия](https://img.shields.io/badge/Версия-8.3.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases/latest)
+[![Версия](https://img.shields.io/badge/Версия-8.4.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases/latest)
 [![Платформа](https://img.shields.io/badge/Платформа-Windows_10_|_11_(x64)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
 [![Процессоры](https://img.shields.io/badge/CPU-Поддержка_AVX2-5c6bc0?style=for-the-badge)](#-о-проекте)
 [![Стек](https://img.shields.io/badge/Стек-Rust_Tauri_v2-f74c00?style=for-the-badge&logo=rust&logoColor=white)](https://tauri.app/)
@@ -130,7 +130,7 @@
 > [!NOTE]
 > **Аппаратные требования**: требуется процессор с поддержкой инструкций **AVX2** (поддерживаются как старые линейки CPU, начиная с Intel Core 4-го поколения Haswell и AMD Zen / Excavator, так и новейшие современные платформы).
 
-1. Перейдите в раздел **[Releases](https://github.com/Sparki1337/eclipse-studio/releases/latest)** и скачайте актуальный файл `Eclipse-Studio-v8.3.0.exe`.
+1. Перейдите в раздел **[Releases](https://github.com/Sparki1337/eclipse-studio/releases/latest)** и скачайте актуальный файл `Eclipse-Studio-v8.4.0.exe`.
 2. Поместите исполняемый файл в любую удобную папку (установка не требуется).
 3. Запустите приложение (для доступа к функциям VBS, Test Mode и реестру Steam рекомендуется запуск от имени администратора).
 
@@ -197,6 +197,6 @@ eclipse-studio/
 
 <div align="center">
 
-**Eclipse Studio v8.3.0** • 2026
+**Eclipse Studio v8.4.0** • 2026
 
 </div>

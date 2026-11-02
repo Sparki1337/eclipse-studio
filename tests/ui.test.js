@@ -72,10 +72,10 @@ async function run() {
     assert(missing.length === 0, "Не зарегистрированы: " + missing.join(", "));
   });
 
-  await test("Запуск без ошибок JS, версия 8.3.0", async () => {
+  await test("Запуск без ошибок JS, версия 8.4.0", async () => {
     const { page, context, errors } = await open();
     const version = await page.textContent(".titlebar-version");
-    assert(version.trim() === "8.3.0", "версия " + version);
+    assert(version.trim() === "8.4.0", "версия " + version);
     assert(errors.length === 0, errors.join("\n"));
     await context.close();
   });

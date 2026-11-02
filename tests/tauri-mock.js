@@ -65,7 +65,7 @@
     files_pause_download: () => {window.__pendingDownload?.reject("Загрузка приостановлена; проверенные сегменты сохранены для докачки");return true;},
     files_cancel_download: () => {window.__pendingDownload?.reject("Загрузка отменена");return true;},
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "8.3.0", latest_version: "8.3.0", currentVersion: "8.3.0", latestVersion: "8.3.0" }),
+    check_for_update: () => ({ available: false, current_version: "8.4.0", latest_version: "8.4.0", currentVersion: "8.4.0", latestVersion: "8.4.0" }),
     download_app_update: async (args) => {
       const ver = args?.version || "6.6.8";
       const name = `Eclipse-Studio-v${ver}.exe`;
@@ -141,6 +141,9 @@
     hubcap_usage: () => ({ used: 3, limit: 25, remaining: 22 }),
     list_games: () => [], get_app_status: () => ({}), check_asset_updates: () => ({}),
     is_selected_game_running: () => false,
+    steam_launch_accounts: () => [{ id: "76561198000000000", name: "EclipseUser", preferred: true }],
+    steam_launch_status: () => ({ appid: 480, account: "76561198000000000", enabled: false, managed: false, command: '"Eclipse-HV.exe" %command%' }),
+    set_steam_launch: (args) => ({ appid: 480, account: args?.account || "76561198000000000", enabled: Boolean(args?.enabled), managed: Boolean(args?.enabled), command: '"Eclipse-HV.exe" %command%' }),
     scan_installed_steam_games: () => [],
     scan_save_locations: () => [],
     eclipse_hv_status: () => ({

@@ -28,7 +28,7 @@
   }
 
   const state = {
-    version: "8.3.0",
+    version: "8.4.0",
     gameDir: "",
     appid: null,
     gameName: "",
@@ -2419,7 +2419,7 @@
     // 1. Версия программы (без суффикса Portable x64, так как других сборок нет)
     const appVerEl = $("#about-app-version");
     if (appVerEl) {
-      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "8.3.0";
+      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "8.4.0";
       state.version = currentVer;
       appVerEl.textContent = currentVer;
     }
@@ -2431,7 +2431,7 @@
         try {
           const hvStatus = await call("eclipse_hv_status");
           if (hvStatus && hvStatus.installed) {
-            const rawVer = hvStatus.version || "1.1.0";
+            const rawVer = hvStatus.version || "8.4.0";
             hvVerEl.textContent = rawVer.replace(/^v/i, "");
           } else {
             hvVerEl.textContent = "Не установлен";
@@ -3364,7 +3364,7 @@
     updateRyuuKeyStatus();
     renderLoaderInfo();
     updateAboutInfo();
-    log("Eclipse Studio 8.3.0 инициализирован", "system");
+    log("Eclipse Studio 8.4.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный вызов отображения окна, если заставка была отключена в параметрах

@@ -27,6 +27,7 @@ mod saves;
 mod secure_state;
 mod smaki;
 mod steam;
+mod steam_hv;
 mod steam_library;
 mod updates;
 mod vbs;
@@ -381,6 +382,9 @@ pub fn run() {
             hypervisor::eclipse_hv_download,
             hypervisor::create_game_shortcut,
             hypervisor::remove_game_shortcut,
+            hypervisor::steam_launch_accounts,
+            hypervisor::steam_launch_status,
+            hypervisor::set_steam_launch,
             anticheat::anticheat_scan,
             anticheat::anticheat_restore,
             anticheat::anticheat_pick_backup_directory,

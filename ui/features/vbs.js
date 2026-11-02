@@ -56,11 +56,8 @@
       "#vbs-disable-button",
       "#vbs-test-button",
       "#vbs-uefi-optout-btn",
-      "#vbs-diag-wmi",
       "#vbs-fix-wmi",
-      "#vbs-diag-sfc",
       "#vbs-fix-sfc",
-      "#vbs-diag-dism",
       "#vbs-fix-dism"
     ];
 
@@ -694,12 +691,9 @@
     });
   }
 
-  // Инструменты системной диагностики и ремонта Windows
-  $("#vbs-diag-wmi")?.addEventListener("click", () => runTroubleshoot("wmi"));
+  // Инструменты системного восстановления и ремонта Windows
   $("#vbs-fix-wmi")?.addEventListener("click", () => runRepair("wmi"));
-  $("#vbs-diag-sfc")?.addEventListener("click", () => runTroubleshoot("sfc"));
   $("#vbs-fix-sfc")?.addEventListener("click", () => runRepair("sfc"));
-  $("#vbs-diag-dism")?.addEventListener("click", () => runTroubleshoot("dism"));
   $("#vbs-fix-dism")?.addEventListener("click", () => runRepair("dism"));
 
 
