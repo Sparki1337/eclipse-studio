@@ -36,6 +36,7 @@ TAURI_MOCK_JS = ROOT_DIR / "tests" / "tauri-mock.js"
 UI_TEST_JS = ROOT_DIR / "tests" / "ui.test.js"
 README_MD = ROOT_DIR / "README.md"
 BUILD_MD = ROOT_DIR / "BUILD.md"
+AGENTS_MD = ROOT_DIR / "AGENTS.md"
 DOCS_INDEX_HTML = ROOT_DIR / "docs" / "index.html"
 DOCS_APP_JS = ROOT_DIR / "docs" / "app.js"
 # Скрипты разработки (scripts/)
@@ -138,7 +139,12 @@ def update_html(old_ver: str, new_ver: str) -> bool:
         )
         # Карточка "О программе"
         content = re.sub(
-            r'(<span>Версия</span><b>)[^<]+(</b>)',
+            r'(<b id="about-app-version">)[^<]+(</b>)',
+            rf"\g<1>{new_ver}\g<2>",
+            content,
+        )
+        content = re.sub(
+            r'(<span>Версия(?: программы)?</span>\s*<b[^>]*>)[^<]+(</b>)',
             rf"\g<1>{new_ver}\g<2>",
             content,
         )
@@ -158,6 +164,16 @@ def update_js_files(old_ver: str, new_ver: str) -> bool:
             content = re.sub(
                 r'Eclipse Studio [0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)? инициализирован',
                 f"Eclipse Studio {new_ver} инициализирован",
+                content,
+            )
+            content = re.sub(
+                r'(version:\s*")[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(")',
+                rf'\g<1>{new_ver}\g<3>',
+                content,
+            )
+            content = re.sub(
+                r'(\|\|\s*")[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(";)',
+                rf'\g<1>{new_ver}\g<3>',
                 content,
             )
             APP_JS.write_text(content, encoding="utf-8")
@@ -283,6 +299,19 @@ def update_docs(old_ver: str, new_ver: str) -> bool:
             BUILD_MD.write_text(content, encoding="utf-8")
         except Exception as e:
             print(f"[!] Ошибка при обновлении BUILD.md: {e}")
+            success = False
+
+    if AGENTS_MD.exists():
+        try:
+            content = AGENTS_MD.read_text(encoding="utf-8")
+            content = re.sub(
+                r'(python (?:scripts[\\/])?bump_version\.py\s+)[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?',
+                rf"\g<1>{new_ver}",
+                content,
+            )
+            AGENTS_MD.write_text(content, encoding="utf-8")
+        except Exception as e:
+            print(f"[!] Ошибка при обновлении AGENTS.md: {e}")
             success = False
 
     return success
@@ -441,7 +470,7 @@ def update_build_helpers(old_ver: str, new_ver: str) -> bool:
                 content,
             )
             content = re.sub(
-                r'(return\s*")[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?("\s*#.*Чтение версии)',
+                r'(return\s*")[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(")',
                 rf'\g<1>{new_ver}\g<3>',
                 content,
             )

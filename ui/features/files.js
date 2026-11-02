@@ -11,6 +11,8 @@
   const INSTALLED_KEY = "filesInstalledMap";
   const VIEW_MODE_KEY = "filesViewMode";
   const PAUSED_KEY = "filesPausedDownloads";
+  const SORT_MODE_KEY = "filesSortMode";
+  const CRACKER_GROUP_KEY = "filesCrackerGroup";
   const state = {
     files: [],
     page: 1,
@@ -26,6 +28,8 @@
     autoInstall: readAutoInstall(),
     pinnedCollapsed: readPinnedCollapsed(),
     viewMode: readViewMode(),
+    sort: readSortMode(),
+    group: readCrackerGroup(),
   };
 
   let defaultDownloadDir = "";
@@ -303,12 +307,213 @@
       .replaceAll("'", "&#039;");
   }
 
+
+  function readSortMode() {
+    try {
+      const mode = window.cgsStorage?.getItem(SORT_MODE_KEY);
+      return ["default", "new", "old", "name", "cracker"].includes(mode) ? mode : "default";
+    } catch (_) {
+      return "default";
+    }
+  }
+
+  function readCrackerGroup() {
+    try {
+      return (window.cgsStorage?.getItem(CRACKER_GROUP_KEY) || "").trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function setSortMode(mode) {
+    state.sort = ["default", "new", "old", "name", "cracker"].includes(mode) ? mode : "default";
+    try { window.cgsStorage?.setItem(SORT_MODE_KEY, state.sort); } catch (_) {}
+    state.page = 1;
+    syncSortUi();
+    render();
+  }
+
+  function setCrackerGroup(group) {
+    state.group = String(group || "").trim();
+    try { window.cgsStorage?.setItem(CRACKER_GROUP_KEY, state.group); } catch (_) {}
+    state.page = 1;
+    syncSortUi();
+    render();
+  }
+
+  // Определение релиз-группы / взломщика из имени файла (как на сайте в docs/app.js)
+  function parseCrackerGroup(file) {
+    const base = String(file || "").replace(/(\.(rar|zip|7z|exe|dll|tar|gz))+$/i, "");
+    const parts = base.split("-");
+    const service = /^(crack\.?fix|fix|hotfix|v?\d+(\.\d+)*)$/i;
+    while (parts.length > 2 && service.test(parts[parts.length - 1])) parts.pop();
+    let group = parts.length > 1 ? parts[parts.length - 1] : "";
+    if (!group) group = (base.match(/_([A-Z][A-Z0-9]{2,})$/) || [])[1] || "";
+    group = group.replace(/\.\d+$/, "").trim();
+    if (service.test(group)) return "";
+    return /^\p{L}[\p{L}\p{N}._]{1,23}$/u.test(group) ? group : "";
+  }
+
+  // Определение номера билда Steam: «Build 18805095» -> 18805095
+  function parseBuildNumber(build) {
+    const match = String(build || "").match(/\d{6,}/);
+    return match ? Number(match[0]) : 0;
+  }
+
+  // Канонизация названий групп (регистр)
+  function normalizeCrackerGroups(files) {
+    const counts = new Map();
+    files.forEach((f) => {
+      if (f.group) counts.set(f.group, (counts.get(f.group) || 0) + 1);
+    });
+    const names = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a));
+    const canon = new Map();
+    names.forEach((n, i) => {
+      const low = n.toLowerCase();
+      const main = names.slice(0, i).find((m) => m.toLowerCase() === low);
+      canon.set(n, main ? canon.get(main) : n);
+    });
+    files.forEach((f) => {
+      if (f.group) f.group = canon.get(f.group) || f.group;
+    });
+  }
+
+  function enrichFiles(list) {
+    list.forEach((f, idx) => {
+      f.idx = idx;
+      f.file = fileNameFromUrl(f.url);
+      f.group = parseCrackerGroup(f.file);
+      f.bnum = parseBuildNumber(f.build);
+    });
+    normalizeCrackerGroups(list);
+  }
+
+  const collator = new Intl.Collator("ru-RU", { numeric: true, sensitivity: "base", ignorePunctuation: true });
+
+  const SORT_COMPARATORS = {
+    default: (a, b) => a.idx - b.idx,
+    new: (a, b) => {
+      if (a.bnum && b.bnum) return (b.bnum - a.bnum) || (b.idx - a.idx);
+      if (a.bnum || b.bnum) return a.bnum ? -1 : 1;
+      return b.idx - a.idx;
+    },
+    old: (a, b) => {
+      if (a.bnum && b.bnum) return (a.bnum - b.bnum) || (a.idx - b.idx);
+      if (a.bnum || b.bnum) return a.bnum ? -1 : 1;
+      return a.idx - b.idx;
+    },
+    name: (a, b) => collator.compare(a.name, b.name) || (a.idx - b.idx),
+    cracker: (a, b) => (!a.group - !b.group) || collator.compare(a.group, b.group) || collator.compare(a.name, b.name) || (a.idx - b.idx),
+  };
+
+  const SORT_LABELS = {
+    default: "По умолчанию",
+    new: "Сначала новые",
+    old: "Сначала старые",
+    name: "По названию",
+    cracker: "По взломщику",
+  };
+
+  function syncSortUi() {
+    const label = $("#files-sort-label");
+    if (label) label.textContent = SORT_LABELS[state.sort] || "По умолчанию";
+
+    const groupChip = $("#files-sort-group");
+    if (groupChip) {
+      if (state.group) {
+        groupChip.textContent = state.group;
+        groupChip.hidden = false;
+      } else {
+        groupChip.hidden = true;
+      }
+    }
+
+    document.querySelectorAll(".files-sort-item[data-sort]").forEach((btn) => {
+      const active = btn.dataset.sort === state.sort;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-checked", String(active));
+    });
+
+    const crackerSec = $("#files-cracker-sec");
+    const crackerList = $("#files-cracker-list");
+    if (crackerSec && crackerList) {
+      const counts = new Map();
+      state.files.forEach((f) => {
+        if (!isFeatured(f) && f.group) {
+          counts.set(f.group, (counts.get(f.group) || 0) + 1);
+        }
+      });
+
+      if (counts.size > 0) {
+        crackerSec.hidden = false;
+        const sortedGroups = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+        const allItem = `<button type="button" class="files-sort-item ${!state.group ? "active" : ""}" role="menuitemradio" aria-checked="${String(!state.group)}" data-group=""><span>Все взломщики</span></button>`;
+        const groupItems = sortedGroups.map(([grp, count]) => {
+          const active = state.group === grp;
+          return `<button type="button" class="files-sort-item ${active ? "active" : ""}" role="menuitemradio" aria-checked="${String(active)}" data-group="${escapeHtml(grp)}"><span>${escapeHtml(grp)}</span><b>${count}</b></button>`;
+        }).join("");
+        crackerList.innerHTML = allItem + groupItems;
+      } else {
+        crackerSec.hidden = true;
+      }
+    }
+  }
+
+  function initSortMenu() {
+    const sortWrap = $("#files-sort");
+    const sortBtn = $("#files-sort-btn");
+    const sortMenu = $("#files-sort-menu");
+    if (!sortWrap || !sortBtn || !sortMenu) return;
+
+    let menuOpen = false;
+    const openMenu = () => {
+      if (menuOpen) return;
+      menuOpen = true;
+      syncSortUi();
+      sortMenu.hidden = false;
+      sortWrap.classList.add("open");
+      sortBtn.setAttribute("aria-expanded", "true");
+    };
+
+    const closeMenu = (restoreFocus) => {
+      if (!menuOpen) return;
+      menuOpen = false;
+      sortWrap.classList.remove("open");
+      sortBtn.setAttribute("aria-expanded", "false");
+      sortMenu.hidden = true;
+      if (restoreFocus) sortBtn.focus();
+    };
+
+    sortBtn.addEventListener("click", () => (menuOpen ? closeMenu(false) : openMenu()));
+    sortBtn.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); openMenu(); }
+      else if (e.key === "Escape") closeMenu(false);
+    });
+
+    document.addEventListener("pointerdown", (e) => {
+      if (sortWrap && !sortWrap.contains(e.target)) closeMenu(false);
+    });
+
+    sortMenu.addEventListener("click", (e) => {
+      const item = e.target.closest(".files-sort-item");
+      if (!item) return;
+      if ("sort" in item.dataset) {
+        setSortMode(item.dataset.sort);
+      } else if ("group" in item.dataset) {
+        setCrackerGroup(item.dataset.group);
+      }
+      closeMenu(true);
+    });
+  }
   function filteredFiles() {
     const query = state.query.trim().toLocaleLowerCase("ru-RU");
-    return state.files.filter((item) => {
+    let result = state.files.filter((item) => {
       if (isFeatured(item)) return false;
+      if (state.group && item.group !== state.group) return false;
       return !query || `${item.name} ${item.build}`.toLocaleLowerCase("ru-RU").includes(query);
     });
+    const cmp = SORT_COMPARATORS[state.sort] || SORT_COMPARATORS.default;
+    return result.slice().sort(cmp);
   }
 
   function isFeatured(item) {
@@ -492,6 +697,8 @@
       if (!invoke) throw new Error("Системный модуль недоступен");
       const catalog = await invoke("files_catalog");
       state.files = Array.isArray(catalog?.files) ? catalog.files : [];
+    enrichFiles(state.files);
+    syncSortUi();
       state.cached = Boolean(catalog?.cached);
       state.error = "";
       state.loaded = true;
@@ -730,5 +937,7 @@
 
   bindEvents();
   initDownloadDir();
+    initSortMenu();
+    syncSortUi();
   applyViewMode();
 })();

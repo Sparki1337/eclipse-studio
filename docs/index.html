@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="./style.css?v=8.2.0" />
+  <link rel="stylesheet" href="./style.css?v=8.3.0" />
   <script>
     (function (d) {
       d.classList.add('js');
@@ -46,7 +46,7 @@
       <a href="#top" class="brand" aria-label="Eclipse Studio">
         <img src="./assets/app-icon.png" alt="" class="brand-icon" />
         <span class="brand-name">Eclipse Studio</span>
-        <span class="brand-ver" data-version>v8.2.0</span>
+        <span class="brand-ver" data-version>v8.3.0</span>
       </a>
       <nav class="nav" id="nav">
         <a href="#modules" data-i18n="nav.modules">Модули</a>
@@ -89,7 +89,7 @@
             <span class="dot"></span>
             <span data-i18n="hero.tag">Eclipse Studio</span>
             <span class="sep"></span>
-            <span class="mono" data-version>v8.2.0</span>
+            <span class="mono" data-version>v8.3.0</span>
           </div>
 
           <h1 class="hero-title" data-split>
@@ -104,7 +104,7 @@
           <div class="hero-actions reveal" style="--d:5">
             <a href="#download" class="btn btn-light btn-lg">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-              <span><span data-i18n="hero.download">Скачать</span> <span data-version>v8.2.0</span></span>
+              <span><span data-i18n="hero.download">Скачать</span> <span data-version>v8.3.0</span></span>
             </a>
             <a href="#modules" class="btn btn-line btn-lg">
               <span data-i18n="hero.modules">Смотреть модули</span>
@@ -257,27 +257,31 @@
           <div class="diff-col reveal">
             <span class="mono diff-k" data-i18n="compare.orig">Оригинал</span>
             <ul>
-              <li data-i18n="compare.diffOrig1"><strong>Ручная распаковка:</strong> скачивание архива в Загрузки, многошаговый мастер и ручной перенос без автоочистки</li>
-              <li data-i18n="compare.diffOrig2"><strong>Внешние зависимости:</strong> батники и бинарники (.bat, .exe) лежали отдельно рядом с программой</li>
-              <li data-i18n="compare.diffOrig3"><strong>Ограниченная кастомизация:</strong> узкий диапазон зума (до 125%), фиксированная ширина меню и синеватый фон</li>
-              <li data-i18n="compare.diffOrig4"><strong>Эмодзи и растровые иконки:</strong> статичные системные пиктограммы Windows, размывающиеся на 4K</li>
-              <li data-i18n="compare.diffOrig5"><strong>Зависание при старте:</strong> пустое белое окно без индикации во время проверки системы</li>
-              <li data-i18n="compare.diffOrig6"><strong>Навязчивые обновления:</strong> сторонние окна браузера, ручное скачивание нового бинарника и мусор из старых версий</li>
-              <li data-i18n="compare.diffOrig7"><strong>Фиксированные пути:</strong> жестко заданная папка сохранения без возможности выбора и быстрого сброса</li>
-              <li data-i18n="compare.diffOrig8"><strong>Фиксированные звуки и меню:</strong> стандартные нестилизуемые селекты без адаптации под тему и отсутствие настройки звуков</li>
+              <li data-i18n="compare.diffOrig1"><strong>Мастер установки:</strong> скачивание архива в Загрузки с ручной распаковкой или многошаговым диалогом</li>
+              <li data-i18n="compare.diffOrig2"><strong>Классическая сборка:</strong> исполняемый файл с сопутствующими скриптами и внешними вспомогательными утилитами</li>
+              <li data-i18n="compare.diffOrig3"><strong>Базовые темы оформления:</strong> фиксированная палитра, стандартная ширина меню и масштабирование до 125%</li>
+              <li data-i18n="compare.diffOrig4"><strong>Смешанная графика:</strong> сочетание системных эмодзи и растровых иконок интерфейса</li>
+              <li data-i18n="compare.diffOrig5"><strong>Классический запуск:</strong> стандартный старт приложения во время инициализации компонентов</li>
+              <li data-i18n="compare.diffOrig6"><strong>Внешние обновления:</strong> переход на страницу релиза на GitHub для ручного скачивания архива</li>
+              <li data-i18n="compare.diffOrig7"><strong>Фиксированный путь:</strong> загрузка файлов в стандартную системную папку</li>
+              <li data-i18n="compare.diffOrig8"><strong>Системные элементы:</strong> стандартные браузерные меню select и фиксированная звуковая схема</li>
+              <li data-i18n="compare.diffOrig9"><strong>Базовая интеграция:</strong> запуск игр через интерфейс лаунчера или простые ярлыки</li>
+              <li data-i18n="compare.diffOrig10"><strong>Стандартные твики VBS:</strong> пакетные команды восстановления целостности и переключение параметров безопасности</li>
             </ul>
           </div>
           <div class="diff-col is-new reveal" style="--d:1">
             <span class="mono diff-k" data-i18n="compare.new">Eclipse Studio</span>
             <ul>
-              <li data-i18n="compare.diffNew1"><strong>Автоустановка в 1 клик:</strong> умный разбор структуры архивов, бэкап в .backup_orig и автоудаление</li>
+              <li data-i18n="compare.diffNew1"><strong>Автоустановка в 1 клик:</strong> умный разбор структуры архивов (ZIP/RAR), распаковка в корень игры, бэкап в .backup_orig и автоочистка</li>
               <li data-i18n="compare.diffNew2"><strong>Полный Standalone Portable:</strong> 100% единый автономный EXE-файл без внешних скриптов и сторонних папок</li>
-              <li data-i18n="compare.diffNew3"><strong>14 тем + OLED и зум 140%:</strong> глубокие палитры без синевы, 12 неоновых акцентов и гибкий ресайз сайдбара</li>
-              <li data-i18n="compare.diffNew4"><strong>Векторный SVG-сет Lucide:</strong> безупречная чёткость на любых экранах и плавные микроанимации 60 FPS</li>
+              <li data-i18n="compare.diffNew3"><strong>Глубокая кастомизация:</strong> 14 тем оформления (включая OLED), 12 неоновых акцентов, ресайз сайдбара и зум до 140%</li>
+              <li data-i18n="compare.diffNew4"><strong>Векторный SVG-сет Lucide:</strong> единый чёткий набор векторных иконок и плавные микроанимации элементов управления 60 FPS</li>
               <li data-i18n="compare.diffNew5"><strong>Аппаратная заставка:</strong> Canvas-анимация с логотипом, пошаговый статус загрузки и пропуск по клику</li>
               <li data-i18n="compare.diffNew6"><strong>Встроенный 1-клик апдейтер:</strong> прямое скачивание в рабочую папку, бесшовный перезапуск, цветной прогресс-бар и сворачиваемый чейнджлог</li>
               <li data-i18n="compare.diffNew7"><strong>Гибкая настройка путей:</strong> выбор любой папки загрузок со сбросом по умолчанию в 1 клик</li>
-              <li data-i18n="compare.diffNew8"><strong>Кастомные звуки и стильные меню:</strong> конструктор своих звуковых профилей и адаптивные выпадающие меню</li>
+              <li data-i18n="compare.diffNew8"><strong>Кастомные меню и звуки:</strong> адаптивные выпадающие меню и конструктор собственных звуковых профилей</li>
+              <li data-i18n="compare.diffNew9"><strong>Нативные ярлыки игр:</strong> автосоздание ярлыков Windows (.lnk) с иконками через Shell COM API и управление в 1 клик</li>
+              <li data-i18n="compare.diffNew10"><strong>Диагностика, ремонт и BitLocker:</strong> раздельные тесты и ремонт WMI, SFC, DISM с живым логом, автозащита BitLocker и SecConfig.efi</li>
             </ul>
           </div>
         </div>
@@ -298,7 +302,7 @@
               <img src="./assets/app-icon.png" alt="" class="dl-icon" />
               <div class="dl-badges">
                 <span class="badge mono badge-accent" data-i18n="dl.recommended">Рекомендуем</span>
-                <span class="badge mono" id="eclipseVersion" data-version>v8.2.0</span>
+                <span class="badge mono" id="eclipseVersion" data-version>v8.3.0</span>
               </div>
             </div>
             <h3>Eclipse Studio</h3>
@@ -553,7 +557,7 @@
         <div class="footer-brand">
           <img src="./assets/app-icon.png" alt="" />
           <div>
-            <strong>Eclipse Studio <span data-version>v8.2.0</span></strong>
+            <strong>Eclipse Studio <span data-version>v8.3.0</span></strong>
             <span data-i18n="footer.sub">Форк Crocodile Gena Studio · автор оригинала LeoBanned\Крокодил Гена.</span>
           </div>
         </div>
@@ -590,6 +594,6 @@
 
   <div class="toast mono" id="toast" role="status" aria-live="polite">Ссылка скопирована</div>
 
-  <script src="./app.js?v=8.2.0"></script>
+  <script src="./app.js?v=8.3.0"></script>
 </body>
 </html>

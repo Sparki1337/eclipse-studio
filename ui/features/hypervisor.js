@@ -20,6 +20,25 @@
 
   ];
 
+  // Ключ хранилища для автоматического создания ярлыков на рабочем столе
+  const SHORTCUT_KEY = "cgs-hv-desktop-shortcuts";
+
+  function isShortcutsEnabled() {
+    return window.cgsStorage?.getItem(SHORTCUT_KEY) !== "0";
+  }
+
+  function setShortcutsEnabled(val) {
+    window.cgsStorage?.setItem(SHORTCUT_KEY, val ? "1" : "0");
+    syncShortcutToggles(val);
+  }
+
+  function syncShortcutToggles(val) {
+    const t1 = $("#hv-setting-desktop-shortcut");
+    const t2 = $("#settings-hv-desktop-shortcut");
+    if (t1) t1.checked = val;
+    if (t2) t2.checked = val;
+  }
+
   const state = {
     selectedId: null,
     launchers: [...defaultLaunchers],
@@ -295,14 +314,19 @@
   function renderGames() {
     const list = $("#hv-game-list");
     const empty = $("#hv-empty");
-    $("#hv-library-count").textContent = pluralGames(state.games.length);
-    $("#hv-games-count").textContent = String(state.games.length);
+    const libCount = $("#hv-library-count");
+    if (libCount) libCount.textContent = pluralGames(state.games.length);
+    const gamesCount = $("#hv-games-count");
+    if (gamesCount) gamesCount.textContent = String(state.games.length);
     empty.classList.toggle("hidden", state.games.length > 0);
     list.classList.toggle("hidden", state.games.length === 0);
 
     list.innerHTML = state.games.map((game) => {
       const selected = game.id === state.selectedId;
       const confirm = state.confirmingRemove === game.id;
+      const hasShortcut = Boolean(game.shortcut_path);
+      const shortcutBtn = `<button class="hv-game-action hv-game-shortcut ${hasShortcut ? "active" : ""}" data-hv-action="${hasShortcut ? "remove-shortcut" : "create-shortcut"}" data-game-id="${escapeHtml(game.id)}" title="${hasShortcut ? "Удалить ярлык с рабочего стола" : "Создать ярлык на рабочем столе"}"><span>Ярлык</span></button>`;
+
       return `
         <article class="hv-game-card ${selected ? "selected" : ""}" data-game-id="${escapeHtml(game.id)}" role="button" tabindex="0" title="Нажмите, чтобы выбрать игру">
           <div class="hv-game-symbol hv-cover hv-game-cover" data-artwork-key="${escapeHtml(artworkKey(game))}">${coverMarkup(game)}</div>
@@ -312,6 +336,7 @@
             <div class="hv-game-bottom">
               <div class="hv-game-actions">
                 ${selected ? '<span class="hv-active-game"><i></i>Активна</span>' : ''}
+                ${shortcutBtn}
                 <button class="hv-game-action danger ${confirm ? "confirm" : ""}" data-hv-action="remove" data-game-id="${escapeHtml(game.id)}" ${state.running ? "disabled" : ""}>${confirm ? "Точно удалить?" : "Удалить"}</button>
               </div>
             </div>
@@ -335,6 +360,14 @@
       $("#hv-selected-state").className = "";
       $("#hv-ready-status").textContent = "Нет игры";
       updateLaunchButton();
+      const selShortcutBtn = $("#hv-selected-shortcut-btn");
+      if (selShortcutBtn) {
+        selShortcutBtn.disabled = true;
+        selShortcutBtn.classList.remove("active");
+        const span = selShortcutBtn.querySelector("span");
+        if (span) span.textContent = "Ярлык";
+        selShortcutBtn.title = "Выберите игру для создания ярлыка";
+      }
       return;
     }
     if (!state.running && typeof status?.game_running === "boolean") {
@@ -346,6 +379,16 @@
     $("#hv-selected-state").className = "ready";
     $("#hv-ready-status").textContent = "Готово";
     updateLaunchButton();
+
+    const selShortcutBtn = $("#hv-selected-shortcut-btn");
+    if (selShortcutBtn) {
+      selShortcutBtn.disabled = false;
+      const has = Boolean(game.shortcut_path);
+      selShortcutBtn.classList.toggle("active", has);
+      const span = selShortcutBtn.querySelector("span");
+      if (span) span.textContent = has ? "Удалить ярлык" : "Ярлык";
+      selShortcutBtn.title = has ? "Удалить ярлык с рабочего стола" : "Создать ярлык на рабочем столе";
+    }
   }
 
   async function refreshAll(silent = false) {
@@ -360,6 +403,32 @@
     }
   }
 
+  // Создание ярлыка на рабочем столе для выбранной игры
+  async function createShortcut(id) {
+    try {
+      const path = await call("create_game_shortcut", { id });
+      appendLog("success", `Ярлык успешно создан: ${path}`);
+      window.cgsToast?.("Ярлык на рабочем столе создан!", "success");
+      await refreshAll(true);
+    } catch (err) {
+      appendLog("error", `Ошибка создания ярлыка: ${err}`);
+      window.cgsToast?.(`Не удалось создать ярлык: ${err}`, "error");
+    }
+  }
+
+  // Удаление ярлыка с рабочего стола
+  async function removeShortcut(id) {
+    try {
+      await call("remove_game_shortcut", { id });
+      appendLog("info", "Ярлык на рабочем столе удалён.");
+      window.cgsToast?.("Ярлык на рабочем столе удалён", "info");
+      await refreshAll(true);
+    } catch (err) {
+      appendLog("error", `Ошибка удаления ярлыка: ${err}`);
+      window.cgsToast?.(`Не удалось удалить ярлык: ${err}`, "error");
+    }
+  }
+
   async function addGame() {
     if (state.running) return;
     try {
@@ -367,11 +436,16 @@
       if (!exePath) return;
       setBusy(true, "Подготовка");
       appendLog("info", `Выбран EXE: ${exePath}`);
-      const library = await call("add_game", { exePath, launcherId: "hv_launcher" });
+      const createShortcutFlag = isShortcutsEnabled();
+      const library = await call("add_game", { exePath, launcherId: "hv_launcher", createShortcut: createShortcutFlag });
       applyLibrary(library);
       await refreshAll(true);
-    refreshEclipseHvStatus();
-      appendLog("success", "Игра добавлена в библиотеку гипервизора.");
+      refreshEclipseHvStatus();
+      if (createShortcutFlag) {
+        appendLog("success", "Игра добавлена и создан ярлык на рабочем столе.");
+      } else {
+        appendLog("success", "Игра добавлена в библиотеку гипервизора.");
+      }
     } catch (error) {
       appendLog("error", String(error));
     } finally {
@@ -392,7 +466,8 @@
   async function verifyGame(id) {
     try {
       setBusy(true, "Проверка");
-      const library = await call("verify_game", { id });
+      const createShortcutFlag = isShortcutsEnabled();
+      const library = await call("verify_game", { id, createShortcut: createShortcutFlag });
       applyLibrary(library);
       appendLog("success", "Файлы игры проверены и восстановлены при необходимости.");
     } catch (error) {
@@ -690,7 +765,26 @@ ${destShort}
     $("#hv-eclipse-download-btn")?.addEventListener("click", downloadEclipseHv);
     $("#hv-copy-log")?.addEventListener("click", copyLog);
     $("#hv-clear-log")?.addEventListener("click", () => { $("#hv-log").innerHTML = ""; });
+    $("#hv-setting-desktop-shortcut")?.addEventListener("change", (e) => setShortcutsEnabled(e.target.checked));
+    $("#settings-hv-desktop-shortcut")?.addEventListener("change", (e) => setShortcutsEnabled(e.target.checked));
+    $("#hv-selected-shortcut-btn")?.addEventListener("click", () => {
+      const game = selectedGame();
+      if (!game) return;
+      if (game.shortcut_path) removeShortcut(game.id);
+      else createShortcut(game.id);
+    });
+
     $("#hv-game-list")?.addEventListener("click", (event) => {
+      const createBtn = event.target.closest('[data-hv-action="create-shortcut"]');
+      if (createBtn) {
+        createShortcut(createBtn.dataset.gameId);
+        return;
+      }
+      const removeShortcutBtn = event.target.closest('[data-hv-action="remove-shortcut"]');
+      if (removeShortcutBtn) {
+        removeShortcut(removeShortcutBtn.dataset.gameId);
+        return;
+      }
       const removeBtn = event.target.closest('[data-hv-action="remove"]');
       if (removeBtn) {
         if (!removeBtn.disabled) removeGame(removeBtn.dataset.gameId);
@@ -723,6 +817,7 @@ ${destShort}
     if (state.initialized) return;
     state.initialized = true;
     renderSteps();
+    syncShortcutToggles(isShortcutsEnabled());
     bindEvents();
     appendLog("info", "Модуль «Гипервизор» готов.");
     if (listen) {

@@ -499,7 +499,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .dl-card {
   position: relative; display: flex; flex-direction: column; padding: 36px;
   border: 1px solid var(--line); border-radius: var(--r); background: var(--bg-1); overflow: hidden;
-  transition: border-color .4s ease;
+  transition: border-color .4s ease; min-width: 0;
 }
 .dl-card:hover { border-color: var(--line-2); }
 .dl-card.is-main { background: linear-gradient(160deg, #141414, #0a0a0a 60%); border-color: var(--line-2); }
@@ -522,10 +522,10 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .badge-accent { color: var(--accent-ink); border-color: var(--accent); background: var(--accent); font-weight: 500; }
 .dl-card h3 { margin: 32px 0 8px; font-size: 30px; font-weight: 500; letter-spacing: -.035em; }
 .dl-desc { margin: 0; color: var(--mut); font-size: 15px; max-width: 420px; }
-.dl-meta { margin: 28px 0 32px; display: grid; gap: 0; border-top: 1px solid var(--line); }
-.dl-meta div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
-.dl-meta dt { color: var(--mut-2); }
-.dl-meta dd { margin: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-meta { margin: 28px 0 32px; display: grid; gap: 0; border-top: 1px solid var(--line); min-width: 0; }
+.dl-meta div { display: flex; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 14px; min-width: 0; }
+.dl-meta dt { color: var(--mut-2); flex-shrink: 0; }
+.dl-meta dd { margin: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .dl-actions { margin-top: auto; display: grid; gap: 16px; justify-items: center; width: 100%; }
 .link-arrow { font-size: 14px; color: var(--mut); transition: color .3s; background: none; border: 0; cursor: pointer; padding: 0; }
 .link-arrow i { display: inline-block; font-style: normal; transition: transform .4s var(--ease); }
@@ -1371,6 +1371,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 
 /* ---------- Адаптив ---------- */
 @media (max-width: 960px) {
+  html { scrollbar-gutter: auto; }
   /* Мобильное меню на весь экран: страница под ним не просвечивает и не кликается */
   .nav {
     /* Высота через vh: у шапки при прокрутке есть backdrop-filter, и fixed-потомок считается от неё */
@@ -1404,7 +1405,8 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   .showcase-view { order: -1; position: sticky; top: 68px; z-index: 5; height: auto; }
   .showcase-sticky { position: static; padding-bottom: 12px; background: var(--bg); }
   .showcase-caption { display: none; }
-  .dl-grid { grid-template-columns: 1fr; }
+  .dl-grid { grid-template-columns: minmax(0, 1fr); }
+  .dl-card.is-main::before { right: 0; top: 0; width: 100%; height: 100%; }
   .comm-row { grid-template-columns: 40px 1fr auto; }
   .comm-handle { display: none; }
 }
@@ -1433,6 +1435,8 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   .diff-col { padding: 24px; }
   .dl-card { padding: 24px; }
   .dl-card h3 { font-size: 26px; }
+  .dl-meta div { gap: 8px; padding: 10px 0; align-items: baseline; }
+  .dl-meta dd { white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
   .comm-row { grid-template-columns: 1fr auto; gap: 16px; padding: 24px 0; }
   .comm-num { display: none; }
   .copy-btn { display: none; }
@@ -1450,7 +1454,9 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   .games-filters { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -8px; padding: 0 8px; }
   .games-filters::-webkit-scrollbar { display: none; }
   .games-chip { height: 34px; padding: 0 12px; }
-  .games-tools { margin-left: 0; width: 100%; padding: 2px 0 0 4px; }
+  .games-tools { margin-left: 0; width: 100%; padding: 2px 0 0 4px; flex-wrap: wrap; justify-content: space-between; gap: 8px; min-width: 0; }
+  .games-stats, .games-sort { min-width: 0; }
+  .games-sort-btn { max-width: 100%; }
   .games-view { display: none; }
   .games-sort-btn { height: 34px; padding: 0 10px 0 12px; }
   .games-sort-menu { width: min(300px, calc(100vw - 40px)); }

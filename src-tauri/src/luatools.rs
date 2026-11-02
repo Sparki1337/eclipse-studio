@@ -1838,7 +1838,7 @@ pub fn luatools_get_loader_info(app: AppHandle, steam_path: Option<String>) -> M
     ManifestLoaderInfo {
         loader_source: source,
         v1_name: "Версия 1 (Основная)".into(),
-        v1_desc: "Основная стабильная сборка OpenSteamTool (1.57 МБ)".into(),
+        v1_desc: "Основная стабильная сборка OpenSteamTool (1.58 МБ)".into(),
         v2_name: "Версия 2 (Альтернативная)".into(),
         v2_desc: "Альтернативная встроенная сборка OpenSteamTool (1.75 МБ). Включайте, если не работает основная версия.".into(),
         active_in_steam,

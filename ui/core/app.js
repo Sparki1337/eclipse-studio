@@ -28,6 +28,7 @@
   }
 
   const state = {
+    version: "8.3.0",
     gameDir: "",
     appid: null,
     gameName: "",
@@ -2418,7 +2419,9 @@
     // 1. Версия программы (без суффикса Portable x64, так как других сборок нет)
     const appVerEl = $("#about-app-version");
     if (appVerEl) {
-      appVerEl.textContent = state.version || "8.0.0";
+      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "8.3.0";
+      state.version = currentVer;
+      appVerEl.textContent = currentVer;
     }
 
     // 2. Версия Eclipse HV (без буквы v)
@@ -2906,6 +2909,11 @@
       }
 
       $("#update-current-version").textContent = update.currentVersion;
+      state.version = update.currentVersion;
+      const aboutVerEl = $("#about-app-version");
+      if (aboutVerEl) {
+        aboutVerEl.textContent = update.currentVersion;
+      }
       if (!update.available) {
         renderUpdateDownloads();
         status.textContent = isEn ? `Latest version ${update.currentVersion} is installed` : `Установлена актуальная версия ${update.currentVersion}`;
@@ -3356,7 +3364,7 @@
     updateRyuuKeyStatus();
     renderLoaderInfo();
     updateAboutInfo();
-    log("Eclipse Studio 8.2.0 инициализирован", "system");
+    log("Eclipse Studio 8.3.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный вызов отображения окна, если заставка была отключена в параметрах

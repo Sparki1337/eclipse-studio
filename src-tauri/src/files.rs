@@ -495,7 +495,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/8.2.0")
+        .user_agent("EclipseStudio/8.3.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -757,7 +757,7 @@ fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, Str
         "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(30))
-        .user_agent("Eclipse-Studio/8.0.0")
+        .user_agent(concat!("Eclipse-Studio/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| format!("Ошибка создания HTTP клиента: {e}"))?;
 

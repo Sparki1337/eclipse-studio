@@ -20,7 +20,32 @@
     return invoke(command, args);
   }
 
-  function setTab(name) {
+  // Переключение вкладок гипервизора с проверкой прав администратора для защищённых разделов
+  async function setTab(name) {
+    if (name === "protections") {
+      try {
+        const elevated = await call("process_is_elevated");
+        if (!elevated) {
+          const tabTitle = "«Управление защитами»";
+          const title = "Требуются права администратора";
+          const message = `Для доступа к разделу ${tabTitle} требуются права администратора Windows.\n\nПерезапустить приложение от имени администратора?`;
+          const confirmed = typeof window.cgsShowModal === "function"
+            ? await window.cgsShowModal(title, message, {
+                confirm: true,
+                confirmText: "Перезапустить",
+                cancelText: "Отмена",
+                symbol: "🛡️"
+              })
+            : window.confirm(`${title}\n\n${message}`);
+          if (confirmed) {
+            await call("relaunch_as_admin");
+          }
+          return;
+        }
+      } catch (err) {
+        console.warn("Ошибка проверки прав администратора:", err);
+      }
+    }
     $$('[data-hv-tab]').forEach((button) => {
       const active = button.dataset.hvTab === name;
       button.classList.toggle("active", active);
@@ -147,9 +172,9 @@
   }
 
   function bindEvents() {
-    $(".hv-module-tabs")?.addEventListener("click", (event) => {
+    $(".hv-module-tabs")?.addEventListener("click", async (event) => {
       const button = event.target.closest("[data-hv-tab]");
-      if (button) setTab(button.dataset.hvTab);
+      if (button) await setTab(button.dataset.hvTab);
     });
     $("#ac-scan-button")?.addEventListener("click", scan);
     $("#ac-restore-button")?.addEventListener("click", restore);
@@ -163,5 +188,13 @@
   bindEvents();
   let initialTab = "hypervisor";
   try { initialTab = window.cgsStorage.getItem("cgs-hv-tab") || initialTab; } catch (_) {}
-  setTab(["hypervisor", "anticheat", "vbs"].includes(initialTab) ? initialTab : "hypervisor");
+  const targetTab = ["hypervisor", "anticheat", "vbs", "protections"].includes(initialTab) ? initialTab : "hypervisor";
+  if (targetTab === "protections" || targetTab === "vbs") {
+    call("process_is_elevated").then((elevated) => {
+      if (elevated) setTab(targetTab);
+      else setTab("hypervisor");
+    }).catch(() => setTab("hypervisor"));
+  } else {
+    setTab(targetTab);
+  }
 })();

@@ -56,9 +56,12 @@
       "#vbs-disable-button",
       "#vbs-test-button",
       "#vbs-uefi-optout-btn",
+      "#vbs-diag-wmi",
       "#vbs-fix-wmi",
-      "#vbs-run-sfc",
-      "#vbs-run-dism"
+      "#vbs-diag-sfc",
+      "#vbs-fix-sfc",
+      "#vbs-diag-dism",
+      "#vbs-fix-dism"
     ];
 
     buttons.forEach((selector) => {
@@ -345,9 +348,21 @@
       if (!(await confirmChange(mode))) return;
       setBusy(false, testMode ? (mode === "test-enable" ? "Включение тестового режима…" : "Выключение тестового режима…") : (enabling ? "Включение визора…" : (rollbackMode ? "Откат визора…" : "Выключение визора…")));
 
+      let allowUefi = false;
+      if (enabling && state.report?.uefiLock?.isLocked) {
+        const uefiConsent = typeof window.cgsShowModal === "function"
+          ? await window.cgsShowModal(
+              "Обнаружена аппаратная блокировка UEFI",
+              "В системе активен UEFI Lock (VBS защищён прошивкой материнской платы).\n\nНастроить автоматический UEFI Opt-Out (SecConfig.efi) в EFI-раздел для отключения защиты при перезагрузке?",
+              { confirm: true, confirmText: "Настроить UEFI Opt-Out", cancelText: "Продолжить без UEFI", symbol: "⚠️" }
+            )
+          : false;
+        allowUefi = Boolean(uefiConsent);
+      }
+
       const result = testMode
-        ? await call("vbs_set_test_mode", { enabled: mode === "test-enable" })
-        : await call(enabling ? "vbs_disable" : "vbs_restore");
+        ? await call("vbs_set_test_mode", { enabled: mode === "test-enable", allowUefi })
+        : (enabling ? await call("vbs_disable", { allowUefi }) : await call("vbs_restore"));
 
       const lines = [result.message, `Изменено параметров: ${result.changed || 0}`];
       if (result.restartRequired) lines.push("Для применения изменений требуется перезагрузка Windows.");
@@ -379,9 +394,37 @@
     }
   }
 
-  // Изменение EFI запрещено до появления проверенного симметричного отката.
+  // Настройка UEFI Opt-Out (SecConfig.efi) с симметричным восстановлением
   async function prepareUefiOptOut() {
-    await window.cgsShowModal?.("Автоматическое изменение UEFI отключено", "Для этой операции пока нет проверенного симметричного восстановления EFI и BCD. Программа не монтирует EFI-раздел и не меняет загрузку. Используйте официальную процедуру Microsoft только после подготовки ключа восстановления BitLocker.", { symbol: "!" });
+    if (state.scanning || state.changing || state.troubleshooting) return;
+    if (!(await ensureAdmin())) return;
+
+    const title = "Настроить UEFI Opt-Out (SecConfig.efi)?";
+    const message = "Программа смонтирует системный EFI-раздел, скопирует официальный инструмент Microsoft SecConfig.efi и зарегистрирует загрузочную запись DGOptOut в BCD.\n\n" +
+      "При следующей перезагрузке микрокод материнской платы покажет экран подтверждения отключения аппаратной защиты VBS.\n\n" +
+      "Защита BitLocker будет автоматически приостановлена на время перезагрузки, чтобы не требовался ключ восстановления.";
+
+    const confirmed = typeof window.cgsShowModal === "function"
+      ? await window.cgsShowModal(title, message, { confirm: true, confirmText: "Настроить", cancelText: "Отмена", symbol: "⚠️" })
+      : window.confirm(`${title}\n\n${message}`);
+    if (!confirmed) return;
+
+    state.changing = true;
+    setBusy(true, "Настройка SecConfig.efi…");
+    try {
+      const result = await call("vbs_prepare_uefi_optout");
+      if (typeof window.cgsShowModal === "function") {
+        await window.cgsShowModal(result.success ? "SecConfig.efi настроен" : "Настройка не удалась", result.message, { symbol: result.success ? "✓" : "!" });
+      }
+    } catch (err) {
+      if (typeof window.cgsShowModal === "function") {
+        await window.cgsShowModal("Ошибка UEFI Opt-Out", String(err), { symbol: "!" });
+      }
+    } finally {
+      state.changing = false;
+      setBusy(false);
+      await scan();
+    }
   }
 
   // Отключение службы FACEIT, вызывающей блокировку гипервизорного драйвера
@@ -476,6 +519,74 @@
     }
   }
 
+  // Выполнение активного восстановления компонентов Windows (WMI, SFC, DISM)
+  async function runRepair(kind) {
+    if (state.scanning || state.changing || state.troubleshooting) return;
+    if (!(await ensureAdmin())) return;
+
+    const descriptions = {
+      wmi: {
+        title: "Восстановить репозиторий WMI?",
+        prompt: "Будет выполнена остановка службы winmgmt, восстановление /salvagerepository или сброс /resetrepository, перерегистрация библиотек WMI и перезапуск службы.",
+        busy: "Восстановление репозитория WMI…"
+      },
+      sfc: {
+        title: "Запустить ремонт системных файлов SFC?",
+        prompt: "Команда sfc /scannow проверит и автоматически восстановит повреждённые системные файлы Windows. Процесс может занять несколько минут.",
+        busy: "Восстановление системных файлов (SFC /scannow)…"
+      },
+      dism: {
+        title: "Запустить восстановление хранилища DISM?",
+        prompt: "Команда DISM /Online /Cleanup-Image /RestoreHealth восстановит хранилище компонентов Windows через Центр обновления. Процесс может занять несколько минут.",
+        busy: "Восстановление хранилища компонентов DISM…"
+      }
+    };
+
+    const cfg = descriptions[kind] || {
+      title: "Выполнить восстановление?",
+      prompt: "Будет запущена операция восстановления системных компонентов Windows.",
+      busy: "Выполнение восстановления…"
+    };
+
+    const confirmed = typeof window.cgsShowModal === "function"
+      ? await window.cgsShowModal(cfg.title, cfg.prompt, { confirm: true, confirmText: "Восстановить", cancelText: "Отмена", symbol: "🔧" })
+      : window.confirm(`${cfg.title}\n\n${cfg.prompt}`);
+    if (!confirmed) return;
+
+    state.troubleshooting = true;
+    setBusy(true, cfg.busy);
+
+    const logPanel = $("#vbs-log-panel");
+    const log = $("#vbs-log");
+    if (logPanel && log) {
+      logPanel.classList.remove("hidden");
+      log.textContent = `[${new Date().toLocaleTimeString()}] Запуск восстановления (${kind.toUpperCase()})…\n`;
+    }
+
+    try {
+      const output = await call("vbs_repair", { kind });
+      if (logPanel && log) {
+        logPanel.classList.remove("hidden");
+        log.textContent = output;
+      }
+      if (typeof window.cgsShowModal === "function") {
+        await window.cgsShowModal("Восстановление завершено", output, { symbol: "✓" });
+      }
+    } catch (error) {
+      if (logPanel && log) {
+        logPanel.classList.remove("hidden");
+        log.textContent += `\nОшибка: ${error}`;
+      }
+      if (typeof window.cgsShowModal === "function") {
+        await window.cgsShowModal("Ошибка восстановления", String(error), { symbol: "!" });
+      }
+    } finally {
+      state.troubleshooting = false;
+      setBusy(false);
+      await scan();
+    }
+  }
+
   // Принудительное включение всех механизмов защиты системы Windows (VBS, HVCI, Blocklist, etc.)
   async function enableAll() {
     if (state.scanning || state.changing || state.troubleshooting) return;
@@ -561,10 +672,35 @@
     }
   });
 
-  // Диагностические инструменты
-  $("#vbs-fix-wmi")?.addEventListener("click", () => runTroubleshoot("wmi"));
-  $("#vbs-run-sfc")?.addEventListener("click", () => runTroubleshoot("sfc"));
-  $("#vbs-run-dism")?.addEventListener("click", () => runTroubleshoot("dism"));
+  // Потоковый вывод прогресса в реальном времени
+  function appendProgress(line) {
+    const logPanel = $("#vbs-log-panel");
+    const log = $("#vbs-log");
+    if (logPanel && log) {
+      logPanel.classList.remove("hidden");
+      log.textContent += (log.textContent ? "\n" : "") + line;
+      log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  if (window.__TAURI__?.event?.listen) {
+    window.__TAURI__.event.listen("vbs-progress", (event) => {
+      const payload = event?.payload ?? event;
+      if (typeof payload === "string") {
+        appendProgress(payload);
+      } else if (payload?.message) {
+        appendProgress(payload.message);
+      }
+    });
+  }
+
+  // Инструменты системной диагностики и ремонта Windows
+  $("#vbs-diag-wmi")?.addEventListener("click", () => runTroubleshoot("wmi"));
+  $("#vbs-fix-wmi")?.addEventListener("click", () => runRepair("wmi"));
+  $("#vbs-diag-sfc")?.addEventListener("click", () => runTroubleshoot("sfc"));
+  $("#vbs-fix-sfc")?.addEventListener("click", () => runRepair("sfc"));
+  $("#vbs-diag-dism")?.addEventListener("click", () => runTroubleshoot("dism"));
+  $("#vbs-fix-dism")?.addEventListener("click", () => runRepair("dism"));
 
 
   // ==================== Управление отдельными защитами ====================

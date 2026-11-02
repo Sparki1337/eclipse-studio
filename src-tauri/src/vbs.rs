@@ -7,7 +7,7 @@ use std::{
     path::PathBuf,
     process::{Command, Output},
 };
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use winreg::{
     enums::{HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY, KEY_WRITE},
     RegKey,
@@ -422,6 +422,14 @@ struct VbsSnapshot {
     kva_shadow: Option<bool>,
     #[serde(default)]
     faceit_disabled: Option<bool>,
+    #[serde(default)]
+    uefi_optout_configured: bool,
+    #[serde(default)]
+    efi_backup: Option<Vec<u8>>,
+    #[serde(default)]
+    efi_file_existed: bool,
+    #[serde(default)]
+    bitlocker_was_suspended: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -449,12 +457,15 @@ pub(crate) async fn vbs_scan(app: AppHandle) -> Result<VbsReport, String> {
 
 // Отключение VBS и подготовка к запуску неподписанных драйверов
 #[tauri::command]
-pub(crate) async fn vbs_disable(app: AppHandle) -> Result<VbsChangeResult, String> {
+pub(crate) async fn vbs_disable(
+    app: AppHandle,
+    allow_uefi: Option<bool>,
+) -> Result<VbsChangeResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         crate::jobs::run(
             &[crate::jobs::system_resource(&app)],
             "Изменение VBS",
-            || disable_vbs(&app, BootMode::AdvancedOptions),
+            || disable_vbs(&app, BootMode::AdvancedOptions, allow_uefi.unwrap_or(false)),
         )?
     })
     .await
@@ -499,6 +510,7 @@ pub(crate) async fn vbs_enable_all(
 pub(crate) async fn vbs_set_test_mode(
     app: AppHandle,
     enabled: bool,
+    allow_uefi: Option<bool>,
 ) -> Result<VbsChangeResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         crate::jobs::run(
@@ -506,7 +518,7 @@ pub(crate) async fn vbs_set_test_mode(
             "Тестовый режим Windows",
             || {
                 if enabled {
-                    disable_vbs(&app, BootMode::TestSigning)
+                    disable_vbs(&app, BootMode::TestSigning, allow_uefi.unwrap_or(false))
                 } else {
                     restore_vbs(&app, true)
                 }
@@ -555,8 +567,33 @@ pub(crate) fn vbs_restart() -> Result<(), String> {
 
 // Подготовка снятия аппаратной блокировки UEFI через SecConfig.efi
 #[tauri::command]
-pub(crate) async fn vbs_prepare_uefi_optout() -> Result<String, String> {
-    Err("Автоматическое изменение EFI/UEFI отключено: для него не реализован проверяемый симметричный откат. Параметры EFI не изменялись.".into())
+pub(crate) async fn vbs_prepare_uefi_optout(
+    app: AppHandle,
+    allow_uefi: Option<bool>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::jobs::run(
+            &[crate::jobs::system_resource(&app)],
+            "Подготовка снятия блокировок UEFI",
+            || setup_uefi_optout_inner(&app, allow_uefi.unwrap_or(false)),
+        )?
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// Активное восстановление подсистем Windows (Fix WMI, DISM RestoreHealth, SFC Scannow)
+#[tauri::command]
+pub(crate) async fn vbs_repair(app: AppHandle, kind: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::jobs::run(
+            &[crate::jobs::system_resource(&app)],
+            "Восстановление Windows",
+            || run_repair_inner(&app, &kind),
+        )?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -608,18 +645,249 @@ pub(crate) async fn vbs_disable_faceit(app: AppHandle) -> Result<String, String>
     .map_err(|e| e.to_string())?
 }
 
-// Инструменты устранения системных неполадок (WMI, SFC, DISM)
+// Диагностика подсистем Windows (WMI, SFC, DISM) без внесения изменений
 #[tauri::command]
 pub(crate) async fn vbs_troubleshoot(app: AppHandle, action: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::jobs::run(&[crate::jobs::system_resource(&app)], "Диагностика Windows без изменений", || {
-        let output = match action.as_str() {
-            "wmi"=>run_command("winmgmt.exe", &["/verifyrepository"]),
-            "sfc"=>run_command("sfc.exe", &["/verifyonly"]),
-            "dism"=>run_command("dism.exe", &["/online","/cleanup-image","/scanhealth"]),
-            _=>return Err("Неизвестная диагностика".into())
-        }?;
-        Ok(format!("Диагностика без автоматического ремонта завершена. Это не утверждение об отсутствии проблем.\n{}",String::from_utf8_lossy(&output.stdout)))
-    })?).await.map_err(|e|e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::jobs::run(
+            &[crate::jobs::system_resource(&app)],
+            "Диагностика Windows",
+            || run_troubleshoot_inner(&app, &action),
+        )?
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+
+const OPT_OUT_GUID: &str = "{0cb3b571-2f2e-4343-a879-d86a476d7215}";
+
+// Определение абсолютного пути к системным утилитам Windows в System32
+fn system_tool(name: &str) -> PathBuf {
+    PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()))
+        .join("System32")
+        .join(name)
+}
+
+// Монтирование скрытого раздела EFI на свободную букву диска от S до Z
+fn efi_mount() -> Result<String, String> {
+    for letter in 'S'..='Z' {
+        let drive = format!("{letter}:");
+        if !std::path::Path::new(&format!("{drive}\\")).exists() {
+            run_command("mountvol.exe", &[&drive, "/s"])?;
+            return Ok(drive);
+        }
+    }
+    Err("Нет свободной буквы S–Z для монтирования раздела EFI.".into())
+}
+
+// Сохранение обновлённого снимка параметров VBS
+fn save_snapshot(app: &AppHandle, snapshot: &VbsSnapshot) -> Result<(), String> {
+    let path = snapshot_path(app)?;
+    let data = crate::secure_state::crypt(
+        &serde_json::to_vec_pretty(snapshot).map_err(|e| e.to_string())?,
+        true,
+    )?;
+    crate::durable::write(&path, &data)?;
+    Ok(())
+}
+
+// Подготовка сценария SecConfig.efi в разделе EFI и BCD для снятия блокировок UEFI
+fn setup_uefi_optout_inner(app: &AppHandle, allow_uefi: bool) -> Result<String, String> {
+    if !is_admin() {
+        return Err("Для изменения параметров UEFI требуются права администратора.".into());
+    }
+    if !allow_uefi {
+        return Err("Требуется подтверждение снятия блокировок UEFI.".into());
+    }
+    let sec_config_src = system_tool("SecConfig.efi");
+    if !sec_config_src.is_file() {
+        return Err("Файл SecConfig.efi не найден в System32.".into());
+    }
+    let drive = efi_mount()?;
+    let result = (|| -> Result<String, String> {
+        let target_dir = PathBuf::from(format!(r"{drive}\EFI\Microsoft\Boot"));
+        fs::create_dir_all(&target_dir).map_err(|e| format!("Не удалось создать папку EFI: {e}"))?;
+        let target_file = target_dir.join("SecConfig.efi");
+
+        let mut snapshot = ensure_snapshot(app)?;
+        if !snapshot.uefi_optout_configured {
+            snapshot.efi_file_existed = target_file.is_file();
+            snapshot.efi_backup = if snapshot.efi_file_existed {
+                Some(fs::read(&target_file).map_err(|e| format!("Ошибка чтения SecConfig.efi: {e}"))?)
+            } else {
+                None
+            };
+            snapshot.uefi_optout_configured = true;
+            save_snapshot(app, &snapshot)?;
+        }
+
+        fs::copy(&sec_config_src, &target_file)
+            .map_err(|e| format!("Ошибка копирования SecConfig.efi в EFI: {e}"))?;
+
+        if run_command("bcdedit.exe", &["/enum", OPT_OUT_GUID]).is_err() {
+            run_command(
+                "bcdedit.exe",
+                &[
+                    "/create",
+                    OPT_OUT_GUID,
+                    "/d",
+                    "DGOptOut",
+                    "/application",
+                    "osloader",
+                ],
+            )?;
+        }
+
+        for (name, value) in [
+            ("path", r"\EFI\Microsoft\Boot\SecConfig.efi"),
+            ("loadoptions", "DISABLE-LSA-ISO,DISABLE-VBS"),
+        ] {
+            run_command("bcdedit.exe", &["/set", OPT_OUT_GUID, name, value])?;
+        }
+        run_command("bcdedit.exe", &["/set", OPT_OUT_GUID, "device", &format!("partition={drive}")])?;
+        run_command("bcdedit.exe", &["/set", "{bootmgr}", "bootsequence", OPT_OUT_GUID])?;
+
+        let _ = app.emit("vbs-progress", "SecConfig.efi подготовлен в разделе EFI. BCD bootsequence настроен.");
+        Ok("Параметры SecConfig.efi успешно подготовлены. При перезагрузке подтвердите изменение UEFI на экране компьютера.".into())
+    })();
+    let _ = run_command("mountvol.exe", &[&drive, "/d"]);
+    result
+}
+
+// Симметричное восстановление исходного SecConfig.efi и очистка BCD
+fn restore_uefi_optout_inner(snapshot: &VbsSnapshot) -> Result<(), String> {
+    if !snapshot.uefi_optout_configured {
+        return Ok(());
+    }
+    let _ = run_command("bcdedit.exe", &["/delete", OPT_OUT_GUID]);
+    let drive = efi_mount()?;
+    let target_file = PathBuf::from(format!(r"{drive}\EFI\Microsoft\Boot\SecConfig.efi"));
+    let res = if let Some(bytes) = &snapshot.efi_backup {
+        fs::write(&target_file, bytes).map_err(|e| format!("Ошибка восстановления SecConfig.efi: {e}"))
+    } else if !snapshot.efi_file_existed && target_file.exists() {
+        fs::remove_file(&target_file).map_err(|e| format!("Ошибка удаления SecConfig.efi: {e}"))
+    } else {
+        Ok(())
+    };
+    let _ = run_command("mountvol.exe", &[&drive, "/d"]);
+    res
+}
+
+// Запуск системной утилиты с потоковой трансляцией строк вывода в реальном времени
+fn stream_command_progress(app: &AppHandle, program: &str, args: &[&str]) -> Result<(i32, String), String> {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let sys = system_tool(program);
+    let mut command = Command::new(if sys.is_file() { sys } else { PathBuf::from(program) });
+    command.args(args);
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = command.spawn().map_err(|e| format!("{program}: {e}"))?;
+    let mut full_output = Vec::new();
+
+    if let Some(stdout) = child.stdout.take() {
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            if let Ok(line) = line {
+                let _ = app.emit("vbs-progress", &line);
+                full_output.push(line);
+            }
+        }
+    }
+
+    let status = child.wait().map_err(|e| format!("{program}: {e}"))?;
+    Ok((status.code().unwrap_or(-1), full_output.join("\n")))
+}
+
+// Выполнение реального восстановления подсистем Windows
+fn run_repair_inner(app: &AppHandle, kind: &str) -> Result<String, String> {
+    if !is_admin() {
+        return Err("Для восстановления системы требуются права администратора.".into());
+    }
+    match kind {
+        "wmi" => fix_wmi_inner(app),
+        "dism" => {
+            let _ = app.emit("vbs-progress", "Запуск DISM RestoreHealth...");
+            let (code, output) = stream_command_progress(app, "dism.exe", &["/Online", "/English", "/Cleanup-Image", "/RestoreHealth"])?;
+            let _ = app.emit("vbs-progress", format!("DISM завершён с кодом {code}"));
+            Ok(output)
+        }
+        "sfc" => {
+            let _ = app.emit("vbs-progress", "Запуск SFC Scannow...");
+            let (code, output) = stream_command_progress(app, "sfc.exe", &["/scannow"])?;
+            let _ = app.emit("vbs-progress", format!("SFC завершён с кодом {code}"));
+            Ok(output)
+        }
+        other => Err(format!("Неизвестный тип восстановления: {other}")),
+    }
+}
+
+// Безопасное восстановление WMI без повреждения Windows Server
+fn fix_wmi_inner(app: &AppHandle) -> Result<String, String> {
+    if let Ok(k) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion") {
+        if let Ok(installation_type) = k.get_value::<String, _>("InstallationType") {
+            if installation_type.to_lowercase().contains("server") {
+                return Err("Fix WMI не выполняет перестройку WMI на Windows Server.".into());
+            }
+        }
+    }
+    let _ = app.emit("vbs-progress", "Проверка работоспособности репозитория WMI...");
+
+    let verify = run_command("winmgmt.exe", &["/verifyrepository"]);
+    if let Ok(out) = verify {
+        let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
+        if text.contains("consistent") || text.contains("целостен") || text.contains("не поврежден") {
+            let _ = app.emit("vbs-progress", "Репозиторий WMI в норме, восстановление не требуется.");
+            return Ok("Репозиторий WMI целостен и не повреждён.".into());
+        }
+    }
+
+    let _ = app.emit("vbs-progress", "Остановка службы Winmgmt и зависимых служб...");
+    let _ = powershell_output("$ErrorActionPreference='SilentlyContinue'; Stop-Service Winmgmt -Force");
+
+    let _ = app.emit("vbs-progress", "Выполнение winmgmt.exe /salvagerepository...");
+    let salvage = run_command("winmgmt.exe", &["/salvagerepository"]);
+    let salvage_msg = match salvage {
+        Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
+        Err(e) => format!("Ошибка /salvagerepository: {e}"),
+    };
+    let _ = app.emit("vbs-progress", &salvage_msg);
+
+    let _ = app.emit("vbs-progress", "Запуск службы Winmgmt...");
+    let _ = run_command("sc.exe", &["start", "Winmgmt"]);
+
+    let _ = app.emit("vbs-progress", "Восстановление WMI завершено.");
+    Ok(format!("Восстановление WMI завершено:\n{salvage_msg}"))
+}
+
+// Диагностика подсистем Windows с потоковым выводом логов в терминал
+fn run_troubleshoot_inner(app: &AppHandle, action: &str) -> Result<String, String> {
+    match action {
+        "wmi" => {
+            let _ = app.emit("vbs-progress", "Запуск диагностики репозитория WMI (/verifyrepository)...");
+            let (code, output) = stream_command_progress(app, "winmgmt.exe", &["/verifyrepository"])?;
+            let _ = app.emit("vbs-progress", format!("Проверка WMI завершена (код {code})"));
+            Ok(output)
+        }
+        "sfc" => {
+            let _ = app.emit("vbs-progress", "Запуск диагностики SFC (/verifyonly)...");
+            let (code, output) = stream_command_progress(app, "sfc.exe", &["/verifyonly"])?;
+            let _ = app.emit("vbs-progress", format!("Проверка SFC завершена (код {code})"));
+            Ok(output)
+        }
+        "dism" => {
+            let _ = app.emit("vbs-progress", "Запуск диагностики DISM (/scanhealth)...");
+            let (code, output) = stream_command_progress(app, "dism.exe", &["/Online", "/English", "/Cleanup-Image", "/ScanHealth"])?;
+            let _ = app.emit("vbs-progress", format!("Проверка DISM завершена (код {code})"));
+            Ok(output)
+        }
+        other => Err(format!("Неизвестное действие диагностики: {other}")),
+    }
 }
 
 // Сбор полного отчёта VBS 2.0
@@ -1162,7 +1430,7 @@ fn change_result(changed: usize, failed: Vec<String>, success_message: &str) -> 
         restart_required: changed > 0,
     }
 }
-fn disable_vbs(app: &AppHandle, mode: BootMode) -> Result<VbsChangeResult, String> {
+fn disable_vbs(app: &AppHandle, mode: BootMode, allow_uefi: bool) -> Result<VbsChangeResult, String> {
     if !is_admin() {
         return Err("Для изменения параметров запустите программу от имени администратора".into());
     }
@@ -1172,6 +1440,15 @@ fn disable_vbs(app: &AppHandle, mode: BootMode) -> Result<VbsChangeResult, Strin
     }
     let snapshot = ensure_snapshot(app)?;
     prepare_bitlocker(&snapshot)?;
+
+    // Проверка наличия аппаратных блокировок UEFI
+    let uefi = check_uefi_lock();
+    if uefi.is_locked {
+        if !allow_uefi {
+            return Err("Требуется подтверждение снятия блокировок UEFI.".into());
+        }
+        let _ = setup_uefi_optout_inner(app, true)?;
+    }
     let mut changed = 0;
     let mut failed = Vec::new();
     for target in REGISTRY_TARGETS {
@@ -1218,6 +1495,13 @@ fn restore_vbs(app: &AppHandle, _disable_test_mode: bool) -> Result<VbsChangeRes
     prepare_bitlocker(&snapshot)?;
     let mut changed = 0;
     let mut failed = Vec::new();
+
+    // Откат параметров SecConfig.efi и BCD DGOptOut, если они были настроены
+    if snapshot.uefi_optout_configured {
+        if let Err(e) = restore_uefi_optout_inner(&snapshot) {
+            failed.push(format!("Откат UEFI SecConfig: {e}"));
+        }
+    }
     for item in &snapshot.registry {
         let result = restore_registry(item);
         match result {
@@ -1757,13 +2041,52 @@ fn verify_dword(path: &str, name: &str, value: Option<u32>) -> Result<(), String
         _ => Err(format!("Не подтверждён параметр {path}\\{name}")),
     }
 }
+// Сопоставление имени параметра BCD с учётом внутренних шестнадцатеричных псевдонимов Windows (custom:25000129)
+fn matches_bcd_key(key: &str, name: &str) -> bool {
+    if key.eq_ignore_ascii_case(name) {
+        return true;
+    }
+    if name.eq_ignore_ascii_case("xsaveremovefeature") {
+        let clean = key.to_ascii_lowercase();
+        return clean == "custom:25000129"
+            || clean == "custom:0x25000129"
+            || clean == "25000129"
+            || clean == "0x25000129"
+            || clean.ends_with("25000129");
+    }
+    false
+}
+
+// Сравнение значений параметров BCD с учётом логических и числовых представлений
+fn bcd_values_match(name: &str, current: Option<&str>, expected: Option<&str>) -> bool {
+    match (current, expected) {
+        (None, None) => true,
+        (Some(_), None) | (None, Some(_)) => false,
+        (Some(c), Some(e)) => {
+            if name == "xsaveremovefeature" {
+                match (bcd_integer(c), bcd_integer(e)) {
+                    (Some(ci), Some(ei)) => ci == ei,
+                    _ => c.eq_ignore_ascii_case(e),
+                }
+            } else if ["testsigning", "onetimeadvancedoptions", "advancedoptions"].contains(&name) {
+                match (bcd_boolean(c), bcd_boolean(e)) {
+                    (Some(cb), Some(eb)) => cb == eb,
+                    _ => c.eq_ignore_ascii_case(e),
+                }
+            } else {
+                c.eq_ignore_ascii_case(e)
+            }
+        }
+    }
+}
+
 fn read_bcd(name: &str) -> Result<Option<String>, String> {
     let output = run_command("bcdedit.exe", &["/enum", "{current}"])?;
     let text = String::from_utf8_lossy(&output.stdout);
     Ok(text.lines().find_map(|line| {
         let mut parts = line.split_whitespace();
         let key = parts.next()?;
-        if !key.eq_ignore_ascii_case(name) {
+        if !matches_bcd_key(key, name) {
             return None;
         }
         let value = parts.collect::<Vec<_>>().join(" ");
@@ -1772,27 +2095,68 @@ fn read_bcd(name: &str) -> Result<Option<String>, String> {
                 bcd_boolean(&value)
                     .map(|v| if v { "on".into() } else { "off".into() })
                     .unwrap_or(value)
+            } else if name == "xsaveremovefeature" {
+                // Для маски XSAVE сохраняем нормализованное шестнадцатеричное число
+                bcd_integer(&value)
+                    .map(|num| format!("0x{num:x}"))
+                    .unwrap_or_else(|| value.to_ascii_lowercase())
             } else {
                 value.to_ascii_lowercase()
             },
         )
     }))
 }
+
 fn write_bcd(name: &str, value: Option<&str>) -> Result<(), String> {
     if !BCD_NAMES.contains(&name) {
         return Err("Неразрешённый параметр BCD".into());
     }
     let current = read_bcd(name)?;
-    let expected = value.map(|v| v.to_ascii_lowercase());
-    if current == expected {
+    let expected = value.map(|v| {
+        if name == "xsaveremovefeature" {
+            bcd_integer(v)
+                .map(|num| format!("0x{num:x}"))
+                .unwrap_or_else(|| v.to_ascii_lowercase())
+        } else if ["testsigning", "onetimeadvancedoptions", "advancedoptions"].contains(&name) {
+            bcd_boolean(v)
+                .map(|b| if b { "on".into() } else { "off".into() })
+                .unwrap_or_else(|| v.to_ascii_lowercase())
+        } else {
+            v.to_ascii_lowercase()
+        }
+    });
+
+    if bcd_values_match(name, current.as_deref(), expected.as_deref()) {
         return Ok(());
     }
-    if let Some(value) = value {
-        run_command("bcdedit.exe", &["/set", "{current}", name, value])?;
+
+    if let Some(val) = value {
+        if let Err(err) = run_command("bcdedit.exe", &["/set", "{current}", name, val]) {
+            // Если по имени не удалось записать xsaveremovefeature, пробуем через идентификатор типа custom:25000129
+            if name == "xsaveremovefeature" {
+                run_command("bcdedit.exe", &["/set", "{current}", "custom:25000129", val])
+                    .map_err(|_| err)?;
+            } else {
+                return Err(err);
+            }
+        }
     } else {
-        run_command("bcdedit.exe", &["/deletevalue", "{current}", name])?;
+        if let Err(err) = run_command("bcdedit.exe", &["/deletevalue", "{current}", name]) {
+            // Если по имени не удалось удалить xsaveremovefeature, пробуем через идентификатор типа custom:25000129
+            if name == "xsaveremovefeature" {
+                let _ = run_command("bcdedit.exe", &["/deletevalue", "{current}", "custom:25000129"]);
+            } else {
+                // Если элемент и так не существовал в хранилище BCD, bcdedit может возвращать ошибку отсутствия
+                let lower = err.to_ascii_lowercase();
+                if !lower.contains("не найден") && !lower.contains("not found") && !lower.contains("element not found") {
+                    return Err(err);
+                }
+            }
+        }
     }
-    if read_bcd(name)? != expected {
+
+    let updated = read_bcd(name)?;
+    if !bcd_values_match(name, updated.as_deref(), expected.as_deref()) {
         return Err(format!("BCD {name}: значение после записи не подтверждено"));
     }
     Ok(())
@@ -1869,6 +2233,10 @@ fn capture_snapshot() -> Result<VbsSnapshot, String> {
         test_signing: None,
         kva_shadow: None,
         faceit_disabled: None,
+        uefi_optout_configured: false,
+        efi_backup: None,
+        efi_file_existed: false,
+        bitlocker_was_suspended: false,
     })
 }
 
@@ -2183,5 +2551,20 @@ mod tests {
         assert_eq!(xsave_mask_warning("unexpected"), XSAVE_OTHER_MASK_WARNING);
         assert!(XSAVE_MASK_WARNING.starts_with("Маска XSAVE в загрузчике"));
         assert!(XSAVE_OTHER_MASK_WARNING.starts_with("Маска XSAVE в загрузчике"));
+    }
+
+    #[test]
+    fn bcd_matching_recognizes_custom_xsave_id() {
+        assert!(matches_bcd_key("xsaveremovefeature", "xsaveremovefeature"));
+        assert!(matches_bcd_key("custom:25000129", "xsaveremovefeature"));
+        assert!(matches_bcd_key("custom:0x25000129", "xsaveremovefeature"));
+        assert!(matches_bcd_key("25000129", "xsaveremovefeature"));
+        assert!(!matches_bcd_key("custom:25000128", "xsaveremovefeature"));
+
+        assert!(bcd_values_match("xsaveremovefeature", Some("0xfffffffffffffff8"), Some("0xFFFFFFFFFFFFFFF8")));
+        assert!(bcd_values_match("xsaveremovefeature", Some("18446744073709551608"), Some("0xfffffffffffffff8")));
+        assert!(bcd_values_match("xsaveremovefeature", None, None));
+        assert!(!bcd_values_match("xsaveremovefeature", Some("0xfffffffffffffff8"), None));
+        assert!(!bcd_values_match("xsaveremovefeature", None, Some("0xfffffffffffffff8")));
     }
 }

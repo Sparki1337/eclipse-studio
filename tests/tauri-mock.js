@@ -65,7 +65,7 @@
     files_pause_download: () => {window.__pendingDownload?.reject("Загрузка приостановлена; проверенные сегменты сохранены для докачки");return true;},
     files_cancel_download: () => {window.__pendingDownload?.reject("Загрузка отменена");return true;},
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "8.2.0", latest_version: "8.2.0", currentVersion: "8.2.0", latestVersion: "8.2.0" }),
+    check_for_update: () => ({ available: false, current_version: "8.3.0", latest_version: "8.3.0", currentVersion: "8.3.0", latestVersion: "8.3.0" }),
     download_app_update: async (args) => {
       const ver = args?.version || "6.6.8";
       const name = `Eclipse-Studio-v${ver}.exe`;
@@ -186,6 +186,9 @@
     vbs_restore: () => ({ success: true, message: "VBS 2.0: параметры восстановлены", changed: 3, failed: [], restartRequired: true }),
     vbs_set_test_mode: (args) => ({ success: true, message: args?.enabled ? "Тестовый режим включён" : "Тестовый режим выключен", changed: 1, failed: [], restartRequired: true }),
     vbs_restart: () => ({ success: true }),
+    vbs_repair: (args) => `Восстановление ${args?.kind || "компонентов"} успешно завершено.`,
+    create_game_shortcut: () => "C:\\Users\\Sparki\\Desktop\\Game.lnk",
+    remove_game_shortcut: () => null,
     vbs_prepare_uefi_optout: () => "UEFI Opt-Out успешно настроен.",
     vbs_disable_faceit: () => "Служба FACEIT успешно остановлена и отключена.",
     vbs_troubleshoot: (args) => `Диагностика ${args?.action || "unknown"} успешно завершена.`,

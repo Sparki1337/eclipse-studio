@@ -15,9 +15,24 @@ use tauri::Emitter;
 use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
+use windows::{
+    core::{Interface, PCWSTR},
+    Win32::{
+        System::Com::{
+            CoCreateInstance, CoInitializeEx, CoTaskMemFree, CoUninitialize, IPersistFile,
+            CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
+        },
+        UI::Shell::{
+            FOLDERID_Desktop, ILCreateFromPathW, ILFree, IShellLinkW, SHGetKnownFolderPath,
+            ShellLink, KF_FLAG_DEFAULT,
+        },
+    },
+};
+
+#[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-const VERSION: &str = "8.0.0";
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 const ECLIPSE_HV_LAUNCHER_ID: &str = "eclipse_hv";
 
 // Встроенный исполняемый файл автономного лаунчера Eclipse-HV
@@ -60,11 +75,189 @@ pub(crate) struct GameEntry {
     #[serde(default = "default_helper_label")]
     pub helper_label: String,
     #[serde(default)]
+    pub shortcut_path: String,
+    #[serde(default)]
     pub batch_found: bool,
     #[serde(default)]
     pub kvc_found: bool,
     pub ready: bool,
     pub last_message: String,
+}
+
+// Преобразование пути в Windows UTF-16 с нулевым байтом в конце
+#[cfg(target_os = "windows")]
+fn wide(path: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    shell_path(path)
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect()
+}
+
+// Преобразование текстовой строки в Windows UTF-16 с нулевым байтом
+#[cfg(target_os = "windows")]
+fn wide_text(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(Some(0)).collect()
+}
+
+// Преобразование пути в кавычках для аргументов командной строки Windows
+#[cfg(target_os = "windows")]
+fn wide_quoted_path(path: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    let mut result = vec![b'"' as u16];
+    result.extend(shell_path(path).as_os_str().encode_wide());
+    result.extend([b'"' as u16, 0]);
+    result
+}
+
+// Нормализация расширенного пути Windows (снятие префикса \\?\)
+#[cfg(target_os = "windows")]
+fn shell_path(path: &Path) -> PathBuf {
+    let raw = path.to_string_lossy();
+    if let Some(stripped) = raw.strip_prefix(r"\\?\") {
+        PathBuf::from(stripped)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+// Очистка недопустимых символов Windows для безопасного имени файла ярлыка
+#[cfg(target_os = "windows")]
+fn safe_shortcut_name(name: &str) -> String {
+    let sanitized: String = name
+        .chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            other => other,
+        })
+        .collect();
+    let trimmed = sanitized.trim();
+    if trimmed.is_empty() {
+        "Игра".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+// Получение пути к рабочему столу текущего пользователя через Known Folders API
+#[cfg(target_os = "windows")]
+fn desktop_dir() -> Result<PathBuf, String> {
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        let desktop_pointer = SHGetKnownFolderPath(&FOLDERID_Desktop, KF_FLAG_DEFAULT, None)
+            .map_err(|error| format!("Не удалось найти рабочий стол: {error}"))?;
+        let desktop_text = desktop_pointer.to_string();
+        CoTaskMemFree(Some(desktop_pointer.0.cast()));
+        let desktop = PathBuf::from(
+            desktop_text
+                .map_err(|error| format!("Не удалось прочитать путь рабочего стола: {error}"))?,
+        );
+        if !desktop.is_dir() {
+            return Err(format!("Рабочий стол не найден: {}", desktop.display()));
+        }
+        Ok(desktop)
+    }
+}
+
+// Запись файла ярлыка .lnk через COM-интерфейсы IShellLinkW и IPersistFile
+#[cfg(target_os = "windows")]
+fn write_shortcut_initialized(
+    exe: &Path,
+    dir: &Path,
+    name: &str,
+    shortcut: &Path,
+) -> Result<(), String> {
+    let link: IShellLinkW = unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }
+        .map_err(|error| format!("Не удалось создать Windows-ярлык: {error}"))?;
+    let helper_exe = dir.join("Eclipse-HV.exe");
+    let target = wide(&helper_exe);
+    let argument = wide_quoted_path(exe);
+    let working_dir = wide(dir);
+    let icon = wide(exe);
+    let description = wide_text(&format!("Eclipse-HV: запуск игры {name}"));
+
+    let target_pidl = unsafe { ILCreateFromPathW(PCWSTR(target.as_ptr())) };
+    let pidl_result = if target_pidl.is_null() {
+        Err("Windows Shell не смог определить файл лаунчера.".to_string())
+    } else {
+        let result = unsafe { link.SetIDList(target_pidl) }
+            .map_err(|error| format!("Не удалось задать цель через Windows Shell: {error}"));
+        unsafe { ILFree(Some(target_pidl)) };
+        result
+    };
+    if let Err(pidl_error) = pidl_result {
+        unsafe { link.SetPath(PCWSTR(target.as_ptr())) }.map_err(|error| {
+            format!(
+                "Не удалось задать цель ярлыка {}: {pidl_error}; резервный способ: {error}",
+                helper_exe.display()
+            )
+        })?;
+    }
+    unsafe {
+        link.SetArguments(PCWSTR(argument.as_ptr()))
+            .map_err(|error| format!("Не удалось задать игру для ярлыка: {error}"))?;
+        link.SetWorkingDirectory(PCWSTR(working_dir.as_ptr()))
+            .map_err(|error| format!("Не удалось задать папку игры: {error}"))?;
+        link.SetIconLocation(PCWSTR(icon.as_ptr()), 0)
+            .map_err(|error| format!("Не удалось задать значок игры: {error}"))?;
+        link.SetDescription(PCWSTR(description.as_ptr()))
+            .map_err(|error| format!("Не удалось задать описание ярлыка: {error}"))?;
+    }
+    let persist: IPersistFile = link
+        .cast()
+        .map_err(|error| format!("Не удалось сохранить ярлык: {error}"))?;
+    let output = wide(shortcut);
+    unsafe { persist.Save(PCWSTR(output.as_ptr()), true) }
+        .map_err(|error| format!("Не удалось записать {}: {error}", shortcut.display()))?;
+    Ok(())
+}
+
+// Создание нативного ярлыка .lnk для Eclipse-HV на рабочем столе
+#[cfg(target_os = "windows")]
+pub(crate) fn create_desktop_shortcut(
+    exe: &Path,
+    dir: &Path,
+    name: &str,
+    preferred_shortcut: Option<&Path>,
+) -> Result<PathBuf, String> {
+    let desktop = desktop_dir()?;
+    let safe_name = safe_shortcut_name(name);
+    let shortcut = if let Some(pref) = preferred_shortcut {
+        if pref.parent() == Some(&desktop) && pref.is_file() {
+            pref.to_path_buf()
+        } else {
+            desktop.join(format!("{safe_name} (Eclipse HV).lnk"))
+        }
+    } else {
+        desktop.join(format!("{safe_name} (Eclipse HV).lnk"))
+    };
+
+    let exe_clone = exe.to_path_buf();
+    let dir_clone = dir.to_path_buf();
+    let name_clone = name.to_string();
+    let shortcut_clone = shortcut.clone();
+
+    std::thread::spawn(move || {
+        unsafe { let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED); }
+        let res = write_shortcut_initialized(&exe_clone, &dir_clone, &name_clone, &shortcut_clone);
+        unsafe { CoUninitialize(); }
+        res
+    })
+    .join()
+    .map_err(|_| "Сбой потока создания ярлыка COM".to_string())??;
+
+    Ok(shortcut)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn create_desktop_shortcut(
+    _exe: &Path,
+    _dir: &Path,
+    _name: &str,
+    _preferred_shortcut: Option<&Path>,
+) -> Result<PathBuf, String> {
+    Err("Создание ярлыков рабочего стола доступно только в Windows".into())
 }
 
 fn default_launcher_id() -> String {
@@ -220,6 +413,7 @@ pub(crate) async fn select_game_exe(window: tauri::Window) -> Result<Option<Stri
 pub(crate) fn add_game(
     app: tauri::AppHandle,
     exe_path: String,
+    create_shortcut: Option<bool>,
     _launcher_id: Option<String>,
 ) -> Result<LibraryView, String> {
     let exe = validate_exe_path(&exe_path)?;
@@ -246,13 +440,40 @@ pub(crate) fn add_game(
     // Установка автономного лаунчера Eclipse-HV и очистка устаревших файлов
     prepare_game_files(&app, &game_id, &dir)?;
 
-    library
-        .games
-        .retain(|game| game.exe_path != exe.display().to_string());
     let name = exe
         .file_stem()
         .map(|stem| stem.to_string_lossy().to_string())
         .unwrap_or_else(|| "Game".to_string());
+
+    let mut shortcut_path = String::new();
+    if create_shortcut.unwrap_or(true) {
+        #[cfg(target_os = "windows")]
+        match create_desktop_shortcut(&exe, &dir, &name, None) {
+            Ok(sc) => {
+                shortcut_path = sc.display().to_string();
+                emit(
+                    &app,
+                    "info",
+                    format!("Создан ярлык на рабочем столе: {}", sc.display()),
+                    Some(2),
+                    Some(game_id.clone()),
+                );
+            }
+            Err(e) => {
+                emit(
+                    &app,
+                    "warning",
+                    format!("Не удалось создать ярлык на рабочем столе: {e}"),
+                    Some(2),
+                    Some(game_id.clone()),
+                );
+            }
+        }
+    }
+
+    library
+        .games
+        .retain(|game| game.exe_path != exe.display().to_string());
 
     library.games.push(GameEntry {
         id: game_id.clone(),
@@ -264,6 +485,7 @@ pub(crate) fn add_game(
         launcher_name: "Eclipse-HV".to_string(),
         batch_name: "Eclipse-HV.exe".to_string(),
         helper_label: "Eclipse-HV.exe".to_string(),
+        shortcut_path,
         batch_found: true,
         kvc_found: true,
         ready: true,
@@ -304,7 +526,15 @@ pub(crate) fn set_selected_game(id: String) -> Result<LibraryView, String> {
 #[tauri::command]
 pub(crate) fn remove_game(id: String) -> Result<LibraryView, String> {
     let mut library = load_library()?;
-    library.games.retain(|game| game.id != id);
+    if let Some(pos) = library.games.iter().position(|game| game.id == id) {
+        let game = library.games.remove(pos);
+        if !game.shortcut_path.is_empty() {
+            let p = PathBuf::from(&game.shortcut_path);
+            if p.is_file() {
+                let _ = fs::remove_file(p);
+            }
+        }
+    }
     if library.selected_id.as_deref() == Some(id.as_str()) {
         library.selected_id = library.games.first().map(|game| game.id.clone());
     }
@@ -315,18 +545,81 @@ pub(crate) fn remove_game(id: String) -> Result<LibraryView, String> {
 
 // Проверка и восстановление файлов Eclipse-HV в папке игры
 #[tauri::command]
-pub(crate) fn verify_game(app: tauri::AppHandle, id: String) -> Result<LibraryView, String> {
+pub(crate) fn verify_game(
+    app: tauri::AppHandle,
+    id: String,
+    create_shortcut: Option<bool>,
+) -> Result<LibraryView, String> {
+    let mut library = load_library()?;
+    let game_index = library
+        .games
+        .iter()
+        .position(|game| game.id == id)
+        .ok_or_else(|| "Игра не найдена в библиотеке.".to_string())?;
+
+    let dir = PathBuf::from(&library.games[game_index].dir_path);
+    let exe = PathBuf::from(&library.games[game_index].exe_path);
+    let name = library.games[game_index].name.clone();
+
+    prepare_game_files(&app, &id, &dir)?;
+
+    if create_shortcut.unwrap_or(true) && library.games[game_index].shortcut_path.is_empty() {
+        #[cfg(target_os = "windows")]
+        if let Ok(sc) = create_desktop_shortcut(&exe, &dir, &name, None) {
+            library.games[game_index].shortcut_path = sc.display().to_string();
+        }
+    }
+
+    let library = refresh_library(library);
+    save_library(&library)?;
+    Ok(library_view(library))
+}
+
+// Принудительное создание нативного ярлыка игры на рабочем столе
+#[tauri::command]
+pub(crate) fn create_game_shortcut(
+    _app: tauri::AppHandle,
+    id: String,
+) -> Result<LibraryView, String> {
     let mut library = load_library()?;
     let game = library
         .games
-        .iter()
-        .find(|game| game.id == id)
-        .cloned()
+        .iter_mut()
+        .find(|g| g.id == id)
         .ok_or_else(|| "Игра не найдена в библиотеке.".to_string())?;
+    let exe = PathBuf::from(&game.exe_path);
     let dir = PathBuf::from(&game.dir_path);
+    if !exe.is_file() {
+        return Err("Исполняемый файл игры не найден.".to_string());
+    }
+    let shortcut = create_desktop_shortcut(&exe, &dir, &game.name, None)?;
+    game.shortcut_path = shortcut.display().to_string();
+    game.last_message = "Ярлык игры успешно создан на рабочем столе.".to_string();
+    let library = refresh_library(library);
+    save_library(&library)?;
+    Ok(library_view(library))
+}
 
-    prepare_game_files(&app, &game.id, &dir)?;
-    library = refresh_library(library);
+// Удаление нативного ярлыка игры с рабочего стола
+#[tauri::command]
+pub(crate) fn remove_game_shortcut(
+    id: String,
+) -> Result<LibraryView, String> {
+    let mut library = load_library()?;
+    let game = library
+        .games
+        .iter_mut()
+        .find(|g| g.id == id)
+        .ok_or_else(|| "Игра не найдена в библиотеке.".to_string())?;
+    if !game.shortcut_path.is_empty() {
+        let path = PathBuf::from(&game.shortcut_path);
+        if path.is_file() {
+            let _ = fs::remove_file(path);
+        }
+        game.shortcut_path.clear();
+        game.last_message = "Ярлык игры удалён с рабочего стола.".to_string();
+    }
+    let library = refresh_library(library);
     save_library(&library)?;
     Ok(library_view(library))
 }
@@ -560,6 +853,19 @@ fn refresh_library(mut library: Library) -> Library {
         game.kvc_found = hv_present;
         game.ready = exe.exists();
 
+        if !game.shortcut_path.is_empty() && !Path::new(&game.shortcut_path).is_file() {
+            game.shortcut_path.clear();
+        }
+        #[cfg(target_os = "windows")]
+        if game.shortcut_path.is_empty() {
+            if let Ok(desktop) = desktop_dir() {
+                let candidate = desktop.join(format!("{} (Eclipse HV).lnk", safe_shortcut_name(&game.name)));
+                if candidate.is_file() {
+                    game.shortcut_path = candidate.display().to_string();
+                }
+            }
+        }
+
         if !exe.exists() {
             game.last_message = "EXE игры не найден.".to_string();
         } else if !hv_present {
@@ -736,7 +1042,7 @@ pub(crate) async fn eclipse_hv_check_update(
 
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(4))
-            .user_agent("Eclipse-Studio/8.0.0")
+            .user_agent(concat!("Eclipse-Studio/", env!("CARGO_PKG_VERSION")))
             .redirect(reqwest::redirect::Policy::limited(5))
             .build();
 
@@ -821,7 +1127,7 @@ pub(crate) async fn eclipse_hv_download(target_dir: Option<String>) -> Result<St
             "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent("Eclipse-Studio/8.0.0")
+            .user_agent(concat!("Eclipse-Studio/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|e| format!("Ошибка создания HTTP клиента: {e}"))?;
 

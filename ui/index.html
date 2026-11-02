@@ -165,7 +165,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><img src="./assets/images/app-icon.png" alt="" data-tauri-drag-region /></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>8.2.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>8.3.0</span>
       </div>
       <div class="window-actions">
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
@@ -257,7 +257,7 @@
           <div class="home-hero premium-panel">
             <div class="home-glow"></div>
             <div class="hero-copy">
-              <span class="hero-kicker">ECLIPSE STUDIO 8.2.0</span>
+              <span class="hero-kicker">ECLIPSE STUDIO 8.3.0</span>
               <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
               <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
             </div>
@@ -764,6 +764,9 @@
               </div>
 
               <div class="hv-selected-actions">
+                <button class="ghost-button hv-shortcut-button" id="hv-selected-shortcut-btn" type="button" disabled title="Создать ярлык на рабочем столе">
+                  <span>Ярлык</span>
+                </button>
                 <button class="primary-button hv-launch-button" id="hv-launch-button" disabled>
                   <span class="hv-play">▶</span>
                   <span>Запустить</span>
@@ -780,10 +783,7 @@
                     <h3>Добавленные игры</h3>
                     <p>Выберите игру для назначения профиля и запуска.</p>
                   </div>
-                  <div class="hv-header-badge-wrap">
-                    <span class="required-chip" id="hv-library-count">0 игр</span>
-                    <span id="hv-games-count" class="hidden">0</span>
-                  </div>
+                  <span id="hv-games-count" class="hidden">0</span>
                 </div>
                 <div class="hv-empty" id="hv-empty">
                   <span class="hv-empty-icon">
@@ -993,27 +993,65 @@
                 <p>Инструменты для восстановления повреждённых подсистем WMI, системных файлов и хранилища компонентов Windows.</p>
               </div>
               <div class="vbs-troubleshoot-grid">
-                <button class="vbs-tool-button" id="vbs-fix-wmi" type="button">
-                  <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-                  <div>
-                    <strong>Восстановить WMI</strong>
-                    <small>Сброс и восстановление репозитория WMI при сбоях отчётов</small>
+                <div class="vbs-tool-card">
+                  <div class="vbs-tool-card-head">
+                    <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                    <div>
+                      <strong>Репозиторий WMI</strong>
+                      <small>Проверка целостности /verifyrepository или полный сброс, перерегистрация DLL и перезапуск службы winmgmt</small>
+                    </div>
                   </div>
-                </button>
-                <button class="vbs-tool-button" id="vbs-run-sfc" type="button">
-                  <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
-                  <div>
-                    <strong>Проверка SFC</strong>
-                    <small>Запуск sfc /scannow для проверки системных файлов</small>
+                  <div class="vbs-tool-card-actions">
+                    <button class="vbs-tool-diag-btn" id="vbs-diag-wmi" type="button" title="Проверка репозитория без изменений">
+                      <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m10.5 10.5 3.5 3.5"/></svg>
+                      <span>Диагностика</span>
+                    </button>
+                    <button class="vbs-tool-fix-btn" id="vbs-fix-wmi" type="button" title="Сброс и восстановление WMI">
+                      <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="m9.5 2.5 4 4-8.5 8.5H1v-4l8.5-8.5z"/></svg>
+                      <span>Ремонт WMI</span>
+                    </button>
                   </div>
-                </button>
-                <button class="vbs-tool-button" id="vbs-run-dism" type="button">
-                  <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                  <div>
-                    <strong>Восстановление DISM</strong>
-                    <small>Восстановление целостности хранилища компонентов Windows</small>
+                </div>
+
+                <div class="vbs-tool-card">
+                  <div class="vbs-tool-card-head">
+                    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                    <div>
+                      <strong>Системные файлы (SFC)</strong>
+                      <small>Проверка системных файлов Windows /verifyonly без замены или полный ремонт через sfc /scannow</small>
+                    </div>
                   </div>
-                </button>
+                  <div class="vbs-tool-card-actions">
+                    <button class="vbs-tool-diag-btn" id="vbs-diag-sfc" type="button" title="Проверка целостности без замены">
+                      <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m10.5 10.5 3.5 3.5"/></svg>
+                      <span>Диагностика</span>
+                    </button>
+                    <button class="vbs-tool-fix-btn" id="vbs-fix-sfc" type="button" title="Автоматическое исправление файлов">
+                      <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5l-8 8L2 9"/></svg>
+                      <span>Ремонт SFC</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="vbs-tool-card">
+                  <div class="vbs-tool-card-head">
+                    <svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                    <div>
+                      <strong>Хранилище компонентов (DISM)</strong>
+                      <small>Диагностика образа Windows /scanhealth или восстановление повреждений через Windows Update (/restorehealth)</small>
+                    </div>
+                  </div>
+                  <div class="vbs-tool-card-actions">
+                    <button class="vbs-tool-diag-btn" id="vbs-diag-dism" type="button" title="Проверка хранилища без восстановления">
+                      <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m10.5 10.5 3.5 3.5"/></svg>
+                      <span>Диагностика</span>
+                    </button>
+                    <button class="vbs-tool-fix-btn" id="vbs-fix-dism" type="button" title="Восстановление хранилища компонентов">
+                      <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M2 8a6 6 0 0 1 10.24-4.24L14 5M14 2v3h-3M14 8a6 6 0 0 1-10.24 4.24L2 11M2 14v-3h3"/></svg>
+                      <span>Ремонт DISM</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -1095,6 +1133,28 @@
                   </span>
                 </label>
                 <label class="files-search"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg><input id="files-search" type="text" placeholder="Найти файл…" autocomplete="off" spellcheck="false"/></label>
+                <div class="files-sort" id="files-sort">
+                  <button type="button" class="files-sort-btn" id="files-sort-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="files-sort-menu" title="Сортировка файлов">
+                    <svg class="files-sort-ico" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M7 4v16M3 16l4 4 4-4M17 20V4M13 8l4-4 4 4"/></svg>
+                    <span class="files-sort-label" id="files-sort-label">По умолчанию</span>
+                    <span class="files-sort-group" id="files-sort-group" hidden></span>
+                    <svg class="files-sort-chev" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                  <div class="files-sort-menu" id="files-sort-menu" role="menu" aria-labelledby="files-sort-btn" hidden>
+                    <div class="files-sort-sec" role="group" aria-labelledby="files-sort-title">
+                      <p class="files-sort-title" id="files-sort-title">Сортировка</p>
+                      <button type="button" class="files-sort-item active" role="menuitemradio" aria-checked="true" data-sort="default"><span>По умолчанию</span></button>
+                      <button type="button" class="files-sort-item" role="menuitemradio" aria-checked="false" data-sort="new"><span>Сначала новые</span></button>
+                      <button type="button" class="files-sort-item" role="menuitemradio" aria-checked="false" data-sort="old"><span>Сначала старые</span></button>
+                      <button type="button" class="files-sort-item" role="menuitemradio" aria-checked="false" data-sort="name"><span>По названию</span></button>
+                      <button type="button" class="files-sort-item" role="menuitemradio" aria-checked="false" data-sort="cracker"><span>По взломщику</span></button>
+                    </div>
+                    <div class="files-sort-sec" id="files-cracker-sec" role="group" aria-labelledby="files-cracker-title" hidden>
+                      <p class="files-sort-title" id="files-cracker-title">Взломщик</p>
+                      <div class="files-sort-list" id="files-cracker-list"></div>
+                    </div>
+                  </div>
+                </div>
                 <div class="files-view-toggle" role="group" aria-label="Режим отображения каталога">
                   <button type="button" class="files-view-btn active" id="files-view-grid" data-mode="grid" title="Плитка (сетка)" aria-pressed="true">
                     <svg viewBox="0 0 16 16"><rect width="5" height="5" x="2" y="2" rx="1.5"/><rect width="5" height="5" x="9" y="2" rx="1.5"/><rect width="5" height="5" x="2" y="9" rx="1.5"/><rect width="5" height="5" x="9" y="9" rx="1.5"/></svg>
@@ -1947,6 +2007,33 @@
                   </div>
                 </div>
               </details>
+
+              <!-- Настройки Гипервизора -->
+              <details class="settings-collapsible" id="collapse-modules-hypervisor" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><rect width="14" height="14" x="3" y="3" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><rect width="5" height="5" x="7.5" y="7.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12.5 1.5v2m0 13v2M1.5 12.5h2m13 0h2M1.5 7.5h2m13 0h2M7.5 1.5v2m0 13v2"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Гипервизор</strong>
+                      <small>Параметры интеграции лаунчера и ярлыков игр</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <label class="pref-row" for="settings-hv-desktop-shortcut">
+                    <div>
+                      <strong>Ярлыки на рабочем столе</strong>
+                      <small>Автоматически создавать ярлык Windows (.lnk) на рабочем столе при добавлении новой игры</small>
+                    </div>
+                    <span class="switch"><input type="checkbox" id="settings-hv-desktop-shortcut" checked /><i></i></span>
+                  </label>
+                </div>
+              </details>
             </section>
           </div>
 
@@ -2011,7 +2098,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.2.0</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.3.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -2040,7 +2127,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">8.0.0</b></div>
+                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">8.3.0</b></div>
                   <div class="about-row"><span>Версия Eclipse HV</span><b id="about-hv-version">Проверка…</b></div>
                   <div class="about-row"><span>Права доступа</span><b id="about-admin-rights">Проверка…</b></div>
                   <div class="about-row"><span>Путь к Steam</span><b id="about-steam-path" class="about-path">Определение…</b></div>
