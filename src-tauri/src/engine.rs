@@ -135,7 +135,7 @@ pub(crate) fn display_relative(path: &Path, game_dir: &Path) -> String {
         .unwrap_or_else(|| ".".into())
 }
 
-// На Windows снимается только readonly; Unix-ветка добавляет лишь запись владельцу.
+// На Windows снимается только readonly; Unix-ветка добавляет лишь запись владельцу
 #[allow(clippy::permissions_set_readonly_false)]
 pub(crate) fn make_writable(path: &Path) {
     if let Ok(metadata) = fs::metadata(path) {
@@ -590,8 +590,7 @@ pub(crate) fn install_fix_blocking_unlocked(
             target.file_stem().unwrap_or_default().to_string_lossy()
         );
         let backup = target.with_file_name(backup_name);
-        // Размер не доказывает подлинность оригинала. Существующий _o не заменяем;
-        // сохраняем и проверяем его через общий сервис до изменения основного DLL.
+        // Размер не подтверждает подлинность DLL; _o проверяем и сохраняем до изменений
         let backup_result = if backup.exists() {
             crate::safe_path::child(&game_dir, &backup)
                 .and_then(|_| backup_file(&backup, &mut logs))

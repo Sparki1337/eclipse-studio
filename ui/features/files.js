@@ -8,7 +8,6 @@
 
   const DOWNLOAD_DIR_KEY = "filesDownloadDir";
   const AUTO_INSTALL_KEY = "filesAutoInstall";
-  const INSTALLED_KEY = "filesInstalledMap";
   const VIEW_MODE_KEY = "filesViewMode";
   const PAUSED_KEY = "filesPausedDownloads";
   const SORT_MODE_KEY = "filesSortMode";
@@ -24,7 +23,8 @@
     error: "",
     progress: new Map(readPaused().map(entry => [entry.url, { ...entry, paused: true, resumable: true, status: "Приостановлено" }])),
     downloads: new Map(),
-    installed: readInstalledMap(),
+    // Подтверждение только для текущего посещения, а не проверка файлов на диске
+    installed: new Map(),
     autoInstall: readAutoInstall(),
     pinnedCollapsed: readPinnedCollapsed(),
     viewMode: readViewMode(),
@@ -33,6 +33,7 @@
   };
 
   let defaultDownloadDir = "";
+  let catalogActive = false;
 
   function readPaused() { try { const value = JSON.parse(window.cgsStorage.getItem(PAUSED_KEY) || "[]"); return Array.isArray(value) ? value : []; } catch (_) { return []; } }
   function rememberDownload(item, targetDir) {
@@ -57,20 +58,21 @@
   function installationComplete(item, gameDir, result) {
     state.progress.delete(item.url);
     if (result?.success !== true || result?.status === "partial" || result?.skipped?.length) {
-      state.installed.delete(item.url); saveInstalledMap(); render();
+      state.installed.delete(item.url); render();
       const message = ["Выполнено частично или с ошибкой. Архив и оригиналы сохранены.", result?.message, ...(result?.skipped || [])].filter(Boolean).join("\n");
       $("#files-status").textContent = message; notify(message, true); return false;
     }
     state.downloads.delete(item.url); state.installed.set(item.url, { gameDir, result });
-    saveInstalledMap(); render(); showSuccessState(item.url); return true;
+    render(); showSuccessState(item.url); return true;
   }
 
   function readViewMode() {
     try {
       const mode = window.cgsStorage.getItem(VIEW_MODE_KEY);
-      return mode === "list" ? "list" : "grid";
+      // Без сохранённого выбора каталог открывается списком-таблицей, как в дизайне; выбор пользователя не меняется
+      return mode === "grid" ? "grid" : "list";
     } catch (_) {
-      return "grid";
+      return "list";
     }
   }
 
@@ -94,28 +96,10 @@
     });
   }
 
-  function readInstalledMap() {
-    try {
-      const raw = window.cgsStorage.getItem(INSTALLED_KEY);
-      if (!raw) return new Map();
-      const parsed = JSON.parse(raw);
-      const map = new Map();
-      for (const [k, v] of Object.entries(parsed)) {
-        if (!k.toLowerCase().includes("studio")) {
-          map.set(k, v);
-        }
-      }
-      return map;
-    } catch (_) {
-      return new Map();
-    }
-  }
-
-  function saveInstalledMap() {
-    try {
-      const obj = Object.fromEntries(state.installed.entries());
-      window.cgsStorage.setItem(INSTALLED_KEY, JSON.stringify(obj));
-    } catch (_) {}
+  function clearInstallationFeedback() {
+    if (!state.installed.size) return;
+    state.installed.clear();
+    render();
   }
 
   function readAutoInstall() {
@@ -925,7 +909,11 @@
       if (button.dataset.filesAction === "reveal") reveal(item);
     });
     window.addEventListener("cgs:view-changed", (event) => {
-      if (event.detail === "files") loadCatalog(true);
+      const active = event.detail === "files";
+      // Сбрасываем отметки при выходе и входе: установка могла завершиться в фоне
+      if (!active || !catalogActive) clearInstallationFeedback();
+      catalogActive = active;
+      if (active) loadCatalog(true);
     });
     document.querySelectorAll(".files-view-btn").forEach((btn) => {
       btn.addEventListener("click", () => setViewMode(btn.dataset.mode));
@@ -934,6 +922,16 @@
       listen("files-download-progress", (event) => updateProgress(event.payload ?? event)).catch(() => {});
     }
   }
+
+  // Каталог для быстрого поиска: только чтение и тихая загрузка
+  window.cgsFiles = {
+    list: () => state.files.map(({ name, build, group, url, pinned }) => ({ name, build, group, url, pinned })),
+    isLoaded: () => state.loaded,
+    load: () => loadCatalog(false, true),
+  };
+
+  // Удаляем старые сохранённые отметки; новый статус существует только в памяти
+  try { window.cgsStorage.removeItem("filesInstalledMap"); } catch (_) {}
 
   bindEvents();
   initDownloadDir();

@@ -1,5 +1,4 @@
-// Экспериментальная интеграция запуска через кнопку «Играть» в клиенте Steam.
-// Модифицирует параметры LaunchOptions в localconfig.vdf при закрытом клиенте Steam.
+// Интеграция кнопки «Играть» через LaunchOptions в localconfig.vdf при закрытом Steam
 use serde::{Deserialize, Serialize};
 use std::{
     fs,

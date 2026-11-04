@@ -1,4 +1,4 @@
-//! Все распаковщики используют одинаковую политику; небезопасный CLI-fallback запрещён.
+//! Все распаковщики используют одинаковую политику; небезопасный CLI-fallback запрещён
 use crate::safe_path;
 use std::{
     collections::BTreeSet,
@@ -78,7 +78,7 @@ pub fn zip_extract(path: &Path, dest: &Path, password: Option<&str>) -> Result<(
     let mut archive = zip::ZipArchive::new(fs::File::open(path).map_err(|e| e.to_string())?)
         .map_err(|e| format!("Повреждён ZIP: {e}"))?;
     let mut budget = Budget::default();
-    // Полная проверка заголовков выполняется до первой записи.
+    // Полная проверка заголовков выполняется до первой записи
     for i in 0..archive.len() {
         let entry = archive.by_index_raw(i).map_err(|e| e.to_string())?;
         if !regular_mode(entry.unix_mode()) {
@@ -151,7 +151,7 @@ pub fn rar_extract(path: &Path, dest: &Path, password: Option<&str>) -> Result<(
             );
         }
         let size = entry.unpacked_size;
-        // Библиотека не получает конечный путь и не может создать ссылку из RAR.
+        // Библиотека не получает конечный путь и не может создать ссылку из RAR
         let (bytes, next) = header
             .read()
             .map_err(|e| format!("Ошибка данных или CRC RAR: {e}"))?;

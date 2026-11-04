@@ -1,4 +1,4 @@
-//! Общий манифест: первый оригинал неизменяем, журнал операций дополняется до изменения файлов.
+//! Общий манифест: первый оригинал неизменяем, журнал операций дополняется до изменения файлов
 use crate::{durable, safe_path};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -111,7 +111,7 @@ pub fn save(backup_dir: &Path, manifest: &Manifest) -> Result<(), String> {
         &serde_json::to_vec_pretty(manifest).map_err(|e| e.to_string())?,
     )
 }
-/// Успех возвращается только после проверки копии и фиксации манифеста.
+/// Успех возвращается только после проверки копии и фиксации манифеста
 pub fn protect(root: &Path, name: &str, operation: &str) -> Result<(), String> {
     validate_name(name)?;
     let target = safe_path::join(root, name)?;
@@ -136,7 +136,7 @@ pub fn protect(root: &Path, name: &str, operation: &str) -> Result<(), String> {
             }
             let backup = safe_path::join(&backup_dir, name)?;
             if backup.exists() {
-                // Старый бэкап не перезаписывается; его назначение требует ручного подтверждения.
+                // Старый бэкап не перезаписывается; его назначение требует ручного подтверждения
                 return Err(format!("Найден оригинал без записи в манифесте: {name}. Сначала восстановите старый бэкап."));
             }
             durable::copy(&target, &backup)?;

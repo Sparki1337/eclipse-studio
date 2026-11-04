@@ -782,7 +782,7 @@ fn remove_service(name: &str, backup: &Path) -> Result<(), String> {
 fn remove_registry(path: &str, backup: &Path, index: usize) -> Result<(), String> {
     for view in ["64", "32"] {
         let export = backup.join(format!("registry-{index}-{view}.reg"));
-        // Отсутствующий вид пропускается, ошибка экспорта существующего ключа останавливает удаление.
+        // Отсутствующий вид пропускается, ошибка экспорта существующего ключа останавливает удаление
         let mut probe = Command::new("reg.exe");
         probe.args(["query", path, &format!("/reg:{view}")]);
         #[cfg(windows)]
@@ -1013,7 +1013,7 @@ pub(crate) async fn anticheat_restore(
             }
             if records.is_empty() { return Err("Проверяемая карта восстановления не найдена. Старые .reg без подписанной карты не импортируются автоматически.".into()); }
             let mut restored = 0; let mut failed = Vec::new();
-            // Сначала файлы, затем реестр служб. Регистрация драйвера может потребовать перезапуска.
+            // Сначала файлы, затем реестр служб. Регистрация драйвера может потребовать перезапуска
             records.sort_by_key(|(_, r)| matches!(r, SystemRestoreRecord::Registry { .. }));
             for (parent, record) in records {
                 let result = match record {
@@ -1027,7 +1027,7 @@ pub(crate) async fn anticheat_restore(
                         if tree_hashes(target)? != hashes { return Err("Проверка восстановленных файлов не пройдена".into()); } Ok(())
                     })(),
                     SystemRestoreRecord::Registry { path, view, file, hash } => (|| {
-                        // Защищаем текущее содержимое перед импортом, если ключ уже появился заново.
+                        // Защищаем текущее содержимое перед импортом, если ключ уже появился заново
                         if registry_key_exists(&path) { export_registry_raw(&path, &parent.join(format!("before-restore-{}.reg", uuid::Uuid::new_v4())), &view)?; }
                         let mut command = Command::new("reg.exe"); command.arg("import").arg(crate::safe_path::join(&parent, &file)?).arg(format!("/reg:{view}"));
                         #[cfg(windows)] command.creation_flags(CREATE_NO_WINDOW);

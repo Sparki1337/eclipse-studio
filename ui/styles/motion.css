@@ -1,0 +1,53 @@
+/* Появление блоков управляется общим модулем анимаций */
+html.motion-ready #korona .view.active,
+html.motion-ready #korona .settings-tab-panel,
+html.motion-ready #korona .settings-collapsible-content {
+  animation: none !important;
+}
+
+/* Обратная связь без сдвига раскладки */
+#korona :is(.files-sort-item, .custom-select-option, .settings-tab-btn, .hv-module-tab,
+  .home-item, .hv-step, .pref-row, .loader-option, [data-files-page]) {
+  transition-property: background-color, border-color, color, box-shadow, opacity;
+  transition-duration: 180ms;
+  transition-timing-function: ease;
+}
+
+#korona :is(button, [role="button"], [role="combobox"], input, summary):focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), .7);
+  outline-offset: 3px;
+}
+
+#korona :is(.save-card, .dlc-item, .dlc-library-game, .hv-game-card, .lua-game,
+  .loader-option, .svc-option, .dlc-method) {
+  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-out, ease);
+}
+
+#korona :is(.hubcap-progress-bar, .app-update-progress-fill) {
+  transition: width 280ms ease-out, background-color 180ms ease;
+}
+
+/* Отключение движения имеет приоритет над стилями тем */
+@layer cgs-motion-preferences {
+  @media (prefers-reduced-motion: reduce) {
+    :root *, :root *::before, :root *::after {
+      animation-duration: .001ms !important;
+      animation-delay: 0ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0ms !important;
+      transition-delay: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  :root.no-motion *, :root.no-motion *::before, :root.no-motion *::after {
+    animation-duration: .001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

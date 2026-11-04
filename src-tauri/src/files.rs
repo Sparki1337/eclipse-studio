@@ -495,7 +495,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/8.4.0")
+        .user_agent("EclipseStudio/9.0.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -616,7 +616,7 @@ fn detect_crack_source_dir(extracted_root: &Path) -> PathBuf {
         .map(|iter| iter.flatten().map(|e| e.path()).collect())
         .unwrap_or_default();
 
-    // 1. Папка ARTIFACT (EA SPORTS FC 27, Borderlands 4, Jurassic World Evolution 3 и т.д.)
+    // Папка ARTIFACT (EA SPORTS FC 27, Borderlands 4, Jurassic World Evolution 3 и т.д.)
     for entry in &entries {
         if entry.is_dir() {
             if let Some(name) = entry.file_name().and_then(|s| s.to_str()) {
@@ -627,7 +627,7 @@ fn detect_crack_source_dir(extracted_root: &Path) -> PathBuf {
         }
     }
 
-    // 2. Папка DenuvOwO (Sonic Origins, Yakuza Kiwami 3, Persona, SMT V и т.д.)
+    // Папка DenuvOwO (Sonic Origins, Yakuza Kiwami 3, Persona, SMT V и т.д.)
     for entry in &entries {
         if entry.is_dir() {
             if let Some(name) = entry.file_name().and_then(|s| s.to_str()) {
@@ -638,7 +638,7 @@ fn detect_crack_source_dir(extracted_root: &Path) -> PathBuf {
         }
     }
 
-    // 3. Папки релиз-групп (Razor1911 в RDR2, CODEX, RUNE, FLT, SKIDROW, PLAZA, Crack, Goldberg)
+    // Папки релиз-групп (Razor1911 в RDR2, CODEX, RUNE, FLT, SKIDROW, PLAZA, Crack, Goldberg)
     let group_names = [
         "Razor1911",
         "CODEX",
@@ -664,7 +664,7 @@ fn detect_crack_source_dir(extracted_root: &Path) -> PathBuf {
         }
     }
 
-    // 4. Если в корне ровно одна папка и остальное только readme/nfo
+    // Если в корне ровно одна папка и остальное только readme/nfo
     let dirs: Vec<&PathBuf> = entries.iter().filter(|e| e.is_dir()).collect();
     if dirs.len() == 1 {
         let other_files_are_junk = entries
@@ -676,7 +676,7 @@ fn detect_crack_source_dir(extracted_root: &Path) -> PathBuf {
         }
     }
 
-    // 5. Плоская структура
+    // Плоская структура
     extracted_root.to_path_buf()
 }
 
@@ -721,7 +721,7 @@ pub(crate) async fn files_install_crack(
 
 // Поиск локального или прямая загрузка актуального Eclipse-HV.exe с GitHub без API
 fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // 1. Проверяем локальные пути (папка Hypervisor, локальная сборка eclipse-hv)
+    // Проверяем локальные пути (папка Hypervisor, локальная сборка eclipse-hv)
     let candidates = [
         PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-HV.exe"),
         PathBuf::from("eclipse-hv/target/release/eclipse-hv.exe"),
@@ -737,7 +737,7 @@ fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, Str
         }
     }
 
-    // 2. Проверяем кэш приложения
+    // Проверяем кэш приложения
     let cache_dir = app
         .path()
         .app_local_data_dir()
@@ -752,7 +752,7 @@ fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, Str
         return Ok(cached_exe);
     }
 
-    // 3. Прямая загрузка с GitHub без использования GitHub API
+    // Прямая загрузка с GitHub без использования GitHub API
     let download_url =
         "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
     let client = reqwest::blocking::Client::builder()
@@ -842,7 +842,7 @@ fn perform_install_crack(
                     Err(e) => skipped.push(format!("Дополнительный лаунчер не установлен: {e}")),
                 }
             }
-            // Все бэкапы и записи манифеста фиксируются до первой перезаписи в игре.
+            // Все бэкапы и записи манифеста фиксируются до первой перезаписи в игре
             for (_, _, name) in &files {
                 crate::backup::protect(&game_dir, name, &operation)?;
             }

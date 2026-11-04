@@ -1,4 +1,4 @@
-//! Блокировка пересекающихся ресурсов: родительская и дочерняя папки конфликтуют.
+//! Блокировка пересекающихся ресурсов: родительская и дочерняя папки конфликтуют
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -19,7 +19,7 @@ impl Drop for HandoffGuard {
         HANDOFF.store(false, Ordering::SeqCst);
     }
 }
-/// Между проверкой занятости и перезапуском новые изменения не допускаются.
+/// Между проверкой занятости и перезапуском новые изменения не допускаются
 pub fn begin_handoff() -> Result<HandoffGuard, String> {
     let locks = registry().lock().map_err(|_| "Ошибка блокировок")?;
     if !locks.is_empty() || HANDOFF.swap(true, Ordering::SeqCst) {

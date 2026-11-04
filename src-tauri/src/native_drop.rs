@@ -37,15 +37,16 @@ mod windows_drop {
                     GetWindowSubclass, RemoveWindowSubclass, SetWindowSubclass, HDROP,
                 },
                 WindowsAndMessaging::{
-                    ChangeWindowMessageFilterEx, EnumChildWindows, KillTimer, SetTimer,
-                    MSGFLT_ALLOW, WM_DROPFILES, WM_NCDESTROY, WM_TIMER,
+                    ChangeWindowMessageFilterEx, EnumChildWindows, GetWindowLongPtrW,
+                    GetWindowThreadProcessId, KillTimer, SetTimer, GWL_EXSTYLE, MSGFLT_ALLOW,
+                    WM_DROPFILES, WM_NCDESTROY, WM_TIMER, WS_EX_ACCEPTFILES,
                 },
             },
         },
     };
 
     const SUBCLASS_ID: usize = 0x43475344;
-    // Explorer transfers the HDROP memory with this Shell message before WM_DROPFILES.
+    // Проводник передаёт память HDROP этим сообщением до WM_DROPFILES
     const WM_COPYGLOBALDATA: u32 = 0x0049;
 
     #[derive(Clone, Serialize)]
@@ -58,9 +59,9 @@ mod windows_drop {
         let hwnd = HWND(handle.0);
         unsafe {
             register_handle(hwnd, window)?;
-            // WebView2 can recreate child HWNDs. Reapply the Shell receiver to new children.
+            // Повторно подключаем Shell-приёмник при пересоздании дочерних HWND WebView2
             SetTimer(Some(hwnd), SUBCLASS_ID, 1500, None);
-            // The cursor normally lands on WebView2's child HWND, not the top-level HWND.
+            // Курсор обычно попадает в дочерний HWND WebView2, а не в окно приложения
             let _ = EnumChildWindows(
                 Some(hwnd),
                 Some(register_child),
@@ -77,28 +78,40 @@ mod windows_drop {
     }
 
     unsafe fn register_handle(hwnd: HWND, window: &WebviewWindow) -> Result<(), String> {
-        // Allow only file-drop messages, preserving the process's other UIPI restrictions.
-        ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, None)
-            .map_err(|error| error.to_string())?;
-        ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, None)
-            .map_err(|error| error.to_string())?;
+        // Пропускаем окна процесса WebView2: система запрещает их менять
+        if !is_own_window(hwnd) {
+            return Ok(());
+        }
         if !GetWindowSubclass(hwnd, Some(drop_proc), SUBCLASS_ID, None).as_bool() {
+            // Фильтр настраиваем один раз: разрешаем только сообщения переноса файлов, сохраняя остальные ограничения UIPI
+            ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, None)
+                .map_err(|error| error.to_string())?;
+            ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, None)
+                .map_err(|error| error.to_string())?;
             let context = Box::into_raw(Box::new(window.clone()));
             if !SetWindowSubclass(hwnd, Some(drop_proc), SUBCLASS_ID, context as usize).as_bool() {
                 drop(Box::from_raw(context));
                 return Err("Could not register file-drop window callback".into());
             }
         }
-        // OLE drag targets take precedence over WM_DROPFILES, and refuse drops across UAC
-        // integrity levels. Remove Wry/WebView2's OLE receiver before accepting Shell drops.
-        // WebView2 external browser drops are already disabled by Wry, avoiding ZIP navigation.
+        // Снимаем OLE-приёмник WebView2 для Shell-drop через UAC; внешние drop уже запрещены
         use_shell_drop(hwnd);
         Ok(())
     }
 
+    // Окно принадлежит текущему процессу (дочерние окна WebView2 живут в процессе браузера)
+    unsafe fn is_own_window(hwnd: HWND) -> bool {
+        let mut process_id = 0u32;
+        let _ = GetWindowThreadProcessId(hwnd, Some(&mut process_id as *mut u32));
+        process_id == std::process::id()
+    }
+
     unsafe fn use_shell_drop(hwnd: HWND) {
         let _ = RevokeDragDrop(hwnd);
-        DragAcceptFiles(hwnd, true);
+        // Меняем стиль только при необходимости, чтобы не рассылать лишние WM_STYLECHANGING/WM_STYLECHANGED
+        if (GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_ACCEPTFILES.0 as isize) == 0 {
+            DragAcceptFiles(hwnd, true);
+        }
     }
 
     unsafe extern "system" fn drop_proc(
@@ -241,7 +254,7 @@ mod windows_drop {
                     GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_ACCEPTFILES.0 as isize,
                     0
                 );
-                // A new registration succeeds only if the conflicting target was actually revoked.
+                // Новая регистрация подтверждает, что конфликтующий приёмник действительно удалён
                 RegisterDragDrop(hwnd, &target).unwrap();
                 RevokeDragDrop(hwnd).unwrap();
                 DestroyWindow(hwnd).unwrap();

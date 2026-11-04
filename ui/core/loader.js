@@ -4,7 +4,7 @@
     await window.cgsStorage.ready;
     window.cgsModulesLoading = true;
     // Порядок важен: ядро (core/) и разделы (features/) подключаются последовательно
-    for (const source of ["core/bootstrap.js", "core/api.js", "core/dialogs.js", "core/jobs.js", "features/saves.js", "core/audio.js", "core/splash.js", "core/scale.js", "core/i18n.js", "core/app.js", "features/hypervisor.js", "features/anticheat.js", "features/vbs.js", "features/files.js", "features/utilities.js", "features/appearance.js", "core/custom-select.js", "core/motion.js", "features/home.js"]) {
+    for (const source of ["core/bootstrap.js", "core/api.js", "core/dialogs.js", "core/jobs.js", "features/saves.js", "core/audio.js", "core/splash.js", "core/scale.js", "core/i18n.js", "core/app.js", "features/hypervisor.js", "features/anticheat.js", "features/vbs.js", "features/local-cloud.js", "features/files.js", "features/utilities.js", "features/appearance.js", "features/layout.js", "core/custom-select.js", "core/motion.js", "features/home.js", "features/search.js"]) {
       await new Promise((resolve, reject) => {
         const script = document.createElement("script"); script.src = "./" + source;
         script.onload = resolve; script.onerror = () => reject(new Error("Не загружен модуль: " + source)); document.body.append(script);

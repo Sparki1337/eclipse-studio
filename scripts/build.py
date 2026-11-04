@@ -63,10 +63,10 @@ def get_project_version() -> str:
         try:
             with open(TAURI_CONF, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                return data.get("version", "8.4.0")
+                return data.get("version", "9.0.0")
         except Exception:
             pass
-    return "8.4.0"
+    return "9.0.0"
 
 
 def check_tool(name: str) -> bool:
@@ -228,8 +228,7 @@ def build_debug(manifest_path: Path) -> bool:
 
 
 def build_nsis() -> bool:
-    # Сборка инсталлятора через Tauri CLI
-    # Пробуем npx @tauri-apps/cli или npm run build
+    # Сборка инсталлятора через Tauri CLI с запасным запуском через npm
     cmd = ["npm", "run", "build", "--", "--bundles", "nsis"]
     return run_command(cmd, ROOT_DIR)
 
@@ -287,7 +286,7 @@ def collect_artifacts(build_type: str, version: str, out_dir: Path) -> list[dict
                     "sha256": sha,
                 })
 
-    # Debug EXE
+    # Отладочный исполняемый файл
     if build_type == "debug":
         exe_src = target_deb / "eclipse-studio.exe"
         if exe_src.exists():

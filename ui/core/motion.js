@@ -4,203 +4,318 @@
 
   const root = document.documentElement;
   const STORAGE_KEY = "cgs-motion";
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+  const EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
   const LIST_SELECTORS = [
     "#files-grid", "#files-featured-grid", "#dlc-game-list", "#dlc-list", "#dlc-catalog",
     "#save-list", "#lua-games", "#hv-game-list", "#ac-list", "#lua-search-results",
     "#lua-detail-in", "#lua-detail-missing", ".vbs-components-list", "#files-pages",
+    "#home-recent-games", "#home-recent-backups", "#home-pending-jobs", "#home-attention",
   ];
-  const timers = new WeakMap();
-
+  const ENTRY_SELECTORS = [
+    ".premium-panel:not(.settings-card):not(.files-catalog)", ".metric-card",
+    ".settings-segmented-tabs", ".hv-module-tabs", ".settings-collapsible", ".files-toolbar",
+    "#files-featured", "#files-grid", "#files-empty", "#files-loading", "#files-pagination", ".home-footer",
+  ].join(",");
+  const SELECTION_SELECTORS = [
+    ".nav-item", "[data-hv-tab]", ".settings-tab-btn", ".files-view-btn", ".svc-option",
+    ".dlc-method", ".sidebar-mode-btn", "[data-sidebar-dock]", "[data-search-dock]", ".loader-option",
+  ].join(",");
+  const animations = new Map();
+  const classRuns = new Map();
+  const pendingReveals = new Map();
+  const signatures = new WeakMap();
   const enabled = () => !root.classList.contains("no-motion");
+  let requested = true;
+  let currentView = null;
+  let recolorTimer;
 
   function readSetting() {
-    try {
-      const stored = window.cgsStorage.getItem(STORAGE_KEY);
-      if (stored === "0") return false;
-      if (stored === "1") return true;
-    } catch (_) {}
-    return !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    try { return window.cgsStorage.getItem(STORAGE_KEY) !== "0"; }
+    catch (_) { return true; }
+  }
+
+  function forget(record) {
+    const channels = animations.get(record.element);
+    if (channels?.get(record.channel) !== record) return;
+    channels.delete(record.channel);
+    if (!channels.size) animations.delete(record.element);
+  }
+
+  function stop(record, settle = false) {
+    record.animation.onfinish = null;
+    record.animation.oncancel = null;
+    forget(record);
+    record.animation.cancel();
+    if (settle) record.complete?.();
+  }
+
+  function animate(element, keyframes, options = {}, channel = "enter", complete) {
+    if (!element || !enabled() || !element.animate) return null;
+    const previous = animations.get(element)?.get(channel);
+    if (previous) stop(previous);
+    const animation = element.animate(keyframes, { duration: 300, easing: EASING, fill: "backwards", ...options });
+    animation.id = `cgs-${channel}`;
+    const record = { element, channel, animation, complete };
+    if (!animations.has(element)) animations.set(element, new Map());
+    animations.get(element).set(channel, record);
+    animation.onfinish = () => { forget(record); complete?.(); };
+    animation.oncancel = () => forget(record);
+    return animation;
+  }
+
+  function visible(element) {
+    return !!element?.getClientRects().length && !element.closest(".hidden,[hidden],.view:not(.active),[data-hv-tab-panel]:not(.active)") && getComputedStyle(element).visibility !== "hidden";
+  }
+
+  function enteringParent(element) {
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      if (animations.get(parent)?.has("enter")) return true;
+    }
+    return false;
+  }
+
+  function enter(element, delay = 0, horizontal = 0) {
+    if (!visible(element) || enteringParent(element)) return;
+    animate(element, [
+      { opacity: 0, translate: horizontal ? `${horizontal}px 0` : "0 8px" },
+      { opacity: 1, translate: "0 0" },
+    ], { delay, duration: 320 });
+  }
+
+  const revealObserver = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const options = pendingReveals.get(entry.target);
+      pendingReveals.delete(entry.target);
+      revealObserver.unobserve(entry.target);
+      if (options && enabled()) enter(entry.target, 0, options.horizontal);
+    }
+  }, { threshold: 0.04 }) : null;
+
+  function clearReveals(scope) {
+    for (const element of pendingReveals.keys()) {
+      if (scope && !scope.contains(element)) continue;
+      revealObserver?.unobserve(element);
+      pendingReveals.delete(element);
+    }
+  }
+
+  function enterSequence(elements, horizontal = 0) {
+    const main = document.querySelector(".main-area")?.getBoundingClientRect();
+    let index = 0;
+    for (const element of elements.slice(0, 60)) {
+      if (!visible(element)) continue;
+      const rect = element.getBoundingClientRect();
+      const inFrame = rect.bottom > (main?.top || 0) && rect.top < Math.min(innerHeight, main?.bottom || innerHeight);
+      if (inFrame || !revealObserver) enter(element, Math.min(index++, 6) * 26, horizontal);
+      else { pendingReveals.set(element, { horizontal }); revealObserver.observe(element); }
+    }
+  }
+
+  function animateSection(scope, horizontal = 0) {
+    if (!scope || !enabled()) return;
+    const items = [...scope.querySelectorAll(ENTRY_SELECTORS)].filter(visible);
+    const candidates = new Set(items);
+    enterSequence(items.filter(element => {
+      for (let parent = element.parentElement; parent && parent !== scope; parent = parent.parentElement) {
+        if (candidates.has(parent)) return false;
+      }
+      return true;
+    }), horizontal);
+  }
+
+  function removeClassRun(element, className) {
+    const runs = classRuns.get(element);
+    clearTimeout(runs?.get(className));
+    runs?.delete(className);
+    if (!runs?.size) classRuns.delete(element);
+    element.classList.remove(className);
+    if (className === "motion-rise") element.style.removeProperty("--motion-delay");
+  }
+
+  function play(element, className, duration = 700) {
+    if (!element || !enabled()) return;
+    removeClassRun(element, className);
+    void element.offsetWidth;
+    element.classList.add(className);
+    if (!classRuns.has(element)) classRuns.set(element, new Map());
+    classRuns.get(element).set(className, setTimeout(() => removeClassRun(element, className), duration));
+  }
+
+  function stopWithin(scope) {
+    for (const channels of [...animations.values()]) {
+      for (const record of [...channels.values()]) if (scope.contains(record.element)) stop(record, true);
+    }
+    for (const [element, runs] of [...classRuns]) {
+      if (scope.contains(element)) for (const className of [...runs.keys()]) removeClassRun(element, className);
+    }
+    clearReveals(scope);
   }
 
   function applyMotion(on, save = true) {
-    root.classList.toggle("no-motion", !on);
+    requested = !!on;
+    const active = requested && !reducedMotion?.matches;
+    root.classList.toggle("no-motion", !active);
     const input = document.getElementById("motion-mode");
-    if (input) input.checked = on;
-    if (save) { try { window.cgsStorage.setItem(STORAGE_KEY, on ? "1" : "0"); } catch (_) {} }
-  }
-
-  // Перезапуск анимации элемента
-  function play(element, className, duration = 700) {
-    if (!element || !enabled()) return;
-    element.classList.remove(className);
-    void element.offsetWidth; // Перезапуск CSS-анимации
-    element.classList.add(className);
-    clearTimeout(timers.get(element));
-    timers.set(element, setTimeout(() => element.classList.remove(className), duration));
-  }
-
-  function staggerChildren(container, selector, step = 20, max = 8) {
-    if (!container || !enabled()) return;
-    const items = [...container.querySelectorAll(selector)].slice(0, 60);
-    items.forEach((item, index) => {
-      const delay = Math.min(index, max) * step;
-      item.style.setProperty("--motion-delay", `${delay}ms`);
-      play(item, "motion-rise", 560 + delay);
+    if (input) input.checked = requested;
+    if (save) { try { window.cgsStorage.setItem(STORAGE_KEY, requested ? "1" : "0"); } catch (_) {} }
+    if (active) return;
+    stopWithin(document.documentElement);
+    clearTimeout(recolorTimer);
+    root.classList.remove("motion-recolor");
+    // Завершаем внешние переходы, сохраняя их обработчики очистки
+    document.getAnimations().forEach(animation => {
+      if ((typeof CSSAnimation !== "undefined" && animation instanceof CSSAnimation) || (typeof CSSTransition !== "undefined" && animation instanceof CSSTransition)) return;
+      try { animation.finish(); } catch (_) { animation.cancel(); }
     });
   }
 
-  // Анимация разделов
   function animateView(view) {
     if (!view || !enabled()) return;
-    play(document.getElementById("page-title"), "motion-title", 300);
-    play(document.getElementById("page-eyebrow"), "motion-title", 300);
+    play(document.getElementById("page-title"), "motion-title", 470);
+    play(document.getElementById("page-eyebrow"), "motion-title", 370);
+    animateSection(view);
   }
 
-  window.addEventListener("cgs:view-changed", (event) => {
-    // Снятие классов анимации с неактивных разделов
-    document.querySelectorAll(".view:not(.active) .motion-rise, [data-view-panel]:not(.active) .motion-rise").forEach((el) => {
-      el.classList.remove("motion-rise");
-      clearTimeout(timers.get(el));
-    });
+  window.addEventListener("cgs:view-changed", event => {
     const view = document.querySelector(`[data-view-panel="${event.detail}"]`);
-    requestAnimationFrame(() => animateView(view));
+    if (!view || view === currentView) return;
+    if (currentView) stopWithin(currentView);
+    currentView = view;
+    requestAnimationFrame(() => { if (view === currentView) animateView(view); });
   });
 
-  // Вкладки гипервизора
-  document.addEventListener("click", (event) => {
-    const tab = event.target.closest("[data-hv-tab]");
-    if (!tab) return;
-    requestAnimationFrame(() => {
-      const panel = document.querySelector(`[data-hv-tab-panel="${tab.dataset.hvTab}"]`);
-      play(panel, "motion-fade", 300);
-    });
-  });
+  function animateTab(panel) {
+    const view = panel?.closest(".view.active");
+    if (!view) return;
+    stopWithin(view);
+    requestAnimationFrame(() => { if (visible(panel)) animateSection(panel, 8); });
+  }
 
-  // Появление скрытых блоков
-  const visibilityObserver = new MutationObserver((records) => {
+  document.addEventListener("cgs:hv-tab-changed", event => animateTab(document.querySelector(`[data-hv-tab-panel="${event.detail}"]`)));
+  document.addEventListener("cgs:settings-tab-changed", event => animateTab(document.querySelector(`[data-tab-panel="${event.detail}"]`)));
+
+  const visibilityObserver = new MutationObserver(records => {
     if (!enabled()) return;
+    const revealed = new Set();
     for (const record of records) {
       const element = record.target;
-      const before = record.oldValue || "";
-      if (!/(^|\s)hidden(\s|$)/.test(before) || element.classList.contains("hidden")) continue;
-      if (element.closest(".toast-stack")) continue;
-      if (element.classList.contains("modal-backdrop")) continue; // У модалок отдельная анимация
-      if (element.classList.contains("settings-tab-panel") || element.closest(".settings-tab-panel")) continue;
-      if (element.classList.contains("nav-context-menu") || element.closest(".nav-context-menu")) continue;
-      play(element, "motion-appear", 450);
+      if (record.attributeName === "class") {
+        const before = new Set((record.oldValue || "").split(/\s+/));
+        if (before.has("hidden") && !element.classList.contains("hidden")) revealed.add(element);
+        const selected = ["active", "selected"].some(name => !before.has(name) && element.classList.contains(name));
+        if (selected && element.matches(SELECTION_SELECTORS) && visible(element)) {
+          const icon = element.querySelector("svg") || element;
+          animate(icon, [{ opacity: 0.55, translate: "0 2px" }, { opacity: 1, translate: "0 0" }], { duration: 220 }, "select");
+        }
+        if (element.classList.contains("files-catalog") && before.has("view-list") !== element.classList.contains("view-list")) {
+          requestAnimationFrame(() => enterSequence([...document.querySelectorAll("#files-grid > *,#files-featured-grid > *")].filter(visible)));
+        }
+      } else if (record.oldValue !== null && !element.hidden) revealed.add(element);
+    }
+    for (const element of revealed) {
+      if (!visible(element) || element.matches(".settings-tab-panel,.modal-backdrop,.nav-context-menu")) continue;
+      if (element.closest(".toast-stack,.modal-backdrop,.nav-context-menu,.k-search") || enteringParent(element)) continue;
+      enter(element);
     }
   });
 
-  // Анимация списков
-  const signatures = new WeakMap();
-  function signature(container) {
-    return [...container.children]
-      .map((child) => (child.querySelector("h3,strong,b")?.textContent || child.textContent || "").replace(/\d+(?:[.,]\d+)?\s*%/g, "").trim().slice(0, 48))
-      .join("|");
-  }
+  const itemKey = child => (child.querySelector("h3,strong,b")?.textContent || child.textContent || "").replace(/\d+(?:[.,]\d+)?\s*%/g, "").trim().slice(0, 48);
+  const signature = container => [...container.children].map(itemKey).join("|");
+
   function watchList(container) {
     signatures.set(container, signature(container));
     new MutationObserver(() => {
       const next = signature(container);
       const previous = signatures.get(container);
       if (next === previous) return;
-      const previousItems = new Set((previous || "").split("|"));
       signatures.set(container, next);
-      if (!enabled()) return;
+      if (!enabled() || !visible(container) || enteringParent(container)) return;
+      const previousItems = new Set((previous || "").split("|"));
       let index = 0;
-      [...container.children].forEach((child) => {
-        const key = (child.querySelector("h3,strong,b")?.textContent || child.textContent || "").replace(/\d+(?:[.,]\d+)?\s*%/g, "").trim().slice(0, 48);
-        if (previousItems.has(key) && previous) return; // Пропуск уже отрисованных элементов
-        const delay = Math.min(index, 8) * 20;
-        child.style.setProperty("--motion-delay", `${delay}ms`);
+      [...container.children].slice(0, 60).forEach(child => {
+        if (previous && previousItems.has(itemKey(child))) return;
+        const delay = Math.min(index++, 8) * 20;
         play(child, "motion-rise", 560 + delay);
-        index += 1;
+        child.style.setProperty("--motion-delay", `${delay}ms`);
       });
     }).observe(container, { childList: true });
   }
 
-  // Плавная смена темы
+  function watchValue(element) {
+    let previous = element.textContent.trim();
+    let changedAt = 0;
+    new MutationObserver(() => {
+      const value = element.textContent.trim();
+      if (value === previous) return;
+      previous = value;
+      const now = performance.now();
+      if (!value || !enabled() || !visible(element) || enteringParent(element) || now - changedAt < 350) return;
+      changedAt = now;
+      animate(element, [{ opacity: 0.45, translate: "0 3px" }, { opacity: 1, translate: "0 0" }], { duration: 240 }, "value");
+    }).observe(element, { childList: true, characterData: true, subtree: true });
+  }
+
   function softRecolor() {
     if (!enabled()) return;
     root.classList.add("motion-recolor");
-    clearTimeout(timers.get(root));
-    timers.set(root, setTimeout(() => root.classList.remove("motion-recolor"), 450));
+    clearTimeout(recolorTimer);
+    recolorTimer = setTimeout(() => root.classList.remove("motion-recolor"), 450);
   }
 
-  // Плавное раскрытие details (аккордеон)
   function setupDetailsAccordion(details) {
-    const summary = details.querySelector("summary");
-    if (!summary || details.__accordionBound) return;
-    details.__accordionBound = true;
-
-    let anim = null;
-    let isClosing = false;
-    let isOpening = false;
-
-    summary.addEventListener("click", (event) => {
-      if (!enabled()) return;
-      event.preventDefault();
-      details.style.overflow = "hidden";
-
-      if (isClosing || !details.open) {
-        isClosing = false;
-        isOpening = true;
-        const startH = details.offsetHeight;
-        details.open = true;
-        details.classList.add("is-open");
-        const endH = details.offsetHeight;
-        if (anim) anim.cancel();
-        anim = details.animate(
-          [
-            { height: `${startH}px`, opacity: 0.6 },
-            { height: `${endH}px`, opacity: 1 }
-          ],
-          { duration: 260, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }
-        );
-        anim.onfinish = () => {
-          isOpening = false;
-          details.style.height = "";
-          details.style.overflow = "";
-        };
-      } else {
-        isOpening = false;
-        isClosing = true;
-        const startH = details.offsetHeight;
-        const endH = summary.offsetHeight;
-        if (anim) anim.cancel();
-        anim = details.animate(
-          [
-            { height: `${startH}px`, opacity: 1 },
-            { height: `${endH}px`, opacity: 0.6 }
-          ],
-          { duration: 220, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }
-        );
-        anim.onfinish = () => {
-          isClosing = false;
-          details.open = false;
-          details.classList.remove("is-open");
-          details.style.height = "";
-          details.style.overflow = "";
-        };
-      }
+    const summary = details.querySelector(":scope > summary");
+    if (!summary) return;
+    const state = { targetOpen: details.open, running: false, overflow: details.style.overflow };
+    details.addEventListener("toggle", () => {
+      if (!state.running) state.targetOpen = details.open;
+      details.classList.toggle("is-open", details.open);
     });
+    summary.addEventListener("click", event => {
+      if (!enabled() || event.defaultPrevented || event.target.closest("a,button,input,select,textarea")) return;
+      event.preventDefault();
+      const target = !(state.running ? state.targetOpen : details.open);
+      const start = details.getBoundingClientRect().height;
+      const previous = animations.get(details)?.get("accordion");
+      if (previous) stop(previous);
+      if (!state.running) state.overflow = details.style.overflow;
+      // Измеряем оба состояния до следующего кадра
+      details.open = target;
+      const end = details.getBoundingClientRect().height;
+      details.open = true;
+      details.style.overflow = "hidden";
+      state.targetOpen = target;
+      state.running = true;
+      animate(details, [{ height: `${start}px` }, { height: `${end}px` }], { duration: target ? 260 : 200 }, "accordion", () => {
+        state.running = false;
+        details.open = target;
+        details.classList.toggle("is-open", target);
+        details.style.overflow = state.overflow;
+      });
+    });
+  }
+
+  function dismiss(element, complete) {
+    if (!element || !enabled() || !visible(element)) { complete(); return; }
+    animate(element, [{ opacity: getComputedStyle(element).opacity }, { opacity: 0 }], { duration: 140 }, "exit", complete);
   }
 
   function init() {
     applyMotion(readSetting(), false);
-    document.getElementById("motion-mode")?.addEventListener("change", (event) => applyMotion(event.currentTarget.checked));
-    document.querySelectorAll("[data-theme-option], .accent").forEach((button) => button.addEventListener("click", softRecolor, true));
+    reducedMotion?.addEventListener("change", () => applyMotion(requested, false));
+    document.getElementById("motion-mode")?.addEventListener("change", event => applyMotion(event.currentTarget.checked));
+    document.querySelectorAll("[data-theme-option],.accent").forEach(button => button.addEventListener("click", softRecolor, true));
     document.querySelectorAll("details").forEach(setupDetailsAccordion);
-
-    visibilityObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class"], attributeOldValue: true });
-    LIST_SELECTORS.forEach((selector) => document.querySelectorAll(selector).forEach(watchList));
-
+    visibilityObserver.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["class", "hidden"], attributeOldValue: true });
+    LIST_SELECTORS.forEach(selector => document.querySelectorAll(selector).forEach(watchList));
+    document.querySelectorAll(".save-stat strong,#files-total,#ac-detected-count,#ac-status,#hv-selected-state,#hv-eclipse-status,#eos-status").forEach(watchValue);
     root.classList.add("motion-ready");
-    animateView(document.querySelector(".view.active"));
+    currentView = document.querySelector(".view.active");
+    animateView(currentView);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
-
-  window.cgsMotion = { play, applyMotion, animateView };
+  window.cgsMotion = { play, applyMotion, animateView, dismiss, transition: animate };
 })();

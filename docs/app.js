@@ -12,9 +12,7 @@
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ESC_MAP[c]);
   const safeUrl = (u) => (/^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '#');
 
-  /* ================= Движение: общие помощники ================= */
-  // Анимации интерфейса идут через Web Animations API: они не спорят с CSS-переходами,
-  // снимаются сами по окончании и полностью отключаются при «уменьшении движения»
+  /* Общие эффекты через Web Animations API с поддержкой уменьшения движения */
   const EASE = 'cubic-bezier(.16, 1, .3, 1)';
   const EASE_IN = 'cubic-bezier(.4, 0, 1, 1)';
   const canAnimate = !reduced && typeof Element !== 'undefined' && 'animate' in Element.prototype;
@@ -61,8 +59,7 @@
     };
   }
 
-  // Скользящая подложка под активным пунктом группы кнопок (фильтры, вид, язык).
-  // blend — белая подложка в режиме difference: текст под ней инвертируется прямо во время движения
+  // Подложка активного пункта; difference инвертирует текст во время движения
   function makeIndicator(box, itemSel, { blend = false } = {}) {
     if (!box) return () => {};
     const ind = document.createElement('span');
@@ -99,7 +96,7 @@
     return update;
   }
 
-  /* ================= Заставка-мозаика ================= */
+  /* Заставка-мозаика */
   function runLoader() {
     return new Promise((resolve) => {
       const loader = $('#loader');
@@ -120,7 +117,7 @@
       if (repeat) { finish(); return; }
       // Скрипт сильно запоздал и страховка CSS уже прячет заставку — повторно её не показываем
       if (+getComputedStyle(loader).opacity < 1) { finish(); return; }
-      loader.style.animation = 'none'; // заставка запущена — страховочное скрытие не нужно
+      loader.style.animation = 'none'; // Заставка запущена — страховочное скрытие не нужно
       const minTime = 1600;
 
       // Фоновая сетка плиток
@@ -219,7 +216,7 @@
     });
   }
 
-  /* ================= Разбивка заголовков на слова ================= */
+  /* Разбивка заголовков на слова */
   function splitText() {
     $$('[data-split]').forEach((el) => {
       let i = 0;
@@ -231,8 +228,7 @@
     });
   }
 
-  // Общий градиент заголовков: каждое слово получает своё смещение внутри заголовка,
-  // поэтому переход от белого к серебристому идёт плавно через все строки
+  // Смещение слов сохраняет общий градиент заголовка
   function paintTitles() {
     $$('[data-split]').forEach((el) => {
       el.style.setProperty('--tw', `${el.clientWidth}px`);
@@ -251,7 +247,7 @@
     document.fonts?.ready?.then(paintTitles).catch(() => {});
   }
 
-  /* ================= Появление при прокрутке ================= */
+  /* Появление при прокрутке */
   function initReveal() {
     const items = $$('.reveal, [data-split]');
     if (!('IntersectionObserver' in window) || reduced) { items.forEach((e) => e.classList.add('in')); return; }
@@ -265,7 +261,7 @@
     items.forEach((e) => io.observe(e));
   }
 
-  /* ================= Счётчики ================= */
+  /* Счётчики */
   function initCounters() {
     const els = $$('[data-count]');
     const io = new IntersectionObserver((entries) => {
@@ -288,7 +284,7 @@
     els.forEach((e) => io.observe(e));
   }
 
-  /* ================= Шапка и навигация ================= */
+  /* Шапка и навигация */
   function initHeader() {
     const header = $('#header');
     const nav = $('#nav');
@@ -328,8 +324,7 @@
       window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
     });
 
-    // Активный пункт меню: раздел, который пересекает линию на 45% высоты окна.
-    // Считаем по положению при прокрутке — так подсветка верна и после прыжков по якорям.
+    // Активен раздел на отметке 45% высоты окна, в том числе после перехода по якорю
     const links = $$('a[href^="#"]', nav);
     const targets = links.map((l) => [l, $(l.getAttribute('href'))]).filter(([, sec]) => sec);
     let current = null;
@@ -348,8 +343,7 @@
       });
     };
 
-    // На телефоне кнопка «Наверх» показывается только при прокрутке вверх,
-    // чтобы не перекрывать кнопки скачивания в карточках
+    // На телефоне показываем «Наверх» только при прокрутке вверх
     const mqMobile = window.matchMedia('(max-width: 600px)');
     let goingUp = false;
     let fabTimer = 0;
@@ -388,7 +382,7 @@
     update();
   }
 
-  /* ================= Эффекты прокрутки ================= */
+  /* Эффекты прокрутки */
   function initScrollFx() {
     const hw = $('#heroWindow');
     const hero = $('.hero');
@@ -415,8 +409,7 @@
         hw.style.setProperty('--p', p.toFixed(3));
       }
       if (footer) {
-        // Волна букв ECLIPSE: от появления подвала снизу до точки, где его верх на 20% высоты окна.
-        // На высоких экранах до этой точки не докрутить — тогда финал ровно в самом низу страницы
+        // Волна ECLIPSE завершается у нижнего края страницы даже на высоких экранах
         const r = footer.getBoundingClientRect();
         const y = window.scrollY;
         const startY = y + r.top - vh;
@@ -431,7 +424,7 @@
     update();
   }
 
-  /* ================= Фон / параллакс ================= */
+  /* Фон / параллакс */
   function initPointerFx() {
     const croc = $('#heroCroc');
     if (!fine || reduced) return;
@@ -460,7 +453,7 @@
     });
   }
 
-  /* ================= Витрина модулей + лайтбокс ================= */
+  /* Витрина модулей + лайтбокс */
   function initShowcase() {
     const items = $$('#showcaseList .sc-item');
     const frames = $('#showcaseFrames');
@@ -485,8 +478,7 @@
     });
 
     let current = 0;
-    // После клика/клавиатуры/закрытия лайтбокса IO ненадолго молчит: иначе сдвиг вёрстки
-    // (смена описания, возврат прокрутки) успевает переключить витрину на соседний пункт
+    // После действий временно отключаем наблюдение, чтобы сдвиг вёрстки не менял витрину
     let ioMuteUntil = 0;
     const muteIo = (ms) => { ioMuteUntil = Math.max(ioMuteUntil, performance.now() + ms); };
     // instant — кадр меняется без анимации (витрину синхронизирует закрывающийся лайтбокс)
@@ -537,14 +529,14 @@
     }, { rootMargin: window.innerWidth < 960 ? '-62% 0px -30% 0px' : '-48% 0px -48% 0px' });
     items.forEach((it) => io.observe(it));
 
-    /* ---- Лайтбокс: снимок «вылетает» из окна витрины и возвращается в него при закрытии ---- */
+    /* Лайтбокс: снимок «вылетает» из окна витрины и возвращается в него при закрытии */
     const lb = $('#lightbox'), lbImg = $('#lightboxImg'), lbT = $('#lightboxTitle'), lbD = $('#lightboxDesc'), lbC = $('#lightboxCount');
     const lbFig = $('.lightbox-fig', lb);
     const lbText = lbT?.parentElement;
     const lbClose = $('.lightbox-nav [data-close]', lb);
     const win = $('#showcaseWindow');
-    let lbIndex = 0;   // показанный снимок
-    let lbTarget = 0;  // снимок, к которому идёт перелистывание
+    let lbIndex = 0;   // Показанный снимок
+    let lbTarget = 0;  // Снимок, к которому идёт перелистывание
     let lastFocus = null;
     let isOpen = false;
     let swapId = 0;
@@ -561,9 +553,7 @@
       lbImg.getAnimations?.().forEach((a) => a.cancel());
       lbText?.getAnimations?.().forEach((a) => a.cancel());
     };
-    // «Полёт» снимка между окном витрины и лайтбоксом. События отмены приходят асинхронно,
-    // поэтому завершение учитывается только для текущего полёта
-    // Преобразование, которое ставит прямоугольник box на место target (масштаб от центра)
+    // Перенос снимка в лайтбокс; учитываем завершение только текущей анимации
     const flipTo = (box, target) => {
       const dx = (target.left + target.width / 2) - (box.left + box.width / 2);
       const dy = (target.top + target.height / 2) - (box.top + box.height / 2);
@@ -591,8 +581,7 @@
       win.classList.remove('is-zoomed');
     };
 
-    // Перелистывание: снимок уходит в сторону, следующий въезжает с противоположной.
-    // fromX — смещение после свайпа, чтобы движение продолжилось с того места, где отпустили палец
+    // Перелистывание продолжается от точки завершения свайпа
     const show = (i, dir = 1, fromX = 0) => {
       if (!isOpen) return;
       const next = (i + items.length) % items.length;
@@ -738,7 +727,7 @@
     lb.addEventListener('touchcancel', endDrag, { passive: true });
   }
 
-  /* ================= Сравнение ================= */
+  /* Сравнение */
   function initCompare() {
     const box = $('#compareBox');
     if (!box) return;
@@ -822,7 +811,7 @@
     io.observe(box);
   }
 
-  /* ================= Мультиязычность (RU / EN) ================= */
+  /* Мультиязычность (RU / EN) */
   let currentLang = localStorage.getItem('es-lang') || 'ru';
   if (!['ru', 'en'].includes(currentLang)) currentLang = 'ru';
 
@@ -1348,7 +1337,7 @@
     }
   }
 
-  /* ================= Релизы GitHub (динамический парсинг всех версий) ================= */
+  /* Релизы GitHub (динамический парсинг всех версий) */
   async function fetchAllReleases(repo) {
     const res = await fetch(`https://api.github.com/repos/${repo}/releases?per_page=30`, {
       headers: { Accept: 'application/vnd.github+json' }
@@ -1501,7 +1490,7 @@
     // Актуальная версия из разметки (её обновляет bump_version.py)
     const htmlVersion = ($('#eclipseVersion')?.textContent || '').trim();
 
-    // Eclipse Studio
+    // Выпуск Eclipse Studio
     getReleases('Sparki1337/eclipse-studio')
       .then((releases) => {
         syncState.ok++;
@@ -1531,7 +1520,7 @@
       })
       .finally(done);
 
-    // Crocodile Gena Studio
+    // Выпуск Crocodile Gena Studio
     getReleases('LeoBanned/crocodile-gena-studio-releases')
       .then((releases) => {
         syncState.ok++;
@@ -1551,7 +1540,7 @@
       .finally(done);
   }
 
-  /* ================= Копирование ================= */
+  /* Копирование */
   function initCopy() {
     $$('.copy-btn').forEach((btn) => {
       let timer = 0;
@@ -1561,7 +1550,7 @@
         const dict = I18N[currentLang] || I18N.ru;
         btn.textContent = dict['comm.done'] || 'Готово';
         btn.classList.remove('ok');
-        void btn.offsetWidth; // повторный клик снова проигрывает отклик
+        void btn.offsetWidth; // Повторный клик снова проигрывает отклик
         btn.classList.add('ok');
         showToast(dict['comm.copied'] || 'Ссылка скопирована', 1800);
         clearTimeout(timer);
@@ -1573,7 +1562,7 @@
     });
   }
 
-  /* ================= Каталог кряков (Crack Vault) ================= */
+  /* Каталог кряков (Crack Vault) */
   const PAGE_SIZE = 24;
   let allGames = [];
   let filteredGames = [];
@@ -1585,7 +1574,7 @@
     if (localStorage.getItem('es-games-view') === 'list') gamesUi.view = 'list';
     const savedSort = localStorage.getItem('es-games-sort');
     if (GAME_SORT_KEYS.includes(savedSort)) gamesUi.sort = savedSort;
-  } catch { /* хранилище недоступно */ }
+  } catch { /* Хранилище недоступно */ }
   // Данные GitHub (даты загрузки и скачивания): wait — ждём, ok — получены, fail — недоступны
   let gamesMeta = 'wait';
 
@@ -1618,8 +1607,7 @@
   const swapLayout = (s, from, to) => [...s].map((ch) => { const i = from.indexOf(ch); return i < 0 ? ch : to[i]; }).join('');
   const altLayout = (q) => (/[а-яё]/.test(q) ? swapLayout(q, KB_RU, KB_EN) : /[a-z]/.test(q) ? swapLayout(q, KB_EN, KB_RU) : '');
 
-  // Подсветка совпадения: сначала точная подстрока, затем «гибкая» —
-  // символы запроса подряд, но с любыми пробелами и знаками между ними (fc27 → FC 27)
+  // Подсветка точного или посимвольного совпадения без учёта разделителей
   function highlightMatch(text, q) {
     if (!q) return esc(text);
     let i = text.toLowerCase().indexOf(q);
@@ -1683,7 +1671,7 @@
     let group = parts.length > 1 ? parts[parts.length - 1] : '';
     // Имена через подчёркивание: «..._Crack_Only_ARTIFACT»
     if (!group) group = (base.match(/_([A-Z][A-Z0-9]{2,})$/) || [])[1] || '';
-    group = group.replace(/\.\d+$/, '').trim(); // «DenuvOwO.2» → «DenuvOwO»
+    group = group.replace(/\.\d+$/, '').trim(); // Убираем номер варианта DenuvOwO
     if (service.test(group)) return '';
     return /^\p{L}[\p{L}\p{N}._]{1,23}$/u.test(group) ? group : '';
   }
@@ -1728,11 +1716,11 @@
       return {
         idx, name, url: g.url, pass, file, ext,
         ...parseBuild(g.build, file),
-        bnum: Number((String(g.build || '').match(/\d{6,}/) || [])[0]) || 0, // номер билда Steam
+        bnum: Number((String(g.build || '').match(/\d{6,}/) || [])[0]) || 0, // Номер билда Steam
         group: parseGroup(file),
         pinned: g.pinned === true,
         isNew: false,
-        ts: 0, dls: null, size: 0, // дата загрузки, скачивания и размер — из GitHub
+        ts: 0, dls: null, size: 0, // Дата загрузки, скачивания и размер — из GitHub
         hay: `${name} ${g.build || ''} ${file}`.toLowerCase(),
         hayc: compactText(`${name} ${file}`),
       };
@@ -1749,7 +1737,7 @@
     allGames.forEach((g) => { g.isNew = newest.has(g); });
   }
 
-  /* ---- Даты загрузки и скачивания из GitHub Releases ---- */
+  /* Даты загрузки и скачивания из GitHub Releases */
   const ASSETS_TTL = 30 * 60 * 1000;
   const normUrl = (u) => { const v = String(u || ''); try { return decodeURIComponent(v).toLowerCase(); } catch { return v.toLowerCase(); } };
   const repoOf = (url) => (/^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/releases\/download\//i.exec(url || '') || [])[1] || '';
@@ -1780,7 +1768,7 @@
     if (cached?.map && Date.now() - cached.t < ASSETS_TTL) return cached.map;
     try {
       const map = await fetchRepoAssets(repo);
-      try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), map })); } catch { /* хранилище переполнено */ }
+      try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), map })); } catch { /* Хранилище переполнено */ }
       return map;
     } catch (err) {
       if (cached?.map) return cached.map;
@@ -1807,7 +1795,7 @@
     if (!hits) throw new Error('No matching assets');
   }
 
-  /* ---- Сортировка ---- */
+  /* Сортировка */
   const locale = () => (currentLang === 'en' ? 'en-US' : 'ru-RU');
   const capitalize = (v) => v.charAt(0).toUpperCase() + v.slice(1);
   const collators = {};
@@ -1905,10 +1893,7 @@
   // Заглушки на время загрузки каталога
   const skeletonHtml = (n) => Array.from({ length: n }, (_, i) => `<div class="game-card is-skeleton" aria-hidden="true" data-key="sk${i}"><span class="sk sk-title"></span><span class="sk sk-line"></span><span class="sk sk-btn"></span></div>`).join('');
 
-  /* ---- Анимация перестройки каталога (FLIP) ----
-     До перестройки запоминаем, где стояли видимые карточки. После — оставшиеся плавно переезжают
-     на новые места, новые проявляются каскадом, а ушедшие гаснут «призраками» на старых местах.
-     Карточки ниже экрана проявляются позже, когда до них долистают. */
+  /* Перестройка каталога по FLIP: перенос, появление и удаление карточек */
   const gridFx = { io: null, ghosts: null, height: null };
 
   function snapGrid(grid) {
@@ -2200,8 +2185,7 @@
     const updateChipsInd = makeIndicator($('.games-filters'), '.games-chip[data-filter]', { blend: true });
     const updateViewInd = makeIndicator($('.games-view'), '.games-view-btn');
 
-    // Если пользователь был глубоко в списке, после смены фильтра возвращаем к началу результатов:
-    // панель оказывается на своём месте сразу под шапкой, первые карточки — под ней
+    // После смены фильтра возвращаем прокрутку к началу результатов
     const keepResultsInView = () => {
       if (!toolbar) return;
       const headerH = $('#header')?.offsetHeight || 68;
@@ -2253,7 +2237,7 @@
           if (gamesUi.sort !== 'default') u.searchParams.set('sort', gamesUi.sort); else u.searchParams.delete('sort');
           if (gamesUi.group) u.searchParams.set('cr', gamesUi.group); else u.searchParams.delete('cr');
           history.replaceState(history.state, '', u);
-        } catch { /* например, file:// */ }
+        } catch { /* Например, file:// */ }
       }, 400);
     };
     try {
@@ -2263,7 +2247,7 @@
       const s0 = sp.get('sort');
       if (GAME_SORT_KEYS.includes(s0)) gamesUi.sort = s0;
       gamesUi.group = (sp.get('cr') || '').trim();
-    } catch { /* без параметров */ }
+    } catch { /* Без параметров */ }
 
     const onSearch = () => {
       if (clearBtn) clearBtn.hidden = !searchInput.value;
@@ -2317,7 +2301,7 @@
       const next = v === 'list' ? 'list' : 'grid';
       const changed = grid.dataset.view !== next;
       gamesUi.view = next;
-      try { localStorage.setItem('es-games-view', gamesUi.view); } catch { /* хранилище недоступно */ }
+      try { localStorage.setItem('es-games-view', gamesUi.view); } catch { /* Хранилище недоступно */ }
       $$('.games-view-btn').forEach((b) => {
         const on = b.dataset.view === gamesUi.view;
         b.classList.toggle('is-active', on);
@@ -2342,7 +2326,7 @@
     const sortMenu = $('#gamesSortMenu');
     const setSort = (v) => {
       gamesUi.sort = GAME_SORT_KEYS.includes(v) ? v : 'default';
-      try { localStorage.setItem('es-games-sort', gamesUi.sort); } catch { /* хранилище недоступно */ }
+      try { localStorage.setItem('es-games-sort', gamesUi.sort); } catch { /* Хранилище недоступно */ }
     };
     const setGroup = (v) => { gamesUi.group = v || ''; };
     const menuItems = () => $$('.games-sort-item', sortMenu).filter((b) => b.offsetParent !== null && b.getAttribute('aria-disabled') !== 'true');
@@ -2494,7 +2478,7 @@
     };
 
     getJson(GIST_URL)
-      .catch(() => getJson(`${FALLBACK_URL}?v=8.4.0`))
+      .catch(() => getJson(`${FALLBACK_URL}?v=9.0.0`))
       .then(async (data) => {
         const cracks = Array.isArray(data) ? data : (data?.cracks || []);
         allGames = prepareGames(cracks.filter((c) => c && c.name && c.url));
@@ -2528,7 +2512,7 @@
       });
   }
 
-  /* ================= Запуск ================= */
+  /* Запуск */
   document.addEventListener('DOMContentLoaded', () => {
     initLanguage();
     splitText();

@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Подготовка релиза для скилла /build:
-# 1. Запуск сборки строго портативной версии в папку Hypervisor (scripts/build.py)
-# 2. Проверка бинарника и расчёт контрольной суммы SHA-256
-# 3. Анализ коммитов git и генерация текста релиза для GitHub в фирменном стиле
+# Сборка портативной версии, проверка SHA-256 и подготовка описания релиза
 
 import os
 import sys
@@ -33,8 +30,8 @@ def get_version() -> str:
     if TAURI_CONF.exists():
         with open(TAURI_CONF, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data.get("version", "8.4.0")
-    return "8.4.0"
+            return data.get("version", "9.0.0")
+    return "9.0.0"
 
 
 def compute_sha256(file_path: Path) -> str:
@@ -91,7 +88,7 @@ def main():
     print(f"🌒 Подготовка и сборка релиза Eclipse Studio v{version}")
     print("=" * 64)
 
-    # 1. Запуск scripts/build.py для создания портативного бинарника
+    # Запуск scripts/build.py для создания портативного бинарника
     build_script = SCRIPTS_DIR / "build.py"
     cmd = [
         sys.executable,
@@ -109,7 +106,7 @@ def main():
         print("\n[-] Ошибка: сборка build.py завершилась с ошибкой.")
         sys.exit(res.returncode)
 
-    # 2. Проверка и расчёт SHA-256
+    # Проверка и расчёт SHA-256
     expected_file = HYPERVISOR_DIR / f"Eclipse-Studio-v{version}.exe"
     if not expected_file.exists():
         print(f"\n[-] Ошибка: собранный файл не найден по пути {expected_file}")
@@ -126,7 +123,7 @@ def main():
     print(f"Размер:   {file_size_mb:.2f} МБ")
     print(f"SHA-256:  {sha256_hash}")
 
-    # 3. Анализ коммитов
+    # Анализ коммитов
     commits = get_git_changes()
 
     print("\n" + "=" * 64)

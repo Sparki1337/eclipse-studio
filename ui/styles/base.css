@@ -283,7 +283,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .premium-panel { position: relative; background: linear-gradient(145deg, var(--panel-a), var(--panel-b)); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: inset 0 1px rgba(255,255,255,.025), 0 16px 50px rgba(0,0,0,.13); overflow: hidden; }
 .premium-panel::after { content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none; background:linear-gradient(115deg,rgba(255,255,255,.025),transparent 28%); }
 
-/* Home */
+/* Главная */
 .coming-label { display:inline-flex; color:var(--accent); font-size:9px; font-weight:800; letter-spacing:.2em; }
 .primary-button, .install-button { height:45px; padding:0 18px; display:inline-flex; align-items:center; justify-content:center; gap:15px; border:0; border-radius:12px; color:var(--accent-contrast, #07110e); font-size:11px; font-weight:800; background:var(--accent); box-shadow:0 13px 35px rgba(var(--accent-rgb),.16), inset 0 1px rgba(255,255,255,.45); cursor:pointer; transition:.22s; }
 .primary-button svg, .install-button svg { width:16px; }
@@ -303,7 +303,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .badge-rust { top:70px; right:24px; }.badge-tauri { bottom:70px; left:8px; }
 .muted-card{opacity:.62;border-style:dashed}
 
-/* Workspace */
+/* Рабочая область */
 .workspace-grid { display:grid; grid-template-columns:minmax(0,1fr) 288px; gap:16px; align-items:start; }
 .workspace-main { min-width:0; display:flex; flex-direction:column; gap:14px; }
 .intro-strip { position:relative; min-height:0; display:flex; align-items:center; justify-content:space-between; padding:18px 24px; border:1px solid var(--line); border-radius:18px; overflow:hidden; background:linear-gradient(145deg, var(--panel-a), var(--panel-b)); }
@@ -330,15 +330,15 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .eos-panel{display:flex;align-items:center;gap:14px;padding:17px 19px;border:1px solid var(--line);background:linear-gradient(110deg,rgba(var(--accent-rgb),.065),var(--panel-b) 50%)}.eos-icon{width:42px;height:42px;display:grid;place-items:center;flex:none;border-radius:12px;color:var(--accent);background:rgba(var(--accent-rgb),.09);border:1px solid rgba(var(--accent-rgb),.2)}.eos-icon svg{width:22px}.eos-copy{flex:1;min-width:0}.eos-copy>div{display:flex;align-items:center;gap:8px}.eos-copy h3{font-size:11px;margin:0;color:var(--text)}.eos-copy p{font-size:8.5px;color:var(--muted);margin:6px 0 0;line-height:1.5}.eos-status{font-size:7px;color:var(--accent);padding:3px 6px;background:rgba(var(--accent-rgb),.08);border-radius:5px}.eos-status.offline{color:var(--muted);background:rgba(255,255,255,.04)}.eos-actions{display:flex;gap:7px}.ghost-button{height:31px;font-size:8px;white-space:nowrap}.ghost-button:disabled{opacity:.35;cursor:not-allowed}.danger-ghost{color:#c98a96}.danger-ghost:hover{border-color:rgba(255,110,138,.25);background:rgba(255,110,138,.06)}
 .action-dock{display:flex;align-items:center;justify-content:space-between;padding:17px 19px;border:1px solid var(--line);background:linear-gradient(100deg,rgba(var(--accent-rgb),.045),var(--panel-b))}.action-ready{font-size:8px;color:var(--accent);letter-spacing:.1em;font-weight:750}.action-ready i{display:inline-block;width:5px;height:5px;margin-right:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}.action-dock p{font-size:8.5px;color:var(--muted);margin:5px 0 0}.action-dock code{color:var(--text)}.action-buttons{display:flex;gap:8px}.install-button{height:39px;font-size:9px;padding:0 15px}.uninstall-button{height:39px;color:#d794a1;border-color:rgba(255,110,138,.16);background:rgba(255,110,138,.04)}.uninstall-button:hover{background:rgba(255,110,138,.09);border-color:rgba(255,110,138,.3)}
 
-/* Activity */
+/* Журнал операций */
 .activity-panel { position:sticky;top:24px;height:calc(100vh - 88px);min-height:380px;display:flex;flex-direction:column; }
 .activity-header{height:59px;padding:0 15px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}.activity-header>div{display:flex;align-items:center;gap:9px}.activity-header strong,.activity-header small{display:block}.activity-header strong{font-size:10px}.activity-header small{font-size:6.5px;color:#56616e;letter-spacing:.16em;margin-top:3px}.activity-header button{width:27px;height:27px;display:grid;place-items:center;border:1px solid var(--line);border-radius:8px;background:transparent;color:#596372;cursor:pointer}.activity-header button:hover{color:#bdc4cc}.activity-header button svg{width:12px}.activity-body{flex:1;min-height:0;overflow-y:auto;padding:12px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.08) transparent}.log-entry{position:relative;padding:8px 10px;margin-bottom:5px;border-radius:8px;color:#94a3b8;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.035);font:9px/1.45 "Cascadia Code","SFMono-Regular",Consolas,monospace;word-break:break-word;user-select:text;display:flex;flex-direction:column;gap:3px}.log-entry time{display:block;color:#56616e;font-size:7.5px;letter-spacing:.06em;font-weight:600;line-height:1}.log-entry .log-msg{display:flex;align-items:baseline;gap:6px;min-width:0}.log-entry .log-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:11px;line-height:1;width:11px}.log-entry .log-text{flex:1;min-width:0}.log-entry.success{color:#a7f3d0;background:rgba(var(--accent-rgb),.045);border-color:rgba(var(--accent-rgb),.16)}.log-entry.success .log-icon{color:var(--accent)}.log-entry.error{color:#fca5a5;background:rgba(255,110,138,.045);border-color:rgba(255,110,138,.18)}.log-entry.error .log-icon{color:var(--danger,#f43f5e)}.log-entry.system{color:#cbd5e1;background:rgba(128,191,255,.035);border-color:rgba(128,191,255,.12)}.log-entry.system .log-icon{color:#60a5fa}.log-entry.info{color:#94a3b8}.log-entry.info .log-icon{color:#64748b}.activity-footer{height:37px;display:flex;align-items:center;gap:7px;padding:0 14px;border-top:1px solid var(--line);color:#46505d;font-size:6.5px;letter-spacing:.11em}.activity-footer b{color:#697481;font-size:6.5px}.activity-footer i{margin-left:auto;width:5px;height:5px;background:var(--accent);border-radius:50%;box-shadow:0 0 7px var(--accent)}
 
-/* Placeholder and settings */
+/* Заглушки и настройки */
 .placeholder-page{min-height:570px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px}.placeholder-orbit{position:relative;width:118px;height:118px;display:grid;place-items:center;margin-bottom:28px;border:1px solid rgba(var(--accent-rgb),.12);border-radius:50%}.placeholder-orbit::before,.placeholder-orbit::after{content:"";position:absolute;border:1px dashed rgba(var(--accent-rgb),.12);border-radius:50%;animation:spin 18s linear infinite}.placeholder-orbit::before{width:150px;height:150px}.placeholder-orbit::after{width:83px;height:83px;animation-direction:reverse}.placeholder-orbit span{position:absolute;width:72px;height:72px;border-radius:22px;background:rgba(var(--accent-rgb),.08);border:1px solid rgba(var(--accent-rgb),.18)}.placeholder-orbit svg{position:relative;z-index:2;width:28px;color:var(--accent)}.placeholder-page h2{font-size:27px;margin:13px 0 9px;letter-spacing:-.04em}.placeholder-page>p{max-width:500px;color:#707b89;line-height:1.7;font-size:11px}.future-slots{display:flex;gap:7px;margin-top:18px}.future-slots span{padding:7px 10px;border:1px dashed var(--line);border-radius:8px;color:#596371;font-size:8px}.violet-orbit{--accent:#a987ff;--accent-rgb:169,135,255}.violet-label{color:var(--violet)}
 .settings-layout{display:flex;flex-direction:column;gap:18px}.settings-card{padding:26px 28px}.settings-card h2{font-size:20px;margin:0 0 6px}.settings-card>p{color:#6c7684;font-size:11px;margin:0 0 14px}.about-row{display:flex;justify-content:space-between;align-items:center;padding:15px 0;border-bottom:1px solid var(--line);font-size:11.5px}.about-row span{color:var(--text);font-weight:600}.about-row b{font-size:10.5px;color:var(--muted);font-weight:500}
 
-/* Modal / toast */
+/* Диалоги и уведомления */
 .modal-backdrop{position:fixed;z-index:100;inset:0;display:grid;place-items:center;background:rgba(2,3,5,.78);backdrop-filter:blur(12px);animation:fade-in .2s;overflow-y:auto;padding:24px 16px;box-sizing:border-box}
 .modal-backdrop.closing{animation:fade-out .2s cubic-bezier(0.16, 1, 0.3, 1) forwards;pointer-events:none}
 .modal-backdrop.closing .modal, .modal-backdrop.closing .telegram-hub-modal, .modal-backdrop.closing .lua-detail{animation:modal-out .2s cubic-bezier(0.16, 1, 0.3, 1) forwards}
@@ -358,7 +358,7 @@ button.busy::after { content:"";width:10px;height:10px;border:1px solid currentC
   display: none !important;
 }
 
-/* Readability and spacing pass */
+/* Читаемость и отступы */
 body { font-size: 15px; }
 .app-shell { grid-template-columns: 260px 1fr; grid-template-rows: 48px 1fr; }
 .sidebar { padding: 30px 17px 20px; }
@@ -443,7 +443,7 @@ body { font-size: 15px; }
 .activity-footer { height: 41px; font-size: 7.5px; }
 .activity-footer b { font-size: 7.5px; }
 
-/* Comfort scale pass */
+/* Масштаб интерфейса */
 body { font-size: 16px; }
 .app-shell { grid-template-columns: 272px 1fr; grid-template-rows: 52px 1fr; }
 .titlebar { padding-left: 19px; }
@@ -572,7 +572,7 @@ body { font-size: 16px; }
 .toast { min-width: 290px; max-width: 400px; padding: 14px 16px; font-size: 11px; }
 
 /* Стили модального окна автообновления */
-.app-update-modal { width: min(500px, calc(100vw - 44px)); text-align: center; }
+.app-update-modal { width: min(580px, calc(100vw - 44px)); text-align: center; }
 .app-update-changelog {
   width: 100%;
   margin: 14px 0 10px;
@@ -641,19 +641,34 @@ body { font-size: 16px; }
   background: rgba(var(--accent-rgb), 0.35);
   border-radius: 3px;
 }
-.app-update-footnote {
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.5;
-  margin: 4px 0 16px;
-  text-align: center;
-}
-.app-update-footnote.hidden { display: none; }
-.app-update-progress-wrap { margin: 18px 0 12px; width: 100%; }
+/* Ход установки: этап, процент, полоса и подробности */
+.app-update-progress-wrap { box-sizing: border-box; width: 100%; margin: 16px 0 4px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-soft); text-align: left; }
 .app-update-progress-wrap.hidden { display: none; }
-.app-update-progress-bar { width: 100%; height: 9px; background: rgba(255, 255, 255, 0.08); border-radius: 6px; overflow: hidden; position: relative; border: 1px solid rgba(255, 255, 255, 0.06); }
+.app-update-phase { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11.5px; line-height: 1.5; }
+.app-update-phase strong { min-width: 0; color: var(--text); font-weight: 700; }
+.app-update-phase span { flex: none; color: var(--accent); font-family: "Cascadia Code", Consolas, monospace; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.app-update-progress-bar { width: 100%; height: 8px; margin-top: 10px; background: var(--k-panel-3, rgba(255, 255, 255, .08)); border-radius: 6px; overflow: hidden; position: relative; border: 1px solid var(--line); }
 .app-update-progress-fill { height: 100%; width: 0%; background: var(--accent); box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.65); border-radius: 6px; transition: width 0.18s ease-out; }
-.app-update-progress-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 10.5px; color: var(--muted); font-family: "Cascadia Code", Consolas, monospace; }
+/* Размер неизвестен (подготовка, переподключение): бегущий отрезок вместо процента */
+.app-update-progress-bar.indeterminate .app-update-progress-fill { width: 34% !important; animation: cgs-update-indeterminate 1.25s ease-in-out infinite; }
+@keyframes cgs-update-indeterminate { from { transform: translateX(-105%); } to { transform: translateX(300%); } }
+html.no-motion .app-update-progress-bar.indeterminate .app-update-progress-fill { width: 100% !important; animation: none; opacity: .35; }
+@media (prefers-reduced-motion: reduce) {
+  .app-update-progress-bar.indeterminate .app-update-progress-fill { width: 100% !important; animation: none; opacity: .35; }
+}
+.app-update-modal .app-update-detail { margin: 10px 0 0; color: var(--muted); font-size: 10.5px; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-line; }
+/* Ошибка и отмена: полоса и процент не нужны, остаётся причина */
+.app-update-progress-wrap:is([data-state="error"], [data-state="cancelled"]) :is(.app-update-progress-bar, #app-update-percent) { display: none; }
+.app-update-progress-wrap[data-state="error"] { border-color: rgba(255, 121, 148, .35); }
+.app-update-progress-wrap[data-state="error"] .app-update-phase strong { color: var(--tone-bad, #ff7994); }
+.app-update-progress-wrap[data-state="ready"] #app-update-percent { color: var(--muted); }
+/* Крестик закрытия: во время установки работает как «Отменить обновление» */
+.app-update-modal { position: relative; }
+.app-update-close { position: absolute; top: 14px; right: 14px; z-index: 1; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; transition: color .18s ease, background .18s ease, border-color .18s ease; }
+.app-update-close svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.app-update-close:hover:not(:disabled) { color: var(--accent); border-color: var(--line); background: var(--panel-soft); }
+.app-update-close:focus-visible { outline: 2px solid rgba(var(--accent-rgb), .7); outline-offset: 2px; }
+.app-update-close:disabled { opacity: .35; cursor: not-allowed; }
 #update-install-button { font-size: 11px; height: 34px; padding: 0 16px; }
 
 /* Шаг 2 модального окна обновления при одновременном обновлении */
@@ -855,13 +870,13 @@ body { font-size: 16px; }
   font-family: "Cascadia Code", Consolas, monospace;
 }
 
-/* Social links */
+/* Ссылки сообщества */
 .social-links { display: flex; flex-direction: column; gap: 8px; }
 .social-links .channel-card { width: 100%; }
 .community-channel { border-color: rgba(var(--accent-rgb), .14); background: linear-gradient(135deg, rgba(var(--accent-rgb), .055), rgba(255,255,255,.018)); }
 .community-channel .channel-icon { color: var(--accent); background: rgba(var(--accent-rgb), .1); border-color: rgba(var(--accent-rgb), .18); }
 
-/* Save manager */
+/* Менеджер сохранений */
 .saves-layout { display: flex; flex-direction: column; gap: 18px; }
 .saves-hero { min-height: 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 24px; background: linear-gradient(145deg, var(--panel-a), var(--panel-b)); }
 .saves-hero > div { max-width: 720px; position: relative; z-index: 2; }
@@ -937,7 +952,7 @@ body { font-size: 16px; }
 }
 .save-archive-dock .install-button:disabled { opacity: .4; cursor: not-allowed; transform: none; filter: none; }
 
-/* DLC Unlocker */
+/* Разблокировка DLC */
 .dlc-config-chip { margin-left: auto; color: #6e7886; font-size: 8px; font-weight: 750; letter-spacing: .1em; padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; white-space: nowrap; }
 .dlc-config-chip.installed { color: #9eb7ff; border-color: rgba(130, 160, 255, .32); background: rgba(130, 160, 255, .06); }
 #dlc-workspace { display: flex; flex-direction: column; gap: 18px; }
@@ -954,12 +969,12 @@ body { font-size: 16px; }
 .save-selection-actions .ghost-button:disabled { opacity: .4; cursor: not-allowed; }
 #dlc-install-button:disabled { opacity: .4; cursor: not-allowed; transform: none; filter: none; }
 
-/* CrocLua */
+/* Манифесты Steam */
 .lua-status-grid { display: grid; grid-template-columns: 1fr 2.4fr; gap: 14px; }
 .lua-steam-card { display: flex; flex-direction: column; justify-content: center; padding: 20px 24px; gap: 10px; }
 .lua-steam-card > small { color: #697482; font-size: 9px; font-weight: 750; letter-spacing: .13em; }
 .lua-steam-row { display: flex; align-items: center; gap: 10px; }
-.lua-steam-row svg { width: 18px; flex: none; color: var(--accent); }
+.lua-steam-row .steam-logo { display: block; width: 18px; height: 18px; flex: none; color: var(--accent); fill: currentColor; stroke: none; }
 .lua-steam-row input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(4,6,9,.4); outline: 0; color: #cfd6df; font: 11px/1.3 "Cascadia Code", Consolas, monospace; }
 .lua-steam-row input:focus { border-color: rgba(var(--accent-rgb), .32); }
 .lua-steam-card > span { color: #5e6876; font-size: 9.5px; }
@@ -978,7 +993,7 @@ body { font-size: 16px; }
 .millennium-plugin-actions .install-button:disabled { opacity: .42; cursor: not-allowed; transform: none; filter: none; }
 .millennium-plugin-actions .uninstall-button { height: 45px; }
 
-/* Неоновый баннер доступности обновлений библиотек OpenSteamTool */
+/* Баннер обновлений библиотек OpenSteamTool */
 .loader-update-banner {
   display: flex;
   align-items: center;
@@ -1366,7 +1381,6 @@ body { font-size: 16px; }
   color: var(--muted);
   font-size: 11px;
 }
-
 
 
 @media (max-width: 1220px) {

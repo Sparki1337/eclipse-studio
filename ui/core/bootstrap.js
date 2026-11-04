@@ -1,7 +1,4 @@
-// Палитра акцентов: единый источник для заставки, app.js и appearance.js.
-// В светлой теме яркие акценты (белый, мятный, жёлтый, лаймовый…) почти не видны на белом фоне,
-// поэтому для неё используется затемнённый оттенок того же цвета с контрастом не ниже 4.5:1.
-// Белый акцент в светлой теме становится графитовым. --accent-contrast — цвет текста на заливке акцентом.
+// Общая палитра: светлые акценты затемняются до контраста ≥ 4,5:1; --accent-contrast задаёт цвет текста
 (function () {
   var ACCENTS = {
     white:  ["#ffffff", "#1e293b"],
@@ -19,7 +16,7 @@
   };
   function normalize(name) {
     if (name === "ice") name = "white";
-    return Object.prototype.hasOwnProperty.call(ACCENTS, name) ? name : "mint";
+    return Object.prototype.hasOwnProperty.call(ACCENTS, name) ? name : "white";
   }
   function rgb(hex) {
     var n = parseInt(hex.slice(1), 16);
@@ -74,8 +71,9 @@
         if (window.cgsStorage.getItem("cgs-compact") === "1") root.classList.add("compact");
         var motion = window.cgsStorage.getItem("cgs-motion");
         if (motion === "0" || (motion === null && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) root.classList.add("no-motion");
-        var fontFamily = window.cgsStorage.getItem("cgs-font-family") || "system";
+        var fontFamily = window.cgsStorage.getItem("cgs-font-family") || "manrope";
         var FONTS = {
+          manrope: '"Manrope", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
           system: '"Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
           jetbrains: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
           minecraft: '"Minecraft", "Minecraftia", "Monocraft", monospace',
@@ -84,13 +82,19 @@
           tahoma: 'Tahoma, "Segoe UI", sans-serif',
           consolas: 'Consolas, "Cascadia Mono", monospace'
         };
-        root.style.setProperty("--font", FONTS[fontFamily] || FONTS.system);
+        root.style.setProperty("--font", FONTS[fontFamily] || FONTS.manrope);
         var font = parseInt(window.cgsStorage.getItem("cgs-font-scale") || "120", 10);
         if (font >= 85 && font <= 140) root.style.setProperty("--fs", String(font / 100));
         var side = parseInt(window.cgsStorage.getItem("cgs-sidebar-width") || "", 10);
-        if (side >= 180 && side <= 380) { root.style.setProperty("--sidebar-w", side + "px"); root.classList.add("sidebar-sized"); }
+        if (side >= 84 && side <= 380) { root.style.setProperty("--sidebar-w", side + "px"); root.classList.add("sidebar-sized"); }
+        // Положение рейки и строки поиска до первой отрисовки, чтобы раскладка не перескакивала
+        var dock = window.cgsStorage.getItem("cgs-sidebar-dock");
+        if (dock === "right" || dock === "top" || dock === "bottom") root.classList.add("sidebar-dock-" + dock);
+        if (dock === "top" || dock === "bottom") root.classList.add("sidebar-horizontal");
+        var searchDock = window.cgsStorage.getItem("cgs-search-dock");
+        if (searchDock === "left" || searchDock === "right") root.classList.add("search-dock-" + searchDock);
         if (window.cgsStorage.getItem("cgs-splash") === "0") root.classList.add("no-splash");
-        window.cgsAccent.apply(window.cgsStorage.getItem("accent") || "mint", theme);
+        window.cgsAccent.apply(window.cgsStorage.getItem("accent") || "white", theme);
         // Мгновенная предварительная загрузка логотипа заставки для исключения черного экрана
         window.__splashLogo = new Image();
         window.__splashLogo.src = "./assets/images/icon-loader.png";

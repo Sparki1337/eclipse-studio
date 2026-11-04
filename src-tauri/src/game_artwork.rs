@@ -1,5 +1,4 @@
-// Модуль поиска обложек и идентификации игр по исполняемым файлам
-// Поддерживает стандартные библиотеки Steam, вложенные пути Unreal Engine, Unity и сторонние репаки
+// Поиск обложек и распознавание игр по исполняемым файлам
 
 use serde::Serialize;
 use std::{
@@ -129,7 +128,7 @@ fn is_system_or_temp_dir(name: &str) -> bool {
 fn game_root(exe: &Path) -> Option<PathBuf> {
     let parent = exe.parent()?;
 
-    // 1. Проверяем стандартную структуру Steam: steamapps/common/<Game>
+    // Проверяем стандартную структуру Steam: steamapps/common/<Game>
     for dir in parent.ancestors() {
         if let (Some(p1), Some(p2)) = (dir.parent(), dir.parent().and_then(|p| p.parent())) {
             if p1
@@ -144,7 +143,7 @@ fn game_root(exe: &Path) -> Option<PathBuf> {
         }
     }
 
-    // 2. Проверяем вложенные каталоги движков (Unreal Engine: Project/Binaries/Win64, Unity, bin/x64)
+    // Проверяем вложенные каталоги движков (Unreal Engine: Project/Binaries/Win64, Unity, bin/x64)
     let mut current = parent.to_path_buf();
     let mut depth = 0;
     while let Some(p) = current.parent().map(|p| p.to_path_buf()) {
@@ -214,7 +213,7 @@ fn game_root(exe: &Path) -> Option<PathBuf> {
     None
 }
 
-// Проверка, является ли строка шаблонным общим словом (Game, Launcher, temp, test и т.д.), которое нельзя угадывать через Steam
+// Исключаем общие имена вроде Game и Launcher из поиска Steam
 fn is_generic_title(title: &str) -> bool {
     let lower = title.trim().to_lowercase();
     if lower.len() < 4 || lower.contains("test") || lower.contains("temp") {
@@ -295,7 +294,7 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
     let root = game_root(&exe);
     let parent = exe.parent()?;
 
-    // 1. Проверяем локальную библиотеку Steam
+    // Проверяем локальную библиотеку Steam
     if let Some(game) = root
         .as_deref()
         .and_then(crate::steam_library::installed_game_for_path)
@@ -306,7 +305,7 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
         return Some((game.appid, Some(game.name)));
     }
 
-    // 2. Проверяем файл steam_appid.txt прямо рядом с исполняемым файлом
+    // Проверяем файл steam_appid.txt прямо рядом с исполняемым файлом
     for name in ["steam_appid.txt", "steam_settings/steam_appid.txt"] {
         if let Some(id) = read_id(&parent.join(name)) {
             let name = crate::steam::app_overview(id).map(|o| o.name);
@@ -314,7 +313,7 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
         }
     }
 
-    // 3. Проверяем файл steam_appid.txt в корне игры, если он найден
+    // Проверяем файл steam_appid.txt в корне игры, если он найден
     if let Some(ref r) = root {
         for name in ["steam_appid.txt", "steam_settings/steam_appid.txt"] {
             if let Some(id) = read_id(&r.join(name)) {
@@ -324,7 +323,7 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
         }
     }
 
-    // 4. Проверяем прямые цепочки предков до корня
+    // Проверяем прямые цепочки предков до корня
     for dir in parent.ancestors().take(6) {
         if dir.parent().is_none()
             || dir
@@ -344,7 +343,7 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
         }
     }
 
-    // 5. Глубокий рекурсивный поиск в корне игры (или папке исполняемого файла)
+    // Глубокий рекурсивный поиск в корне игры (или папке исполняемого файла)
     let search = root.as_deref().unwrap_or(parent);
     let mut ids = BTreeSet::new();
 
@@ -394,7 +393,7 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
         return None;
     }
 
-    // 6. Поиск через Steam Store API по названию корневой папки или исполняемого файла
+    // Поиск через Steam Store API по названию корневой папки или исполняемого файла
     if let Some(ref r) = root {
         if let Some(folder_name) = r.file_name().and_then(|n| n.to_str()) {
             let clean = clean_game_title(folder_name);
@@ -446,12 +445,12 @@ pub(crate) async fn game_artwork(exe_path: String) -> Result<Option<GameArtwork>
         });
 
         let mut urls = Vec::new();
-        // 1. Точный URL обложки из Steam Store (включая актуальные хешированные пути CDN)
+        // Точный URL обложки из Steam Store (включая актуальные хешированные пути CDN)
         if let Some(store_url) = crate::steam::app_overview(appid).and_then(|app| app.header_image)
         {
             urls.push(store_url);
         }
-        // 2. Стандартные резервные пути Steam CDN
+        // Стандартные резервные пути Steam CDN
         urls.push(format!(
             "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{appid}/header.jpg"
         ));

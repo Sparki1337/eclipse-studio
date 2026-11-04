@@ -44,17 +44,17 @@ const pinnedFiles = [
   },
   {
     name: "Crocodile Gena Studio",
-    build: "Build 8.4.0",
+    build: "Build 9.0.0",
     password: "",
     pinned: true,
-    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/download/v8.4.0/setup.exe",
+    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/download/v9.0.0/setup.exe",
   },
   {
     name: "Eclipse Studio",
-    build: "Build 8.4.0",
+    build: "Build 9.0.0",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/download/v8.4.0/Eclipse-Studio-v8.4.0.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/download/v9.0.0/Eclipse-Studio-v9.0.0.exe",
   },
 ];
 
@@ -144,12 +144,12 @@ async function main() {
 
   const page = await browser.newPage();
 
-  // Тот же мок и те же IPC-контракты, что в npm test.
+  // Тот же мок и те же IPC-контракты, что в npm test
   await page.evaluateOnNewDocument(require("./dev-mock.cjs")(fullCatalogFiles));
 
   const baseUrl = `http://127.0.0.1:${port}/index.html`;
 
-  // 1. Главная
+  // Главная
   console.log("Снятие скриншота: Главная.png");
   await page.goto(`${baseUrl}?view=home`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
@@ -160,7 +160,7 @@ async function main() {
   fs.copyFileSync(homePath, comparePath);
   console.log("  ✓ Главная.png и compare-eclipse.png сохранены");
 
-  // 2. Online Fix
+  // Раздел Online Fix
   console.log("Снятие скриншота: Online_Fix.png");
   await page.goto(`${baseUrl}?view=fix`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
@@ -168,7 +168,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "Online_Fix.png") });
   console.log("  ✓ Online_Fix.png сохранён");
 
-  // 3. Менеджер сохранений
+  // Менеджер сохранений
   console.log("Снятие скриншота: Менеджер_сохранений.png");
   await page.goto(`${baseUrl}?view=saves`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
@@ -176,7 +176,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "Менеджер_сохранений.png") });
   console.log("  ✓ Менеджер_сохранений.png сохранён");
 
-  // 4. DLC Unlocker
+  // Раздел DLC Unlocker
   console.log("Снятие скриншота: DLC_Unlocker.png");
   await page.goto(`${baseUrl}?view=dlc`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
@@ -186,7 +186,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "DLC_Unlocker.png") });
   console.log("  ✓ DLC_Unlocker.png сохранён");
 
-  // 5. Eclipse Manifest
+  // Раздел Eclipse Manifest
   console.log("Снятие скриншота: Eclipse_Manifest.png");
   await page.goto(`${baseUrl}?view=lua`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
@@ -194,7 +194,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "Eclipse_Manifest.png") });
   console.log("  ✓ Eclipse_Manifest.png сохранён");
 
-  // 6. Гипервизор (вкладка Гипервизор)
+  // Гипервизор (вкладка Гипервизор)
   console.log("Снятие скриншота: Гипервизор.png");
   await page.goto(`${baseUrl}?view=hypervisor`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
@@ -217,7 +217,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "Гипервизор.png") });
   console.log("  ✓ Гипервизор.png сохранён");
 
-  // 7. Античиты (вкладка Античиты)
+  // Античиты (вкладка Античиты)
   console.log("Снятие скриншота: Античиты.png");
   await page.evaluate(() => {
     const btn = document.querySelector('button[data-hv-tab="anticheat"]');
@@ -227,7 +227,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "Античиты.png") });
   console.log("  ✓ Античиты.png сохранён");
 
-  // 8. VBS & HVCI (вкладка VBS)
+  // VBS & HVCI (вкладка VBS)
   console.log("Снятие скриншота: VBS.png");
   await page.evaluate(() => {
     const btn = document.querySelector('button[data-hv-tab="vbs"]');
@@ -237,7 +237,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "VBS.png") });
   console.log("  ✓ VBS.png сохранён");
 
-  // 9. Кряки
+  // Кряки
   console.log("Снятие скриншота: Кряки.png");
   await page.goto(`${baseUrl}?view=files`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
@@ -245,7 +245,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "Кряки.png") });
   console.log("  ✓ Кряки.png сохранён");
 
-  // 10. Утилиты
+  // Утилиты
   console.log("Снятие скриншота: Утилиты.png");
   await page.goto(`${baseUrl}?view=utilities`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
@@ -253,7 +253,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "Утилиты.png") });
   console.log("  ✓ Утилиты.png сохранён");
 
-  // 11. Настройки
+  // Настройки
   console.log("Снятие скриншота: Настройки.png");
   await page.goto(`${baseUrl}?view=settings`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
@@ -261,7 +261,7 @@ async function main() {
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, "Настройки.png") });
   console.log("  ✓ Настройки.png сохранён");
 
-  // 12. Telegram Каналы
+  // Telegram Каналы
   console.log("Снятие скриншота: Telegram_Каналы.png");
   await page.click("#open-telegram-hub");
   await sleep(600);

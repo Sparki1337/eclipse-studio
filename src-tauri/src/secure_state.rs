@@ -1,4 +1,4 @@
-//! Всё состояние WebView переносится в пользовательское хранилище DPAPI, ключи не возвращаются UI.
+//! Всё состояние WebView переносится в пользовательское хранилище DPAPI, ключи не возвращаются UI
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::PathBuf, sync::Mutex};
 use tauri::{AppHandle, Manager};
@@ -38,7 +38,7 @@ pub(crate) fn crypt(bytes: &[u8], encrypt: bool) -> Result<Vec<u8>, String> {
         pbData: bytes.as_ptr() as *mut u8,
     };
     let mut output = CRYPT_INTEGER_BLOB::default();
-    // Только текущая учётная запись Windows; без CRYPTPROTECT_LOCAL_MACHINE.
+    // Только текущая учётная запись Windows; без CRYPTPROTECT_LOCAL_MACHINE
     unsafe {
         let result = if encrypt {
             CryptProtectData(&input, PCWSTR::null(), None, None, None, 1, &mut output)
@@ -194,7 +194,15 @@ pub fn secret(app: &AppHandle, service: &str) -> Result<String, String> {
         _ => return Err("Неизвестный сервис".into()),
     };
     let _lock = STATE_LOCK.lock().map_err(|_| "Хранилище занято")?;
-    load(app)?
+    let state = load(app)?;
+    if service == "ryuu" {
+        return crate::ryuu_auth::resolve_key(
+            state.values.get("ryuuKeySource").map(String::as_str),
+            state.values.get("ryuuKey").map(String::as_str),
+        )
+        .map(str::to_owned);
+    }
+    state
         .values
         .get(key)
         .filter(|v| !v.is_empty())

@@ -1,4 +1,4 @@
-// Локальный HTTP-сервер для разработки и тестирования интерфейса Eclipse Studio в браузере.
+// Локальный HTTP-сервер для разработки и тестирования интерфейса Eclipse Studio в браузере
 
 const http = require("http");
 const fs = require("fs");
@@ -40,17 +40,17 @@ const pinnedFiles = [
   },
   {
     name: "Crocodile Gena Studio",
-    build: "Build 8.4.0",
+    build: "Build 9.0.0",
     password: "",
     pinned: true,
-    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/download/v8.4.0/setup.exe",
+    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/download/v9.0.0/setup.exe",
   },
   {
     name: "Eclipse Studio",
-    build: "Build 8.4.0",
+    build: "Build 9.0.0",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/download/v8.4.0/Eclipse-Studio-v8.4.0.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/download/v9.0.0/Eclipse-Studio-v9.0.0.exe",
   },
 ];
 
@@ -67,7 +67,7 @@ const regularFiles = cracksData.cracks
 
 const fullCatalogFiles = [...pinnedFiles, ...regularFiles];
 
-// Общий мок используется также UI-тестами и средством снятия снимков.
+// Общий мок используется также UI-тестами и средством снятия снимков
 const devMock = require("./dev-mock.cjs");
 function generateMockScript() { return devMock(fullCatalogFiles); }
 

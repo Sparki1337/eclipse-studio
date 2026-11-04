@@ -23,6 +23,40 @@
 
 ---
 
+## 🔐 Приватный ключ Ryuu перед сборкой
+
+Значение встроенного ключа больше не хранится в репозитории. Если нужен режим
+**Crocodile Gena Studio**, перед сборкой один раз выполните из корня проекта:
+
+```powershell
+python scripts/set_ryuu_key.py
+```
+
+Введите ключ в обычном терминале: ввод скрыт. Скрипт создаст локальный файл
+`.secrets/ryuu-key.txt`; вся папка `.secrets/` исключена из Git. В публичном
+архиве исходников этого файла нет. Ключ вводится отдельно, не аргументом команды.
+Локальный сборочный файл — обычный текст: не отправляйте его другим людям.
+
+Для CI вместо файла задайте переменную окружения `ECLIPSE_RYUU_BUILTIN_KEY`.
+Она имеет приоритет над локальным файлом. В GitHub Actions сохраните значение
+в **Settings → Secrets and variables → Actions → New repository secret**
+под именем `RYUU_BUILTIN_KEY`, затем добавьте к существующему шагу сборки:
+
+```yaml
+env:
+  ECLIPSE_RYUU_BUILTIN_KEY: ${{ secrets.RYUU_BUILTIN_KEY }}
+```
+
+Значение не записывается в YAML и не выводится нашим скриптом сборки. Не
+печатайте окружение и не публикуйте сборочный кеш `target/` с секретом.
+При изменении переменной или локального файла Cargo заново подготавливает ключ.
+Пустое или неверное явно заданное значение вызывает ошибку сборки.
+
+Без файла и переменной сборка разрешена: доступен **Свой ключ**, а выбор
+встроенного режима выдаст понятную ошибку настройки. При наличии приватного
+ключа он попадёт в EXE; извлечение из готового EXE всё ещё возможно.
+---
+
 ## ⚠️ Важные нюансы и файлы перед сборкой
 
 Перед запуском компиляции убедитесь в наличии следующих компонентов:
@@ -61,6 +95,26 @@ Copy-Item eclipse-hv/target/release/eclipse-hv.exe src-tauri/resources/hyperviso
 ```
 Файлы в `eclipse-hv/reference/` (`HV-Launcher.bat`, `HV-PlugNPlay.bat`, `kvc.exe`) — справочные, в сборку не входят.
 
+### 5. Локальное облако (CloudRedirect)
+Движок локального облака вшивается в EXE через `include_bytes!` (`src-tauri/src/local_cloud.rs`):
+```text
+src-tauri/resources/local-cloud/
+├── cgs_cloud_redirect.dll   (CloudRedirect 2.6.6-cgs-local.1, x64)
+└── LICENSE.txt              (лицензия MIT движка)
+```
+DLL взята из официального релиза Crocodile Gena Studio 5.6.3 без изменений
+(SHA-256 `e45f409c417d4b77ed4741bfcd6b798351882aabd849ceb477938bb8afe4d871`), поэтому для обычной сборки C++-инструменты не нужны.
+Исходники движка лежат в `third_party/cloudredirect` (MIT, upstream — [crghofficial/cloudredirect](https://github.com/crghofficial/cloudredirect),
+зафиксированный коммит `4e81e492e4678c1d907fbeaef2625846f6afaad8`), список изменений — в `third_party/cloudredirect/CGS-INTEGRATION.md`.
+Копия лицензии для интерфейса — `ui/assets/licenses/cloudredirect-MIT.txt`.
+
+Если вы меняли код движка, пересоберите DLL из x64 Developer PowerShell для Visual Studio (нужны `cl.exe`, C++20 и Windows SDK; CMake и .NET не требуются):
+```powershell
+./scripts/build_local_cloud.ps1
+```
+Скрипт положит новую `cgs_cloud_redirect.dll` и `LICENSE.txt` в `src-tauri/resources/local-cloud/` и выведет SHA-256.
+Своя сборка побайтово не совпадёт с официальной — это нормально: хеш встроенной DLL программа вычисляет сама.
+
 ---
 
 ## ⚡ Автоматическая сборка через Python (Рекомендуемый способ)
@@ -74,7 +128,7 @@ Copy-Item eclipse-hv/target/release/eclipse-hv.exe src-tauri/resources/hyperviso
 python scripts/bump_version.py
 
 # Или передача версии аргументом:
-python scripts/bump_version.py 8.4.0
+python scripts/bump_version.py 9.0.0
 ```
 Скрипт автоматически:
 * Обновляет `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `package.json` и `package-lock.json`.
@@ -159,6 +213,34 @@ src-tauri/target/release/eclipse-studio.exe
 
 ---
 
+## 🔄 Обновление внутри программы (требования к релизу)
+
+Кнопка «Обновить и перезапустить» скачивает новый EXE прямо из релиза GitHub и заменяет текущий файл на месте —
+путь, имя файла и ярлыки сохраняются. Отдельной утилиты (как `CgsUpdater.exe` в оригинале) нет: роль помощника
+выполняет копия текущего EXE, запущенная с ключом `--eclipse-update-helper`. Чтобы обновление работало, релиз должен соответствовать правилам:
+
+1. **Файл релиза** — портативный x64 EXE с именем `Eclipse-Studio-v<версия>.exe` (именно его создаёт `scripts/build.py`).
+   Если такого имени нет, берётся первый `.exe` со словом `eclipse` в имени, кроме `setup`/`installer`.
+2. **Тег релиза** — `v<версия>`, при этом версия в ресурсах EXE (`FILEVERSION`) должна совпадать с тегом.
+   Поэтому перед сборкой всегда выполняйте `python scripts/bump_version.py <версия>`.
+3. **SHA-256** берётся из хеша `sha256:…`, который GitHub сам вычисляет и показывает у каждого загруженного файла релиза —
+   вручную ничего публиковать не нужно. Если хеша нет, программа не станет ставить обновление и предложит только «Скачать EXE».
+
+Как проходит установка:
+* рядом с EXE создаётся временная папка `.eclipse-update-<nonce>` (`payload.exe`, `updater.exe`, `plan.json`, `helper.log`);
+* файл скачивается (до 3 попыток при сетевых сбоях, с прогрессом, скоростью и отменой), затем проверяются SHA-256,
+  разрядность, тип программы и версия файла;
+* помощник получает SHA-256 `plan.json` в аргументах, ждёт команду `go` (до 600 с), закрытия программы (до 120 с)
+  и подтверждения от новой версии, запущенной с ключом `--eclipse-update-probe` (до 90 с);
+* если новая версия не запустилась или не подтвердила запуск, прежний EXE возвращается на место и сразу запускается
+  с сообщением о причине (ключ `--eclipse-update-failed`);
+* права администратора не запрашиваются: если в папку программы нельзя писать, обновление отказывается заранее
+  с подсказкой запустить программу от имени администратора или перенести её в папку пользователя.
+
+Проверки файловой транзакции, отката и разбора страницы релиза входят в `npm run test:safety` (`src-tauri/src/update_core.rs`).
+
+---
+
 ## 🔍 Решение возможных проблем
 
 | Ошибка | Причина | Решение |
@@ -166,6 +248,7 @@ src-tauri/target/release/eclipse-studio.exe
 | `couldn't read ... .millennium/Dist/index.js` | Папка `.millennium` не скопировалась (скрытая папка) | Проверьте наличие `eclipse-manifest/.millennium/Dist/` (или пересоберите плагин: `npm run build:plugin`) |
 | `couldn't read ... smokeapi/SmokeAPI64.dll` | Файлы анлокера переименованы или отсутствуют | Убедитесь, что есть `src-tauri/resources/smokeapi/SmokeAPI64.dll` и `SmokeAPI86.dll` |
 | `couldn't read ... creamapi/steam_api64.dll` | Папка CreamAPI переименована или отсутствует | Убедитесь, что есть папка `src-tauri/resources/creamapi/` с `steam_api.dll` и `steam_api64.dll` |
+| `couldn't read ... local-cloud/cgs_cloud_redirect.dll` | Ресурс локального облака не скопирован | Верните `src-tauri/resources/local-cloud/` из репозитория или пересоберите DLL: `./scripts/build_local_cloud.ps1` |
 | `couldn't read ... Eclipse-HV.exe` / `opensteamtool/...` | Ресурс удалён или лежит не в той папке | Сверьте структуру `src-tauri/resources/` с разделом выше; `npm run test:contracts` покажет все несуществующие пути |
 | `link.exe not found` | Не установлены инструменты C++ | Установите Visual Studio C++ Build Tools с Windows SDK |
 | Ошибка антивируса при сборке | Windows Defender блокирует временный exe | Добавьте папку проекта в исключения Защитника Windows |
@@ -186,5 +269,5 @@ npm test
 ---
 
 <div align="center">
-  <sub>Eclipse Studio v8.4.0 • Инструкция по сборке</sub>
+  <sub>Eclipse Studio v9.0.0 • Инструкция по сборке</sub>
 </div>

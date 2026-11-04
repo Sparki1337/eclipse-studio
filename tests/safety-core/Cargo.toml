@@ -10,7 +10,8 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 tempfile = "3"
 walkdir = "2.5"
 uuid = { version = "1", features = ["v4"] }
+toml_edit = "0.25"
 zip = { version = "2", default-features = false, features = ["deflate", "aes-crypto"] }
 unrar = "0.5.8"
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61.3", features = ["Win32_Storage_FileSystem"] }
+windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Threading"] }

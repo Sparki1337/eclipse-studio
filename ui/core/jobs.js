@@ -1,10 +1,7 @@
 // Журнал операций интерфейса за текущую сессию (дополняет нативный журнал jobs_list)
 (() => {
   "use strict";
-  // Понятные названия пользовательских операций: [подпись, раздел, подпись в нативном журнале].
-  // Фоновые и читающие команды (лимиты, статусы, поиск) сюда не входят и на главной не показываются.
-  // Для команд с нативным журналом третья колонка совпадает с подписью в Rust (jobs::run),
-  // чтобы главная не показывала одну и ту же ошибку дважды.
+  // Операции: [подпись, раздел, имя в jobs::run]; читающие команды исключены, совпадение имён убирает дубли ошибок
   const OPERATIONS = {
     install_fix: ["Установка Online Fix", "fix", "Установка Online Fix"],
     uninstall_fix: ["Возврат оригинальных файлов", "fix", "Возврат оригинальных файлов"],
@@ -30,6 +27,7 @@
     anticheat_restore: ["Вернуть системные компоненты как было", "hypervisor:anticheat", "Вернуть системные компоненты как было"],
     vbs_disable: ["Изменение VBS", "hypervisor:vbs", "Изменение VBS"],
     vbs_restore: ["Возврат исходных параметров Windows", "hypervisor:vbs", "Возврат исходных параметров Windows"],
+    vbs_restore_external: ["Восстановление внешнего VBS.cmd", "hypervisor:vbs", "Восстановление внешнего VBS.cmd"],
     vbs_enable_all: ["Включение защит Windows", "hypervisor:vbs", "Включение защит Windows"],
     vbs_set_test_mode: ["Тестовый режим Windows", "hypervisor:vbs", "Тестовый режим Windows"],
     vbs_disable_faceit: ["Изменение служб FACEIT", "hypervisor:vbs", "Изменение служб FACEIT"],
@@ -49,8 +47,8 @@
     millennium_remove_plugin: ["Удаление плагина Millennium", "lua"],
     millennium_migrate_from_croclua: ["Замена CrocLua", "lua"],
     millennium_remove_legacy_croclua: ["Удаление CrocLua", "lua"],
-    download_app_update: ["Загрузка обновления программы", "settings"],
-    launch_app_update: ["Запуск обновления программы", "settings"],
+    local_cloud_set: ["Настройка локального облака", "lua", "Настройка локального облака"],
+    install_update: ["Обновление программы", "settings"],
   };
   // Раздел по подписи нативного задания — для кнопки «Открыть» на главной
   const NATIVE_VIEWS = new Map();

@@ -193,6 +193,8 @@
 
   function setBusy(busy, label = "") {
     state.running = busy;
+    // Обновление программы ждёт завершения операций гипервизора
+    window.cgsReportBusy?.("hypervisor", busy);
     const addBtn = $("#hv-add-game");
     if (addBtn) addBtn.disabled = busy;
     updateLaunchButton();
@@ -922,6 +924,12 @@ ${destShort}
     await refreshAll(true);
     call("check_asset_updates").catch((error) => appendLog("warning", `Обновление профилей пропущено: ${error}`));
   }
+
+  // Данные для быстрого поиска: добавленные игры и выбор игры, как нажатием на карточку
+  window.cgsHypervisor = {
+    games: () => state.games.map((game) => ({ id: game.id, name: game.name, exePath: game.exe_path, ready: Boolean(game.ready), selected: game.id === state.selectedId })),
+    select: (id) => (id && id !== state.selectedId ? selectGame(id) : Promise.resolve()),
+  };
 
   boot();
 })();

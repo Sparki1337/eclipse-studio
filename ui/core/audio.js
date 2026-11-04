@@ -1,5 +1,4 @@
-// Звуковая система Eclipse Studio (Web Audio API)
-// Процедурный синтез звуковых эффектов для запуска программы, кликов по кнопкам и успешных операций
+// Звуковые эффекты через Web Audio API
 (() => {
   "use strict";
 
@@ -16,8 +15,7 @@
   const DEFAULT_CLICK = "cyber-click";
   const DEFAULT_SUCCESS = "eclipse-success";
 
-  // Стандартные профили по умолчанию
-  // Базовые звуковые профили отсутствуют по умолчанию
+  // Встроенные звуковые профили по умолчанию отсутствуют
   const DEFAULT_PROFILES = [];
 
   let audioCtx = null;
@@ -438,14 +436,12 @@
     applyVolumeGain();
   }
 
-  // ==========================================
-  // ПРОЦЕДУРНЫЙ СИНТЕЗАТОР ЗВУКОВЫХ ЭФФЕКТОВ
-  // ==========================================
+  // Синтез звуковых эффектов
 
-  // --- ЗВУКИ ЗАПУСКА ---
+  // ЗВУКИ ЗАПУСКА
   function synthStartupDawn(ctx, dest) {
     const now = ctx.currentTime;
-    // 1. Глубокий суб-бас
+    // Глубокий суб-бас
     const sub = ctx.createOscillator();
     const subGain = ctx.createGain();
     sub.type = "sine";
@@ -462,7 +458,7 @@
     sub.start(now);
     sub.stop(now + 1.65);
 
-    // 2. Гармонический неоновый аккорд (C4 -> G4 -> C5)
+    // Аккорд C4 → G4 → C5
     const freqs = [261.63, 392.00, 523.25];
     freqs.forEach((freq, idx) => {
       const osc = ctx.createOscillator();
@@ -550,7 +546,7 @@
     });
   }
 
-  // --- ЗВУКИ КЛИКА ---
+  // ЗВУКИ КЛИКА
   function synthClickCyber(ctx, dest) {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -635,7 +631,7 @@
     osc.stop(now + 0.026);
   }
 
-  // --- ЗВУКИ УСПЕХА ---
+  // ЗВУКИ УСПЕХА
   function synthSuccessEclipse(ctx, dest) {
     const now = ctx.currentTime;
     const notes = [523.25, 783.99]; // Ноты До5, Соль5

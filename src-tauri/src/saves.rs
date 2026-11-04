@@ -1072,8 +1072,7 @@ fn create_save_archive_blocking(
             .suffix(&format!(".{format}"))
             .tempfile_in(parent)
             .map_err(|e| e.to_string())?;
-        // Закрываем временный дескриптор до WinRAR/DeleteFile и атомарного rename.
-        // На Windows удалённое, но всё ещё открытое имя может оставаться delete-pending.
+        // Закрываем временный дескриптор до удаления и переименования, исключая delete-pending на Windows
         let output_path = output.path().to_path_buf();
         let _output_cleanup = output.into_temp_path();
         if format == "rar" {
@@ -1357,7 +1356,7 @@ fn restore_save_archive_blocking(app: &tauri::AppHandle, archive: String) -> Sav
                     files: vec![],
                 };
                 let mut copies = Vec::new();
-                // Сначала защищаем все оригиналы. До фиксации снимка ни один файл не меняется.
+                // Сначала защищаем все оригиналы. До фиксации снимка ни один файл не меняется
                 for item in &plan {
                     for entry in WalkDir::new(&item.source).follow_links(false) {
                         let entry = entry.map_err(|e| e.to_string())?;
@@ -1459,7 +1458,7 @@ pub async fn save_undo_restore(app: tauri::AppHandle) -> SaveArchiveResult {
             }
             let options = save_options(&app)?;
             let mut resources = vec![backup.clone()];
-            // Проверяем все записи и хеши до первого изменения.
+            // Проверяем все записи и хеши до первого изменения
             for item in &snapshot.files {
                 let root = Path::new(&item.root);
                 if !allowed_with_options(root, &options) {

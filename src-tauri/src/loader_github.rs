@@ -1,5 +1,4 @@
-// Модуль обнаружения, проверки и загрузки актуальных версий библиотек OpenSteamTool с GitHub.
-// Выполняет проверку удалённых коммитов, валидацию PE-заголовков DLL и гибридный фоллбэк на встроенные ресурсы.
+// Обновление библиотек OpenSteamTool с проверкой PE-заголовков и резервными встроенными файлами
 use crate::{lua_loader, models::OperationResult};
 use reqwest::blocking::Client;
 #[cfg(test)]
@@ -14,8 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-// Репозиторий источника библиотек OpenSteamTool
-// Работа с репозиторием ведется через Git Smart HTTP и raw.githubusercontent.com без использования GitHub API
+// Git Smart HTTP и raw.githubusercontent.com используются без GitHub API
 const RAW: &str = "https://raw.githubusercontent.com/LeoBanned/pirate-station-hv";
 
 // Максимальный допустимый размер DLL-библиотеки (16 МБ)
@@ -238,8 +236,7 @@ fn fetch_commit_sha(client: &Client) -> Result<String, String> {
         .ok_or_else(|| "Не удалось определить ревизию репозитория GitHub".into())
 }
 
-// Запрос актуального слепка файлов репозитория через Git refs и raw.githubusercontent.com
-// Полностью исключает использование GitHub REST API и ограничения частоты запросов (rate limit)
+// Снимок репозитория через Git refs и raw.githubusercontent.com без GitHub REST API
 fn fetch_snapshot() -> Result<Snapshot, String> {
     let client = client()?;
     let commit = fetch_commit_sha(&client)?;
@@ -393,8 +390,7 @@ fn check_snapshot(steam: &Path, snapshot: &Snapshot) -> Result<UpdateInfo, Strin
         let mut info = Vec::new();
         let mut current = true;
         for file in files {
-            // version.dll намеренно исключается из проверки обновлений,
-            // поскольку Steam может переименовывать или удалять её при запуске.
+            // Исключаем version.dll: Steam может переименовать или удалить её при запуске
             let (state, local_size) = if file.target == "version.dll" {
                 ("ignored", None)
             } else if *variant != selected {

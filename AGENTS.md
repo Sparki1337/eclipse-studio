@@ -82,7 +82,7 @@
 
 | **Application Startup** | Standard window start during component init | **Hardware-accelerated Canvas splash screen** with animated logo, status steps, and click-to-skip |
 
-| **Updates & Manifests** | External browser download, single loader DLL | **In-app 1-Click Auto-Updater** (live progress, changelog, safe restart), **Dual OpenSteamTool loader (v1/v2)**, active Steam detection & safe termination |
+| **Updates & Manifests** | In-app updater via a separate `CgsUpdater.exe` helper, single loader DLL | **In-app 1-Click Updater without extra binaries** (SHA-256 from the GitHub release digest, in-place EXE swap with health probe and rollback, 5-launch snooze), **Dual OpenSteamTool loader (v1/v2)**, active Steam detection & safe termination |
 
 | **Desktop Shortcuts** | Standard launcher shortcuts | **Native Windows Shell COM (`IShellLinkW`)** shortcuts with game icons, toggle setting & 1-click management |
 
@@ -212,6 +212,8 @@ E:\Projects\eclipse-studio\
 
 │   ├── bump_version.py                 # Version synchronization across the repository
 
+│   ├── build_local_cloud.ps1           # Rebuilds cgs_cloud_redirect.dll from third_party\ (x64 MSVC shell)
+
 │   ├── release.py                      # /build skill: portable build, SHA-256, release notes
 
 │   ├── ui_dev_server.js                # /ui-dev: browser UI server with the Tauri mock
@@ -248,6 +250,8 @@ E:\Projects\eclipse-studio\
 
 │   │   ├── opensteamtool\v2\           # OpenSteamTool v2 (compatibility)
 
+│   │   ├── local-cloud\                # cgs_cloud_redirect.dll (CloudRedirect) + LICENSE.txt
+
 │   │   └── hypervisor\                 # Eclipse-HV.exe built from eclipse-hv\
 
 │   └── src\                            # Rust source code only (*.rs, see Section 3.1)
@@ -266,6 +270,10 @@ E:\Projects\eclipse-studio\
 
 │
 
+├── third_party\cloudredirect\         # CloudRedirect C++ sources (MIT, pinned 4e81e492), CGS-INTEGRATION.md
+
+│
+
 ├── ui\                                 # Frontend (Vanilla JS + CSS), Tauri frontendDist
 
 │   ├── index.html                      # Single-page UI markup
@@ -276,7 +284,7 @@ E:\Projects\eclipse-studio\
 
 │   ├── styles\                         # base, modules, hypervisor-artwork, themes, appearance
 
-│   └── assets\                         # fonts\ (JetBrains Mono, Monocraft), images\
+│   └── assets\                         # fonts\ (JetBrains Mono, Monocraft), images\, licenses\
 
 │
 
@@ -322,7 +330,7 @@ All backend operations run asynchronously or via `tauri::async_runtime::spawn_bl
 
 | **`lib.rs`** | Core library entry point. Registers all `#[tauri::command]` handlers. Handles embedded asset extraction (`core_engine_path`, `dlc_unlocker_path`; payloads from `src-tauri/resources/core_engine/` and `resources/creamapi/`), window controls (`minimize_window`, `toggle_maximize_window`, `close_window`, `start_dragging_window`), and administrative elevation (`relaunch_as_admin`, `process_is_elevated`). |
 
-| **`main.rs`** | Application binary entry point. Hides Windows console window in release builds (`windows_subsystem = "windows"`). |
+| **`main.rs`** | Application binary entry point. Hides Windows console window in release builds (`windows_subsystem = "windows"`). Runs the update helper mode (`run_update_helper`, `--eclipse-update-helper`) before Tauri starts, so no window or WebView is created. |
 
 | **`native_dialog.rs`** | Uses Windows COM API (`IFileOpenDialog` with `FOS_PICKFOLDERS`) to provide a modern, Explorer-style folder picker. Avoids legacy WinForms dialogs. Provides `rfd` fallback on Linux. |
 
@@ -360,7 +368,13 @@ All backend operations run asynchronously or via `tauri::async_runtime::spawn_bl
 
 | **`files.rs`** | Crack Vault cloud sync and downloader. Fetches catalog from GitHub Gist. Runs 6-part parallel chunk downloads with cancellation tokens. Implements **1-click crack auto-installation**: inspects archive directory structure, determines root directory vs nested game folders, extracts files (ZIP or RAR with password support), creates backups in `.backup_orig`, and optionally deletes the archive. |
 
-| **`updates.rs`** | In-app 1-click auto-updater. Queries GitHub Releases API for `Sparki1337/eclipse-studio`. Compares semver versions, returns release notes, downloads Portable EXE directly to app directory with live speed/progress events (`download_app_update`), launches new binary with automatic legacy cleanup (`launch_app_update`), and powers localized collapsible changelog in UI. |
+| **`updates.rs`** | In-app updater for `Sparki1337/eclipse-studio`. `check_for_update` follows the `releases/latest` redirect, parses `releases/expanded_assets/<tag>` HTML (no GitHub API, no rate limit), reads notes from the Atom feed and picks the portable `Eclipse-Studio-v<ver>.exe` with its published `sha256:` digest (`inAppSupported` only when the digest exists). `install_update` re-checks the release, downloads into a `.eclipse-update-<nonce>` stage next to the EXE (3 attempts, `cgs-update-progress` events: preparing/downloading/verifying/installing/restarting), verifies SHA-256 and the PE (x64 GUI, FILEVERSION = tag), copies the current EXE as `updater.exe`, starts it detached as the helper and exits after the `ready` → `go` handoff (`resource_lock::begin_handoff` refuses while operations hold resources). `cancel_update` aborts before the handoff; `update_launch_ready` returns the previous install outcome on startup. Also `cleanup_old_app_versions`, `updates_page_url`. No UAC: a non-writable app folder is rejected up front. |
+
+| **`update_core.rs`** | Tauri-free updater core (also compiled into `tests/safety-core`): version comparison, release asset + digest parsing, PE/version-resource checks, stage protocol (`owner`, `plan.json` whose SHA-256 is passed in the helper arguments, `ready`/`go`/`abort`/`healthy` signals, `result.json`, `helper.log`), in-place replacement with backup, health probe of the new EXE (`--eclipse-update-probe`) and rollback with relaunch of the old EXE (`--eclipse-update-failed`). Timeouts: decision 600 s, app exit 120 s, health 90 s. Stale stages are cleaned on start. |
+
+| **`local_cloud.rs`** | Local cloud (CloudRedirect) commands: `local_cloud_status`, `local_cloud_set`, `local_cloud_pick_folder`. Embeds `resources/local-cloud/cgs_cloud_redirect.dll` (`include_bytes!`). Requires a local/removable drive and no running games, stops Steam gracefully (30 s), writes files with a backup and rollback, then restarts Steam. |
+
+| **`local_cloud_core.rs`** | Tauri-free local cloud core (also compiled into `tests/safety-core`): eligible games (numeric root Lua in `config/lua` or `config/stplug-in` with `addappid` and a manifest), loader check (`OpenSteamTool.dll` must reference `CR_InitCloudSave`), `[cloud]` section edit in `opensteamtool.toml` via `toml_edit` (the previous section is restored on disable), provider config `config/cgs-local-cloud.json`, state `config/cgs-local-cloud-state.json`, up to 10 backups in `config/cgs-local-cloud-backups`, folder validation and data migration on folder change. Saves are never deleted. |
 
 | **`models.rs`** | Shared Rust data structures (`PlatformInfo`, `GameInfo`, etc.) with `Serialize` / `Deserialize`. |
 
@@ -398,13 +412,15 @@ All frontend code is written in clean, modern vanilla JavaScript (ES6+) without 
 
 | **`core/i18n.js`** | Internationalization engine with complete Russian (`ru`) and English (`en`) dictionaries. Allows instant language switching without page reload. |
 
-| **`core/app.js`** | Central frontend coordinator. Handles navigation between panels, toast notifications, modal dialogs, IPC event listeners, and drag-and-drop feedback. Picks the startup view on boot (`?view=` first, then `cgsHome.startTarget()`, then the Hypervisor sub-tab) and delegates `[data-open-view]` clicks. |
+| **`core/app.js`** | Central frontend coordinator. Handles navigation between panels, toast notifications, modal dialogs, IPC event listeners, and drag-and-drop feedback. Picks the startup view on boot (`?view=` first, then `cgsHome.startTarget()`, then the Hypervisor sub-tab) and delegates `[data-open-view]` clicks. Owns the update dialog (`#app-update-backdrop`: phases, progress/speed/ETA, cancel, retry, the shell is `inert` while installing), the 5-launch snooze (`cgs-update-snooze-launches`, consumed once per process session) and the launch outcome toast. Tracks running operations (`activeOperations`, `window.cgsReportBusy`) so an update cannot start while another operation is in progress. |
 
 | **`core/custom-select.js`** | Theme-adaptive custom dropdowns (`window.cgsCustomSelect`). |
 
 | **`core/motion.js`** | Orchestrates staggered entrance animations (`motion-rise`, `motion-appear`) and respects the `no-motion` setting. |
 
 | **`features/home.js`** | Home dashboard: hero, recent games, recent backups, pending operations, needs attention, module cards (ordered like the sidebar). Renders the **Home & startup** settings tab (block order/visibility, module cards, rows per list 3/4/6/8, operation IDs, hidden notifications, history) and the startup view selector. Exposes `window.cgsHome` (`recordGame`, `startTarget`, `openSettings`). `cgsStorage` keys: `cgs-home-layout`, `cgs-home-modules-hidden`, `cgs-home-rows`, `cgs-home-ids`, `cgs-start-view` (`home` \| `last` \| view \| `view:tab`), `cgs-last-view`. |
+
+| **`features/local-cloud.js`** | «Локальное облако» panel in the Eclipse Manifest view (`#local-cloud-panel`): status badge, folder picker (`local_cloud_pick_folder`), enable toggle (`local_cloud_set`), loader compatibility warning, footer status and help. Refreshes after loader installs and Steam path changes. |
 
 | **`features/saves.js`** | Save Manager view logic (`window.cgsSaves`): scan results, selection, archive and restore actions. |
 
@@ -419,6 +435,8 @@ All frontend code is written in clean, modern vanilla JavaScript (ES6+) without 
 | **`features/utilities.js`** | Utilities hub: launcher buttons and setup guides for Zapret2, CirnoDownloader, and Sigma. |
 
 | **`features/appearance.js`** | Appearance controller: 9+ base themes, 12 neon accents, compact mode toggle, font scale slider (85%–140%), and sidebar drag-resizer logic with keyboard arrow support. Owns the Settings tab order (`SETTINGS_TAB_ORDER`) and dispatches `cgs:sidebar-changed` after the sidebar order or visibility changes. |
+
+| **`features/layout.js`** | Panel layout: docks the navigation rail to the left, right, top or bottom window edge (`cgs-sidebar-dock`, default `left`) and places the title-bar search at the left, center or right (`cgs-search-dock`, default `center`). Handles drag-to-dock (empty rail space, the search pill; Esc cancels), the pickers in Settings → Sidebar → «Расположение панелей», fitting of the horizontal rail to narrow windows, and exposes `window.cgsLayout`. `core/bootstrap.js` applies the saved classes before first paint. |
 
 | **`styles/base.css`** | Base variables, CSS reset, layout containers, titlebar, custom scrollbars and `@font-face` (fonts from `../assets/fonts/`). |
 
@@ -446,7 +464,9 @@ All scripts are started from the repository root; paths inside them are resolved
 
 | **`build.py`** | Automated build script (`python scripts/build.py`). Supports interactive menu or CLI flags (`--type portable/nsis/all/debug`, `--out <dir>`, `--clean`, `--no-open`). Saves output path in `scripts/build_config.json` (defaults to `C:\Users\Sparki\Desktop\Programms\Hypervisor`), checks prerequisites, calculates SHA-256 hashes, and offers to open Windows Explorer. |
 
-| **`bump_version.py`** | Updates the project version across the repository (`python scripts/bump_version.py 8.4.0`): `tauri.conf.json`, `Cargo.toml`, `package.json`, `package-lock.json`, `ui/index.html`, `ui/core/app.js`, `ui/core/i18n.js`, `dlc_catalog.rs`, `files.rs`, `tauri-mock.js`, `ui.test.js`, `README.md`, `BUILD.md`, `docs/`, the scripts in `scripts/` and `.agents/skills/build/SKILL.md`. Refreshes `Cargo.lock` automatically. |
+| **`bump_version.py`** | Updates the project version across the repository (`python scripts/bump_version.py 9.0.0`): `tauri.conf.json`, `Cargo.toml`, `package.json`, `package-lock.json`, `ui/index.html`, `ui/core/app.js`, `ui/core/i18n.js`, `dlc_catalog.rs`, `files.rs`, `tauri-mock.js`, `ui.test.js`, `README.md`, `BUILD.md`, `docs/`, the scripts in `scripts/` and `.agents/skills/build/SKILL.md`. Refreshes `Cargo.lock` automatically. |
+
+| **`build_local_cloud.ps1`** | Rebuilds `src-tauri/resources/local-cloud/cgs_cloud_redirect.dll` from `third_party/cloudredirect` (port of upstream `tools/Build-LocalCloud.ps1`; run from an x64 Developer PowerShell, needs `cl.exe`, C++20, Windows SDK; static CRT). Copies the MIT license and prints the SHA-256. Not needed for regular builds. |
 
 | **`release.py`** | `/build` skill helper (`python scripts/release.py`): runs `build.py --type portable` into the Hypervisor folder, verifies `Eclipse-Studio-vX.X.X.exe`, prints SHA-256 and a bilingual GitHub release template with recent commits. |
 
@@ -630,7 +650,7 @@ python scripts/bump_version.py
 
 # Or pass the new version directly:
 
-python scripts/bump_version.py 8.4.0
+python scripts/bump_version.py 9.0.0
 
 ```
 

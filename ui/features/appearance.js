@@ -37,7 +37,7 @@
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[theme]);
     write("cgs-theme", theme);
     // Акцент зависит от темы: в светлой используется затемнённый оттенок
-    window.cgsAccent?.apply(read("accent", "mint"), theme);
+    window.cgsAccent?.apply(read("accent", "white"), theme);
   }
 
   function applyCompact(enabled) {
@@ -65,6 +65,7 @@
 
   const SHAPES = new Set(["sharp", "soft", "round"]);
   const FONTS = {
+    manrope: '"Manrope", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
     system: '"Segoe UI Variable", "Segoe UI", system-ui, sans-serif',
     jetbrains: '"JetBrains Mono", "Cascadia Code", Consolas, monospace',
     minecraft: '"Minecraft", "Minecraftia", "Monocraft", monospace',
@@ -75,6 +76,7 @@
   };
 
   const FONT_NAMES = {
+    manrope: "Manrope",
     system: "Segoe UI Variable",
     jetbrains: "JetBrains Mono",
     minecraft: "Minecraft",
@@ -97,7 +99,7 @@
   }
 
   function applyFontFamily(fontKey) {
-    const key = FONTS[fontKey] ? fontKey : "system";
+    const key = FONTS[fontKey] ? fontKey : "manrope";
     root.dataset.font = key;
     root.style.setProperty("--font", FONTS[key]);
     const select = document.getElementById("ui-font");
@@ -202,33 +204,7 @@
         });
       }
 
-      const summary = details.querySelector("summary");
-      const content = details.querySelector(".settings-collapsible-content");
-      if (!summary || !content) return;
 
-      summary.addEventListener("click", (e) => {
-        if (details.open && !details.dataset.animating) {
-          if (root.classList.contains("no-motion")) return;
-          e.preventDefault();
-          details.dataset.animating = "true";
-          const startHeight = content.offsetHeight;
-          content.style.overflow = "hidden";
-          const anim = content.animate(
-            [
-              { height: `${startHeight}px`, opacity: "1" },
-              { height: "0px", opacity: "0" }
-            ],
-            { duration: 180, easing: "cubic-bezier(0.16, 1, 0.3, 1)" }
-          );
-          const cleanup = () => {
-            content.style.overflow = "";
-            delete details.dataset.animating;
-            details.open = false;
-          };
-          anim.onfinish = cleanup;
-          anim.oncancel = cleanup;
-        }
-      });
     });
   }
 
@@ -274,6 +250,7 @@
       }
     });
     write("cgs-settings-tab", tab);
+    document.dispatchEvent(new CustomEvent("cgs:settings-tab-changed", { detail: tab }));
   }
 
   function bindSettingsTabs() {
@@ -283,9 +260,14 @@
     applySettingsTab(read("cgs-settings-tab", "interface"), false);
   }
 
-  // Настройка ширины левой панели
-  const SIDEBAR_MIN = 180;
+  // Ширина рейки: 84px по умолчанию; от 150px пункты располагаются в строку
+  const SIDEBAR_MIN = 84;
   const SIDEBAR_MAX = 380;
+  const SIDEBAR_DEFAULT = 84;
+  const SIDEBAR_COMPACT_DEFAULT = 72;
+  const SIDEBAR_COMPACT_MIN = 72;
+  const SIDEBAR_COMPACT_MAX = 220;
+  const SIDEBAR_ICONS = 60;
 
   function applySidebarWidth(width, save = true) {
     const mode = read("cgs-sidebar-mode", "default");
@@ -294,16 +276,16 @@
     if (width == null) {
       root.classList.remove("sidebar-sized");
       if (mode === "compact") {
-        root.style.setProperty("--sidebar-w", "185px");
+        root.style.setProperty("--sidebar-w", `${SIDEBAR_COMPACT_DEFAULT}px`);
         if (save) { try { window.cgsStorage.removeItem("cgs-sidebar-w-compact"); } catch (_) {} }
       } else {
-        root.style.setProperty("--sidebar-w", "245px");
+        root.style.setProperty("--sidebar-w", `${SIDEBAR_DEFAULT}px`);
         if (save) { try { window.cgsStorage.removeItem("cgs-sidebar-width"); } catch (_) {} }
       }
       return;
     }
-    const minW = mode === "compact" ? 160 : SIDEBAR_MIN;
-    const maxW = mode === "compact" ? 220 : SIDEBAR_MAX;
+    const minW = mode === "compact" ? SIDEBAR_COMPACT_MIN : SIDEBAR_MIN;
+    const maxW = mode === "compact" ? SIDEBAR_COMPACT_MAX : SIDEBAR_MAX;
     const value = Math.round(Math.min(maxW, Math.max(minW, width)));
     root.style.setProperty("--sidebar-w", `${value}px`);
     root.classList.add("sidebar-sized");
@@ -324,7 +306,9 @@
 
     const move = (event) => {
       if (!dragging) return;
-      requestedWidth = startWidth + (event.clientX - startX);
+      // У рейки справа ручка на левом краю: ширина растёт при движении влево
+      const direction = root.classList.contains("sidebar-dock-right") ? -1 : 1;
+      requestedWidth = startWidth + (event.clientX - startX) * direction;
       applySidebarWidth(requestedWidth, false);
     };
     const stop = (event) => {
@@ -352,7 +336,8 @@
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
       event.preventDefault();
       const current = sidebar.getBoundingClientRect().width;
-      applySidebarWidth(current + (event.key === "ArrowRight" ? 10 : -10));
+      const grow = root.classList.contains("sidebar-dock-right") ? "ArrowLeft" : "ArrowRight";
+      applySidebarWidth(current + (event.key === grow ? 10 : -10));
     });
     handle.tabIndex = 0;
   }
@@ -438,13 +423,13 @@
 
     if (validMode === "icons") {
       root.classList.add("sidebar-icons");
-      root.style.setProperty("--sidebar-w", "68px");
+      root.style.setProperty("--sidebar-w", `${SIDEBAR_ICONS}px`);
     } else if (validMode === "compact") {
       root.classList.add("sidebar-compact");
-      const compactW = parseInt(read("cgs-sidebar-w-compact", "185"), 10) || 185;
+      const compactW = parseInt(read("cgs-sidebar-w-compact", String(SIDEBAR_COMPACT_DEFAULT)), 10) || SIDEBAR_COMPACT_DEFAULT;
       root.style.setProperty("--sidebar-w", `${compactW}px`);
     } else {
-      const defaultW = parseInt(read("cgs-sidebar-width", "245"), 10) || 245;
+      const defaultW = parseInt(read("cgs-sidebar-width", String(SIDEBAR_DEFAULT)), 10) || SIDEBAR_DEFAULT;
       root.style.setProperty("--sidebar-w", `${defaultW}px`);
     }
 
@@ -685,6 +670,9 @@
       const startX = e.clientX;
       const startY = e.clientY;
       let isDragging = false;
+      // В горизонтальной рейке (сверху или снизу) пункты переставляются слева направо
+      const horizontal = root.classList.contains("sidebar-horizontal");
+      const axis = horizontal ? "X" : "Y";
 
       let visibleItems = [];
       let itemMetrics = [];
@@ -705,17 +693,19 @@
             toIndex = fromIndex;
 
             const itemRect = item.getBoundingClientRect();
-            draggedDisplacement = itemRect.height + 4;
+            draggedDisplacement = (horizontal ? itemRect.width : itemRect.height) + 4;
 
             itemMetrics = visibleItems.map((el) => {
               const r = el.getBoundingClientRect();
+              const top = horizontal ? r.left : r.top;
+              const height = horizontal ? r.width : r.height;
               return {
                 el,
                 id: el.dataset.view,
-                top: r.top,
-                bottom: r.bottom,
-                height: r.height,
-                midY: r.top + r.height / 2
+                top,
+                bottom: top + height,
+                height,
+                midY: top + height / 2
               };
             });
           } else {
@@ -724,8 +714,8 @@
         }
 
         ev.preventDefault();
-        const dy = ev.clientY - startY;
-        item.style.setProperty("transform", `translateY(${dy}px)`, "important");
+        const dy = horizontal ? ev.clientX - startX : ev.clientY - startY;
+        item.style.setProperty("transform", `translate${axis}(${dy}px)`, "important");
 
         const currentCenterY = itemMetrics[fromIndex].midY + dy;
 
@@ -755,18 +745,18 @@
           const targetEl = itemMetrics[i].el;
           if (fromIndex < toIndex) {
             if (i > fromIndex && i <= toIndex) {
-              targetEl.style.transform = `translateY(-${draggedDisplacement}px)`;
+              targetEl.style.transform = `translate${axis}(-${draggedDisplacement}px)`;
             } else {
-              targetEl.style.transform = "translateY(0px)";
+              targetEl.style.transform = `translate${axis}(0px)`;
             }
           } else if (fromIndex > toIndex) {
             if (i >= toIndex && i < fromIndex) {
-              targetEl.style.transform = `translateY(${draggedDisplacement}px)`;
+              targetEl.style.transform = `translate${axis}(${draggedDisplacement}px)`;
             } else {
-              targetEl.style.transform = "translateY(0px)";
+              targetEl.style.transform = `translate${axis}(0px)`;
             }
           } else {
-            targetEl.style.transform = "translateY(0px)";
+            targetEl.style.transform = `translate${axis}(0px)`;
           }
         }
       };
@@ -780,9 +770,12 @@
           suppressNextClick = true;
 
           if (toIndex !== fromIndex && toIndex >= 0 && toIndex < itemMetrics.length) {
-            const landingOffset = itemMetrics[toIndex].top - itemMetrics[fromIndex].top;
+            // Пункты горизонтальной рейки разной ширины: при сдвиге вперёд пункт встаёт к концу целевого
+            const landingOffset = horizontal && toIndex > fromIndex
+              ? itemMetrics[toIndex].bottom - itemMetrics[fromIndex].height - itemMetrics[fromIndex].top
+              : itemMetrics[toIndex].top - itemMetrics[fromIndex].top;
             item.classList.add("nav-item-animating");
-            item.style.setProperty("transform", `translateY(${landingOffset}px)`, "important");
+            item.style.setProperty("transform", `translate${axis}(${landingOffset}px)`, "important");
 
             setTimeout(() => {
               visibleItems.forEach((el) => { el.style.transform = ""; });
@@ -800,7 +793,7 @@
             }, 210);
           } else {
             item.classList.add("nav-item-animating");
-            item.style.setProperty("transform", "translateY(0px)", "important");
+            item.style.setProperty("transform", `translate${axis}(0px)`, "important");
             setTimeout(() => {
               visibleItems.forEach((el) => { el.style.transform = ""; });
               item.classList.remove("nav-item-dragging", "nav-item-animating");
@@ -1120,7 +1113,7 @@
   applyCompact(read("cgs-compact", "1") === "1");
   applyFontScale(read("cgs-font-scale", "120"));
   applyShape(read("cgs-shape", "soft"));
-  applyFontFamily(read("cgs-font-family", "system"));
+  applyFontFamily(read("cgs-font-family", "manrope"));
   applyTextWeight(read("cgs-text-weight", "regular"));
   applyContrast(read("cgs-contrast", "0") === "1");
   applyGlow(read("cgs-glow", "1") !== "0");

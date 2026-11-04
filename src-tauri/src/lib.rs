@@ -12,7 +12,10 @@ mod game_artwork;
 mod hubcap;
 mod hypervisor;
 mod jobs;
+mod key_menu;
 mod loader_github;
+mod local_cloud;
+mod local_cloud_core;
 mod lua_loader;
 mod luatools;
 mod millennium;
@@ -22,6 +25,7 @@ mod native_drop;
 mod operation_outcome;
 mod resource_lock;
 mod ryuu;
+mod ryuu_auth;
 mod safe_path;
 mod saves;
 mod secure_state;
@@ -29,7 +33,9 @@ mod smaki;
 mod steam;
 mod steam_hv;
 mod steam_library;
+mod update_core;
 mod updates;
+mod external_vbs_plan;
 mod vbs;
 
 use std::process::Command;
@@ -199,6 +205,13 @@ struct PlatformInfo {
     os: &'static str,
     windows: bool,
     windows_only_modules: Vec<&'static str>,
+    /// Один идентификатор на процесс: перезагрузка WebView не считается новым запуском
+    session_id: &'static str,
+}
+
+fn session_id() -> &'static str {
+    static ID: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    ID.get_or_init(|| uuid::Uuid::new_v4().to_string())
 }
 
 #[tauri::command]
@@ -211,10 +224,12 @@ fn platform_info() -> PlatformInfo {
         } else {
             vec!["hypervisor"]
         },
+        session_id: session_id(),
     }
 }
 
-#[tauri::command]
+// Блокирующая системная проверка выполняется вне главного потока
+#[tauri::command(async)]
 fn process_is_elevated() -> bool {
     #[cfg(windows)]
     {
@@ -272,8 +287,7 @@ fn relaunch_as_admin(app: AppHandle) -> Result<(), String> {
             )
         });
     }
-    // До завершения процесса блокируем новые изменения. Новый экземпляр ждёт
-    // освобождения файловой блокировки; отмена UAC оставляет текущую копию живой.
+    // Блокировка передаётся новому процессу; отмена UAC сохраняет текущий экземпляр
     std::mem::forget(handoff);
     app.exit(0);
     Ok(())
@@ -285,7 +299,13 @@ fn relaunch_as_admin() -> Result<(), String> {
     Err("Повышение прав через UAC доступно только в Windows".into())
 }
 
+/// Запуск в роли помощника обновления: замена EXE без окна и WebView
+pub fn run_update_helper() -> Option<i32> {
+    updates::helper_main()
+}
+
 pub fn run() {
+    updates::init_launch_context();
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             pick_game_directory,
@@ -395,6 +415,7 @@ pub fn run() {
             vbs::vbs_set_protection,
             vbs::vbs_disable,
             vbs::vbs_restore,
+            vbs::vbs_restore_external,
             vbs::vbs_enable_all,
             vbs::vbs_set_test_mode,
             vbs::vbs_restart,
@@ -417,16 +438,20 @@ pub fn run() {
             steam::steam_drm_info,
             updates::check_for_update,
             updates::updates_page_url,
-            updates::download_app_update,
-            updates::launch_app_update,
+            updates::install_update,
+            updates::cancel_update,
+            updates::update_launch_ready,
             updates::cleanup_old_app_versions,
+            local_cloud::local_cloud_status,
+            local_cloud::local_cloud_set,
+            local_cloud::local_cloud_pick_folder,
         ])
         .setup(|app| {
             jobs::init(app.handle()).map_err(std::io::Error::other)?;
-            // Окно создано скрытым (visible: false), чтобы исключить показ пустого синего/темного экрана до рендеринга страницы.
-            // Приложение отобразит окно сразу после отрисовки первого кадра заставки через команду show_window.
-            // Добавляем страховочный таймер на случай непредвиденных задержек в WebView2:
+            // Показываем окно после первого кадра заставки; таймер страхует от задержки WebView2
             if let Some(window) = app.get_webview_window("main") {
+                // Одиночный Alt не уводит окно в невидимый режим меню (см. key_menu.rs)
+                key_menu::install(&window);
                 let win = window.clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(2500));

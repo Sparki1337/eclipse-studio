@@ -58,16 +58,16 @@ async function keepManifestsAvailable(): Promise<void> {
 
 // Извлечение AppID текущей открытой игры из URL или DOM
 function currentAppId(): string | null {
-  // 1. Из pathname (/app/12345/...)
+  // Из pathname (/app/12345/...)
   const fromPath = window.location.pathname.match(/\/app\/(\d+)/)?.[1];
   if (fromPath) return fromPath;
 
-  // 2. Из query string (?appid=12345)
+  // Из query string (?appid=12345)
   const searchParams = new URLSearchParams(window.location.search);
   const fromSearch = searchParams.get('appid') ?? searchParams.get('appId');
   if (fromSearch && /^\d+$/.test(fromSearch)) return fromSearch;
 
-  // 3. Из скрытых полей или метатегов Steam
+  // Из скрытых полей или метатегов Steam
   const metaAppId = document.querySelector<HTMLInputElement>('input[name="appid"]')?.value
     ?? document.querySelector<HTMLElement>('[data-appid]')?.dataset.appid;
   if (metaAppId && /^\d+$/.test(metaAppId)) return metaAppId;
@@ -930,28 +930,28 @@ async function refreshGameStatus(panel: HTMLElement, appid: string, force = fals
 
 // Поиск оптимального контейнера на странице Steam для вставки карточки манифестов
 function findPurchaseArea(): Element | null {
-  // 1. Стандартная область покупки игры
+  // Стандартная область покупки игры
   const gameArea = document.querySelector('#game_area_purchase')
     ?? document.querySelector('.game_area_purchase');
   if (gameArea) return gameArea;
 
-  // 2. Родительский контейнер первого блока покупки
+  // Родительский контейнер первого блока покупки
   const wrapper = document.querySelector('.game_area_purchase_game_wrapper')
     ?? document.querySelector('.game_area_purchase_game');
   if (wrapper?.parentElement) return wrapper.parentElement;
 
-  // 3. Контейнер опций покупки (новые макеты Steam)
+  // Контейнер опций покупки (новые макеты Steam)
   const options = document.querySelector('#purchaseOptionsContent')
     ?? document.querySelector('.purchase_options_content');
   if (options && options.parentElement) return options.parentElement;
 
-  // 4. Основная левая колонка страницы игры
+  // Основная левая колонка страницы игры
   const mainCol = document.querySelector('.page_content_ctn .leftcol')
     ?? document.querySelector('.game_page_autocollapse')
     ?? document.querySelector('#tabletGrid .leftcol');
   if (mainCol) return mainCol;
 
-  // 5. Блок действий очереди (желаемое / подписка)
+  // Блок действий очереди (желаемое / подписка)
   const queueActions = document.querySelector('#queueActionsCtn')
     ?? document.querySelector('.queue_actions_ctn');
   if (queueActions?.parentElement?.parentElement) {

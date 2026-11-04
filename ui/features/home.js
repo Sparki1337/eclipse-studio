@@ -2,15 +2,15 @@
 (() => {
   "use strict";
   const storage = window.cgsStorage;
-  const ROW_CHOICES = [3, 4, 6, 8];       // строк в панели до кнопки «Ещё» (настройка «Строк в списке»)
+  const ROW_CHOICES = [3, 4, 6, 8];       // Строк в панели до кнопки «Ещё» (настройка «Строк в списке»)
   const limit = () => { const value = Number(storage.getItem("cgs-home-rows")); return ROW_CHOICES.includes(value) ? value : 4; };
-  const DISMISSED_KEY = "homeDismissedJobs"; // записи журнала, скрытые пользователем
+  const DISMISSED_KEY = "homeDismissedJobs"; // Записи журнала, скрытые пользователем
   const PROBLEM = new Set(["failed", "partial"]);
   const PENDING = new Set(["running", "interrupted"]);
   let nativeJobs = [];
   let journalError = "";
-  const expanded = new Set();             // панели, раскрытые кнопкой «Ещё»
-  const signatures = new Map();           // отпечатки списков: без изменений DOM не перерисовывается
+  const expanded = new Set();             // Панели, раскрытые кнопкой «Ещё»
+  const signatures = new Map();           // Отпечатки списков: без изменений DOM не перерисовывается
 
   const read = key => { try { const value = JSON.parse(storage.getItem(key) || "[]"); return Array.isArray(value) ? value : []; } catch (_) { return []; } };
   function remember(key, entry, identity) {
@@ -123,8 +123,7 @@
       dismiss: job.status === "interrupted" ? job.id : "",
     })), "Незавершённых операций нет.", pending.some(job => job.status === "running") ? "busy" : pending.length ? "warn" : "");
 
-    // Ошибки интерфейса: только пользовательские операции, по одной (новейшей) на команду,
-    // без операций другого источника манифестов и без дублей нативного журнала
+    // Показываем последнюю ошибку операции без дублей и ошибок неактивного источника манифестов
     const current = service();
     const uiProblems = latest(window.cgsJobs?.list() || [], job => job.command)
       .filter(job => PROBLEM.has(job.status) && !hidden.has(job.id) && (!job.service || job.service === current))
@@ -164,10 +163,10 @@
     event.preventDefault(); card.click();
   });
   // ── Настройки главной: блоки, карточки модулей, длина списков и раздел при запуске ──
-  const LAYOUT_KEY = "cgs-home-layout";            // { order: [...], hidden: [...] }
-  const MODULES_KEY = "cgs-home-modules-hidden";   // карточки модулей, выключенные на главной
+  const LAYOUT_KEY = "cgs-home-layout";            // Порядок и скрытые блоки
+  const MODULES_KEY = "cgs-home-modules-hidden";   // Карточки модулей, выключенные на главной
   const IDS_KEY = "cgs-home-ids";                  // "0" — не показывать ID операций
-  const START_KEY = "cgs-start-view";              // раздел при запуске: home | last | раздел | раздел:вкладка
+  const START_KEY = "cgs-start-view";              // Раздел при запуске: home | last | раздел | раздел:вкладка
   const LAST_VIEW_KEY = "cgs-last-view";
   const STATUS_BLOCKS = new Set(["games", "backups", "pending", "attention"]);
   const HV_TABS = ["hypervisor", "anticheat", "vbs"];
@@ -222,8 +221,7 @@
     return note;
   }
 
-  // Пересборка главной: подряд идущие панели состояния делят одну сетку, скрытые блоки и карточки убираются из DOM,
-  // чтобы правила раскладки по nth-child считали только видимые элементы. DOM меняется, только если порядок другой
+  // Перестраиваем DOM только при смене порядка; скрытые блоки не участвуют в сетке
   const sameChildren = (parent, nodes) => parent.childElementCount === nodes.length && nodes.every((node, index) => parent.children[index] === node);
   function applyLayout() {
     if (!layout || !footer) return;
@@ -352,9 +350,7 @@
     renderBlockRows();
   }
 
-  // Длина списков, номера операций, скрытые уведомления и история.
-  // Текст меняется только при изменении: любая правка DOM запускает перевод всей страницы
-  // (сравнивается исходный русский текст: в английском интерфейсе textContent уже переведён)
+  // Меняем DOM только при новом русском тексте, чтобы не запускать повторный перевод i18n
   const shownText = new WeakMap();
   const setText = (element, text) => { if (!element || shownText.get(element) === text) return; shownText.set(element, text); element.textContent = text; };
   const rowsPicker = document.getElementById("home-rows-picker");

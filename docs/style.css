@@ -1,4 +1,4 @@
-/* ============ Eclipse Studio — монохромная тема ============ */
+/* Eclipse Studio — монохромная тема */
 :root {
   --bg: #050505;
   --bg-1: #0b0b0b;
@@ -51,14 +51,14 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .muted { color: var(--mut-3); }
 
-/* ---------- Индикатор прокрутки ---------- */
+/* Индикатор прокрутки */
 .progress {
   position: fixed; inset: 0 0 auto; z-index: 101; height: 2px; pointer-events: none;
   background: var(--accent); transform-origin: left; transform: scaleX(var(--sp, 0));
   box-shadow: 0 0 12px rgba(255, 255, 255, .35);
 }
 
-/* ---------- Кнопка «Наверх» ---------- */
+/* Кнопка «Наверх» */
 .to-top-fab {
   position: fixed; right: 24px; bottom: 24px; z-index: 90;
   width: 48px; height: 48px; display: grid; place-items: center;
@@ -73,10 +73,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .to-top-fab svg { transition: transform .3s var(--ease); }
 .to-top-fab:hover svg { transform: translateY(-2px); }
 
-/* ---------- Заставка (мозаика) ---------- */
-/* Заставка непрозрачна с первого кадра (до запуска скриптов сайт под ней не мелькает).
-   Когда JS выложил плитки, фон отдаётся им — они и «рассыпаются» при уходе.
-   Если скрипт не загрузился, заставка сама исчезает через 7 с */
+/* Мозаичная заставка скрывает первый кадр; без скриптов исчезает через 7 секунд */
 .loader { position: fixed; inset: 0; z-index: 1000; pointer-events: all; background: var(--bg); animation: loader-failsafe .5s ease 7s forwards; }
 .loader.tiled { background: transparent; }
 .loader:not(.tiled) .loader-title { opacity: 0; }
@@ -129,7 +126,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .loader.leave .loader-grid i { transform: scale(0); opacity: 0; }
 .loader.done { display: none; }
 
-/* ---------- Фон ---------- */
+/* Фон */
 .cursor-light { display: none !important; }
 .grain {
   position: fixed; inset: -50%; z-index: 999; pointer-events: none; opacity: .05;
@@ -138,7 +135,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 }
 @keyframes grain { 0%{transform:translate(0,0)} 25%{transform:translate(-3%,2%)} 50%{transform:translate(2%,-3%)} 75%{transform:translate(-2%,-1%)} 100%{transform:translate(0,0)} }
 
-/* ---------- Шапка ---------- */
+/* Шапка */
 .header {
   position: fixed; inset: 0 0 auto; z-index: 100; height: 68px;
   display: flex; align-items: center;
@@ -207,7 +204,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .burger.open span:first-child { transform: translateY(3.5px) rotate(45deg); }
 .burger.open span:last-child { transform: translateY(-3.5px) rotate(-45deg); }
 
-/* ---------- Кнопки ---------- */
+/* Кнопки */
 .btn {
   position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   height: 44px; padding: 0 20px; border-radius: 10px; font-size: 15px; font-weight: 500; white-space: nowrap;
@@ -259,20 +256,18 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   transform: translateX(3px);
 }
 
-/* ---------- Появление ---------- */
+/* Появление */
 .js .reveal { opacity: 0; transform: translateY(28px); filter: blur(8px); }
 .js .reveal.in { opacity: 1; transform: none; filter: none; transition: opacity 1s var(--ease), transform 1.2s var(--ease), filter 1s var(--ease); transition-delay: calc(var(--d, 0) * 90ms); }
 [data-split] .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .08em; margin-bottom: -.08em; margin-right: .24em; }
 [data-split] .w:last-child { margin-right: 0; }
 [data-split] .w > span { display: inline-block; transform: translateY(105%) rotate(4deg); transform-origin: left bottom; transition: transform 1.2s var(--ease); transition-delay: calc(var(--i) * 45ms); }
 [data-split].in .w > span { transform: none; }
-/* До разбивки на слова заголовок скрыт, иначе на первом кадре он мелькает целиком
-   и тут же исчезает перед анимацией. Страховка — если скрипт не запустился */
+/* Скрываем заголовок до разбивки на слова; таймер страхует от сбоя скрипта */
 .js [data-split]:not(.is-split) { opacity: 0; animation: split-failsafe .4s ease 4s forwards; }
 @keyframes split-failsafe { to { opacity: 1; } }
 .line { display: block; }
-/* Заголовки: плавный переход от белого к серебристому вместо резкой пары «белый + серый».
-   Фон общий для всего заголовка — JS передаёт каждому слову его смещение (--x/--y) */
+/* Общий градиент заголовка учитывает смещения слов --x и --y */
 [data-split] {
   position: relative;
   --title-grad: linear-gradient(180deg, #ffffff 0%, #f2f2f0 40%, #b8b8b6 72%, #7c7c7a 100%);
@@ -297,7 +292,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   }
 }
 
-/* ---------- Hero ---------- */
+/* Первый экран */
 .hero { position: relative; min-height: 100vh; padding: 148px 0 0; overflow: hidden; }
 .hero-bg { position: absolute; inset: 0; pointer-events: none; }
 .hero-grid {
@@ -372,7 +367,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .scroll-hint span { position: absolute; left: 50%; top: 8px; width: 2px; height: 6px; margin-left: -1px; border-radius: 2px; background: var(--fg); animation: scroll-dot 1.8s var(--ease) infinite; }
 @keyframes scroll-dot { 0% { opacity: 0; transform: translateY(0); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateY(14px); } }
 
-/* ---------- Бегущая строка ---------- */
+/* Бегущая строка */
 .marquee { border-block: 1px solid var(--line); overflow: hidden; padding: 22px 0; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
 .marquee-track { display: flex; align-items: center; gap: 36px; width: max-content; animation: marquee 40s linear infinite; }
 .marquee:hover .marquee-track { animation-play-state: paused; }
@@ -381,7 +376,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .marquee i { width: 8px; height: 8px; border: 1px solid var(--mut-2); transform: rotate(45deg); flex: none; }
 @keyframes marquee { to { transform: translateX(-50%); } }
 
-/* ---------- Секции ---------- */
+/* Секции */
 .section { position: relative; padding: clamp(88px, 9vw, 120px) 0; }
 .section-head { margin-bottom: 64px; }
 .section-head.center { text-align: center; }
@@ -406,7 +401,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   letter-spacing: .02em;
 }
 
-/* ---------- Факты ---------- */
+/* Факты */
 .facts { padding: 0; }
 .facts-grid { display: grid; grid-template-columns: repeat(4, 1fr); border-inline: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .fact { position: relative; padding: 48px 28px 56px; border-right: 1px solid var(--line); overflow: hidden; }
@@ -418,7 +413,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .fact-v .muted { margin: 0 .12em; }
 .fact p { margin: 0; color: var(--mut); font-size: 14px; max-width: 240px; }
 
-/* ---------- Витрина модулей ---------- */
+/* Витрина модулей */
 .showcase { display: grid; grid-template-columns: minmax(280px, 400px) 1fr; gap: 64px; align-items: start; }
 .showcase-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .sc-item {
@@ -460,7 +455,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .showcase-frames.is-instant img { transition: none !important; }
 .showcase-window.is-zoomed .showcase-frames img { visibility: hidden; }
 
-/* ---------- Сравнение ---------- */
+/* Сравнение */
 .compare { background: linear-gradient(180deg, transparent, var(--bg-1) 30%, var(--bg-1) 70%, transparent); }
 .compare-box {
   position: relative; aspect-ratio: 1024 / 640; border-radius: var(--r); overflow: hidden;
@@ -494,7 +489,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .diff-col.is-new li strong { color: var(--fg); font-weight: 600; }
 .diff-col.is-new li::before { background: var(--accent); width: 6px; height: 6px; top: 8px; left: 2px; border-radius: 50%; }
 
-/* ---------- Загрузка ---------- */
+/* Загрузка */
 .dl-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; }
 .dl-card {
   position: relative; display: flex; flex-direction: column; padding: 36px;
@@ -615,7 +610,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   gap: 8px;
   min-width: 0;
 }
-.ver-item-tag { font-weight: 500; color: var(--fg); } /* у JetBrains Mono загружены только 400/500 */
+.ver-item-tag { font-weight: 500; color: var(--fg); } /* У JetBrains Mono загружены только 400/500 */
 .ver-item-date { font-size: 11px; color: var(--mut-2); }
 .ver-item-right { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--mut); }
 .ver-item-size { color: var(--mut-2); font-size: 11px; }
@@ -655,13 +650,13 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .dl-steps p { margin: 6px 0 0; color: var(--mut); font-size: 14px; line-height: 1.5; }
 .dl-steps code { font-family: var(--mono); font-size: 12.5px; color: var(--fg); }
 
-/* ---------- Каталог кряков (Crack Vault) ---------- */
+/* Каталог кряков (Crack Vault) */
 .games { position: relative; }
 
 /* Панель каталога: поиск, быстрые фильтры, счётчик и вид. На широких экранах прилипает к верху */
 .games-toolbar {
   position: relative;
-  z-index: 30; /* меню сортировки должно открываться поверх карточек */
+  z-index: 30; /* Меню сортировки должно открываться поверх карточек */
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -914,8 +909,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   height: 20px;
   padding: 0 7px;
   border-radius: 5px;
-  /* Inter: у JetBrains Mono загружены только 400/500, и «600» браузер рисовал искусственным
-     жирным — мелкий текст на белом расплывался и пикселил. Целый кегль — ровнее на Windows */
+  /* Inter исключает искусственное утолщение мелкого текста; целый кегль чётче на Windows */
   font: 600 10px/1 var(--sans);
   letter-spacing: .06em;
   text-transform: uppercase;
@@ -1124,7 +1118,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .games-footer-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 24px; }
 .games-more-count { font-size: 11px; opacity: .6; margin-left: 2px; }
 
-/* ---------- Сообщество ---------- */
+/* Сообщество */
 .comm-list { border-top: 1px solid var(--line); }
 .comm-row {
   position: relative; display: grid; grid-template-columns: 64px 1fr 200px auto; align-items: center; gap: 24px;
@@ -1150,7 +1144,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .comm-row:hover .comm-go { background: var(--fg); color: #000; border-color: var(--fg); }
 .comm-row:hover .comm-go svg { transform: rotate(45deg); }
 
-/* ---------- Благодарность (Tribute) ---------- */
+/* Благодарность (Tribute) */
 .tribute { padding-top: 40px; padding-bottom: 60px; }
 .tribute-card {
   position: relative;
@@ -1224,7 +1218,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   flex-wrap: wrap;
 }
 
-/* ---------- Подвал ---------- */
+/* Подвал */
 .footer { padding: 100px 0 32px; border-top: 1px solid var(--line); overflow: hidden; }
 .footer-top { display: flex; justify-content: space-between; align-items: center; gap: 32px; flex-wrap: wrap; }
 .footer-brand { display: flex; align-items: center; gap: 14px; }
@@ -1243,17 +1237,14 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 /* Буквы поднимаются волной от центра слова по мере прокрутки к подвалу */
 .footer-word span {
   display: inline-block;
-  /* Затухание до самого низа: при обрыве на 85% нижние штрихи пропадали — «E» читалась как «F»,
-     а хвост «S» висел отдельной точкой */
+  /* Полный градиент сохраняет нижние штрихи букв */
   background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.012));
   -webkit-background-clip: text; background-clip: text; color: transparent;
   transform: translate3d(0, calc((1 - var(--fp, 1)) * (26% + var(--i, 0) * 14%)), 0);
 }
 .footer-copy { margin: 0; text-align: center; color: var(--mut-2); font-size: 11px; text-transform: none; }
 
-/* ---------- Лайтбокс ---------- */
-/* Лайтбокс. Снимок «вылетает» из окна витрины (FLIP в JS), подпись проявляется следом.
-   После закрытия слой остаётся видимым, пока снимок возвращается на место */
+/* Лайтбокс остаётся видимым до завершения обратного переноса снимка */
 .lightbox {
   position: fixed; inset: 0; z-index: 500; display: grid; place-items: center; padding: 32px;
   visibility: hidden; pointer-events: none; touch-action: pinch-zoom;
@@ -1295,8 +1286,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-/* ---------- Движение: микроанимации интерфейса ---------- */
-/* Линия у надзаголовков прорисовывается вслед за появлением текста */
+/* Линия надзаголовка появляется вслед за текстом */
 .js .kicker.reveal::before,
 .js .dl-start.reveal .dl-start-k::before { transform: scaleX(0); transform-origin: left; transition: transform 1s var(--ease) .3s; }
 .js .kicker.reveal.in::before,
@@ -1369,7 +1359,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   .games-ghosts { display: none; }
 }
 
-/* ---------- Адаптив ---------- */
+/* Адаптив */
 @media (max-width: 960px) {
   html { scrollbar-gutter: auto; }
   /* Мобильное меню на весь экран: страница под ним не просвечивает и не кликается */

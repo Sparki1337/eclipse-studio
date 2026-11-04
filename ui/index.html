@@ -144,8 +144,11 @@
   <link rel="stylesheet" href="./styles/hypervisor-artwork.css" />
   <link rel="stylesheet" href="./styles/themes.css" />
   <link rel="stylesheet" href="./styles/appearance.css" />
+  <link rel="preload" href="./assets/fonts/Manrope[wght].ttf" as="font" type="font/ttf" crossorigin />
+  <link rel="stylesheet" href="./styles/korona.css" />
+  <link rel="stylesheet" href="./styles/motion.css" />
 </head>
-<body>
+<body id="korona">
   <div class="ambient ambient-a"></div>
   <div class="ambient ambient-b"></div>
 
@@ -153,21 +156,32 @@
   <aside class="app-splash s4" id="app-splash" aria-label="Заставка запуска">
     <div class="s4-box" id="s4-box">
       <canvas id="s4-canvas"></canvas>
+      <div class="k-eclipse" aria-hidden="true"><i class="k-ring"></i><i class="k-ring k-ring-2"></i><i class="k-sun"></i><i class="k-moon"></i></div>
     </div>
     <div class="s4-name" id="s4-name">
       <span>E</span><span>c</span><span>l</span><span>i</span><span>p</span><span>s</span><span>e</span><span>-</span><span>s</span><span>t</span><span>u</span><span>d</span><span>i</span><span>o</span>
     </div>
+    <div class="k-splash-copy"><strong>Eclipse Studio</strong><span>Steam · DLC · Online Fix · Гипервизор</span></div>
     <div class="pct s4-pct" id="splash-percent" data-pct>0%</div>
   </aside>
 
   <div class="app-shell">
     <header class="titlebar" data-tauri-drag-region>
       <div class="titlebar-brand" data-tauri-drag-region>
-        <div class="mini-mark" data-tauri-drag-region><img src="./assets/images/app-icon.png" alt="" data-tauri-drag-region /></div>
+        <div class="mini-mark" data-tauri-drag-region><span class="eclipse-mark" aria-hidden="true" data-tauri-drag-region></span></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>8.4.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>9.0.0</span>
       </div>
+      <button class="titlebar-search" id="titlebar-search" type="button" aria-label="Быстрый поиск" aria-keyshortcuts="Control+K">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <span class="titlebar-search-text">Поиск игр, разделов и настроек</span>
+        <span class="titlebar-search-keys" id="titlebar-search-keys" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span>
+      </button>
       <div class="window-actions">
+        <button class="titlebar-icon-button telegram-hub-trigger" id="open-telegram-hub" type="button" title="Открыть Telegram каналы" aria-label="Telegram каналы">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.5 4.2-3.1 15.3c-.2 1-.9 1.3-1.7.8l-4.7-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.8 8.7-7.9c.4-.3-.1-.5-.6-.2L6.4 13.4l-4.6-1.4c-1-.3-1-1 .2-1.5L20.2 3.4c.8-.3 1.6.2 1.3.8z"/></svg>
+          <span class="k-sr">Telegram каналы</span>
+        </button>
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
           <svg viewBox="0 0 16 16"><path d="M3 8.5h10"/></svg>
         </button>
@@ -189,7 +203,7 @@
         </div>
       </div>
 
-      <nav class="navigation" aria-label="Разделы приложения">
+      <nav class="navigation" aria-label="Разделы приложения" title="Перетащите за свободное место, чтобы переместить панель">
         <div class="nav-label">Рабочая область</div>
         <button class="nav-item active" data-view="home">
           <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -230,18 +244,6 @@
       </nav>
 
       <div class="sidebar-resizer" id="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Ширина панели навигации" title="Потяните, чтобы изменить ширину. Двойной клик — сбросить"></div>
-      <div class="sidebar-footer">
-        <div class="social-links">
-          <button class="channel-card telegram-hub-trigger" id="open-telegram-hub" title="Открыть Telegram каналы">
-            <span class="channel-icon">
-              <svg viewBox="0 0 24 24"><path d="m20.66 3.72-17.73 6.84c-1.21.48-1.2 1.16-.22 1.46l4.55 1.42 10.53-6.65c.5-.3.95-.14.58.2l-8.53 7.7-.32 4.69c.46 0 .67-.21.92-.46l2.21-2.15 4.6 3.4c.85.47 1.46.23 1.67-.78l3.02-14.23c.31-1.24-.47-1.8-1.28-1.44z"/></svg>
-            </span>
-            <span><strong>Telegram каналы</strong><small>Сообщество и разработчики</small></span>
-            <svg class="channel-arrow" viewBox="0 0 20 20"><path d="m7.5 4.5 5 5-5 5"/></svg>
-          </button>
-        </div>
-        <div class="system-line"><span class="pulse-dot"></span><span>Система</span><b>ГОТОВО</b></div>
-      </div>
     </aside>
 
     <main class="main-area">
@@ -257,7 +259,7 @@
           <div class="home-hero premium-panel">
             <div class="home-glow"></div>
             <div class="hero-copy">
-              <span class="hero-kicker">ECLIPSE STUDIO 8.4.0</span>
+              <span class="hero-kicker">ECLIPSE STUDIO 9.0.0</span>
               <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
               <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
             </div>
@@ -362,12 +364,12 @@
               <section class="premium-panel eos-panel" id="eos-panel">
                 <div class="eos-icon"><svg viewBox="0 0 32 32"><path d="M16 3 5 7.5v8.5c0 6.5 4.7 11.2 11 13 6.3-1.8 11-6.5 11-13V7.5L16 3z"/><path d="M11 16h10M16 11v10"/></svg></div>
                 <div class="eos-copy"><div><h3>Epic Online Services</h3><span class="eos-status" id="eos-status">Проверка…</span></div><p>Пошаговое исправление запуска и создания лобби: сначала EpicFix, затем при необходимости восстановление оригинального EOS.</p></div>
-                <div class="eos-actions"><button class="ghost-button" id="epicfix-button">Установить EpicFix</button><button class="ghost-button danger-ghost" id="restore-eos-button">Восстановить EOS</button></div>
+                <div class="eos-actions equal-button-group"><button class="ghost-button" id="epicfix-button">Установить EpicFix</button><button class="ghost-button danger-ghost" id="restore-eos-button">Восстановить EOS</button></div>
               </section>
 
               <section class="action-dock premium-panel">
                 <div><span class="action-ready"><i></i>ГОТОВО К УСТАНОВКЕ</span><p>Перед изменением существующие файлы будут сохранены в <code>.backup_orig</code>.</p></div>
-                <div class="action-buttons"><button class="uninstall-button hidden" id="uninstall-button">Удалить / восстановить</button><button class="install-button" id="install-button"><span>Установить Online Fix</span><svg viewBox="0 0 20 20"><path d="M3.5 10h13m-5-5 5 5-5 5"/></svg></button></div>
+                <div class="action-buttons equal-button-group"><button class="uninstall-button hidden" id="uninstall-button">Удалить / восстановить</button><button class="install-button" id="install-button"><span>Установить Online Fix</span><svg viewBox="0 0 20 20"><path d="M3.5 10h13m-5-5 5 5-5 5"/></svg></button></div>
               </section>
             </div>
           </div>
@@ -484,7 +486,7 @@
 
             <section class="action-dock premium-panel">
               <div><span class="action-ready"><i></i>УСТАНОВКА</span><p id="dlc-install-note">Оригинальная библиотека Steam сохраняется и восстанавливается при удалении.</p></div>
-              <div class="action-buttons"><button class="dlc-button hidden" id="dlc-uninstall-button">Удалить анлокер</button><button class="dlc-button dlc-install-action" id="dlc-install-button" disabled><span>Установить DLC Unlocker</span><svg viewBox="0 0 20 20"><path d="M3.5 10h13m-5-5 5 5-5 5"/></svg></button></div>
+              <div class="action-buttons equal-button-group"><button class="dlc-button hidden" id="dlc-uninstall-button">Удалить анлокер</button><button class="dlc-button dlc-install-action" id="dlc-install-button" disabled><span>Установить DLC Unlocker</span><svg viewBox="0 0 20 20"><path d="M3.5 10h13m-5-5 5 5-5 5"/></svg></button></div>
             </section>
           </div>
         </div>
@@ -509,7 +511,7 @@
           <section class="premium-panel save-browser">
             <div class="save-browser-header">
               <div><span class="coming-label">НАЙДЕННЫЕ ДАННЫЕ</span><h3>Папки сохранений</h3><p>Снимите отметку с папок, которые не нужно добавлять в архив.</p></div>
-              <div class="save-selection-actions"><button class="ghost-button" id="save-add-location" type="button">Добавить папку</button><button class="ghost-button" id="save-reset-exclusions" type="button">Вернуть исключённые</button><button class="ghost-button" id="save-toggle-selection">Выделить все</button></div>
+              <div class="save-selection-actions equal-button-group"><button class="ghost-button" id="save-add-location" type="button">Добавить папку</button><button class="ghost-button" id="save-reset-exclusions" type="button">Вернуть исключённые</button><button class="ghost-button" id="save-toggle-selection">Выделить все</button></div>
             </div>
             <div class="save-empty" id="save-empty">
               <span><svg viewBox="0 0 32 32"><rect width="26" height="7" x="3" y="6" rx="2"/><path d="M5 13v12a3 3 0 0 0 3 3h16a3 3 0 0 0 3-3V13M12 18h8"/></svg></span>
@@ -522,7 +524,7 @@
           <section class="premium-panel save-archive-dock">
             <div class="save-archive-copy"><span class="action-ready"><i></i>РЕЗЕРВНОЕ КОПИРОВАНИЕ</span><p>Создайте архив или восстановите его — сохранения автоматически попадут в исходные папки.</p></div>
             <label class="archive-format"><span>Формат</span><select id="save-format"><option value="zip">ZIP · рекомендуется</option><option value="rar">RAR · требуется WinRAR</option></select></label>
-            <div class="save-archive-actions">
+            <div class="save-archive-actions equal-button-group">
               <button class="ghost-button" id="save-undo-restore" type="button">Вернуть как было</button><button class="ghost-button" id="save-discard-rollback" type="button">Удалить копию отката</button><button class="ghost-button" id="restore-save-archive"><span>Восстановить архив</span></button>
               <button class="install-button" id="create-save-archive" disabled><span>Создать архив</span><svg viewBox="0 0 20 20"><path d="M15.5 17.5H4.5a1.5 1.5 0 0 1-1.5-1.5V4a1.5 1.5 0 0 1 1.5-1.5h8l4.5 4.5v9a1.5 1.5 0 0 1-1.5 1.5z"/><path d="M13.5 17.5v-6h-7v6M6.5 2.5v4h6"/></svg></button>
             </div>
@@ -545,7 +547,7 @@
             <article class="premium-panel lua-steam-card">
               <small>РАСПОЛОЖЕНИЕ STEAM</small>
               <div class="lua-steam-row">
-                <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-9.95 9l4.9 2a3.5 3.5 0 0 1 2.8-.7l2.8-4.1V8a4 4 0 1 1 4 4h-.1l-4.1 2.8a3.5 3.5 0 0 1-.7 2.8l-2 4.9A10 10 0 1 0 12 2zm3.7 9.5a1.8 1.8 0 1 0-1.8-1.8 1.8 1.8 0 0 0 1.8 1.8zm-7.9 4a2.2 2.2 0 1 0-2.2-2.2 2.2 2.2 0 0 0 2.2 2.2z"/></svg>
+                <svg class="steam-logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z"/></svg>
                 <input id="lua-steam-path" type="text" spellcheck="false" placeholder="Steam не найден" />
                 <button class="ghost-button" id="lua-steam-browse">Изменить</button>
               </div>
@@ -563,7 +565,7 @@
               <h3>Eclipse Manifest</h3>
               <p>Добавляет кнопку «Получить манифест» на страницы игр в магазине Steam и автоматически размещает полученные файлы в нужных папках.</p>
             </div>
-            <div class="millennium-plugin-actions">
+            <div class="millennium-plugin-actions equal-button-group">
               <button class="secondary-button hidden" id="millennium-site-button">Установить Millennium</button>
               <button class="install-button hidden" id="millennium-migrate-button"><span>Заменить CrocLua</span></button>
               <button class="install-button hidden" id="millennium-install-button" disabled><span>Проверка…</span></button>
@@ -597,7 +599,7 @@
                 <h3>Версия OpenSteamTool</h3>
                 <p>Выберите версию загрузчика для Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.</p>
               </div>
-              <div class="manifest-loader-actions">
+              <div class="manifest-loader-actions equal-button-group">
                 <button type="button" class="manifest-loader-sync-btn" id="manifest-loader-sync-btn" title="Проверить и синхронизировать DLL с GitHub">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
                   <span>Синхронизация</span>
@@ -623,6 +625,48 @@
                 </div>
                 <small>Используйте, если не работает основная версия или возникают проблемы с запуском</small>
               </div>
+            </div>
+          </section>
+
+          <!-- Локальное облако: CloudRedirect перенаправляет Steam Cloud игр с манифестами в папку на диске -->
+          <section class="premium-panel local-cloud-panel" id="local-cloud-panel" data-busy="false" aria-labelledby="lc-title">
+            <div class="local-cloud-head">
+              <div class="millennium-plugin-icon" aria-hidden="true">
+                <svg class="local-cloud-icon" viewBox="0 0 24 24"><path d="M12 13v8"/><path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.24"/><path d="m8 17 4 4 4-4"/></svg>
+              </div>
+              <div class="local-cloud-copy">
+                <div class="millennium-plugin-heading">
+                  <span class="coming-label">CLOUDREDIRECT · LOCAL</span>
+                  <span class="millennium-plugin-badge" id="lc-badge">Проверка…</span>
+                </div>
+                <h3 id="lc-title">Локальное облако</h3>
+                <p id="lc-summary">Сохранения игр, добавленных через манифесты, синхронизируются с папкой на вашем диске вместо Steam Cloud.</p>
+              </div>
+              <div class="local-cloud-actions">
+                <button type="button" class="ghost-button local-cloud-info" id="lc-info" aria-expanded="false" aria-controls="lc-help">
+                  <svg class="local-cloud-info-icon" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="7.25"/><path d="M10 9v4"/><circle class="local-cloud-info-dot" cx="10" cy="6.5" r=".75"/></svg>
+                  <span id="lc-info-label">Информация</span>
+                </button>
+                <label class="local-cloud-toggle">
+                  <span id="lc-toggle-label">Включить</span>
+                  <span class="switch"><input id="lc-enabled" type="checkbox" aria-labelledby="lc-title lc-toggle-label" disabled /><i></i></span>
+                </label>
+              </div>
+            </div>
+            <div class="local-cloud-path">
+              <div class="path-entry local-cloud-entry">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h3.5l1.8 2H16A1.5 1.5 0 0 1 17.5 7.5v8a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
+                <input id="lc-folder" type="text" readonly spellcheck="false" placeholder="Выберите папку хранения" aria-label="Папка локального облака" />
+              </div>
+              <button type="button" class="ghost-button" id="lc-browse">Выбрать папку</button>
+            </div>
+            <div class="local-cloud-footer">
+              <span id="lc-status" role="status" aria-live="polite" data-kind="info">Проверка…</span>
+              <button type="button" class="ghost-button" id="lc-refresh">Проверить</button>
+            </div>
+            <div class="local-cloud-help" id="lc-help" hidden>
+              <p id="lc-description">Сохранения игр с Lua и манифестами обрабатываются как облачные, но хранятся на вашем диске. CloudRedirect перенаправляет запросы Steam Cloud в локальную папку — без Google Drive, OneDrive и регистрации. Обычные игры Steam продолжают использовать своё облако.</p>
+              <p class="local-cloud-note" id="lc-note">После изменения режима Steam перезапустится автоматически. Сохранения сохраняются после отключения. Настроенный режим работает вместе со Steam, даже когда эта программа закрыта. Совместимость зависит от игры и версии Steam.</p>
             </div>
           </section>
 
@@ -684,7 +728,7 @@
           </button>
           <button data-hv-tab="vbs" role="tab" aria-selected="false">
             <svg class="hv-tab-icon" viewBox="0 0 24 24"><path d="M12 2 3.5 6v6c0 5.5 3.8 10 8.5 11.5 4.7-1.5 8.5-6 8.5-11.5V6L12 2z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/></svg>
-            <span>VBS 2.0</span>
+            <span>VBS 2.0.1</span>
           </button>
           <button data-hv-tab="protections" role="tab" aria-selected="false">
             <svg class="hv-tab-icon" viewBox="0 0 24 24"><path d="M21 4H3"/><path d="M21 12H3"/><path d="M21 20H3"/><circle cx="8" cy="4" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="12" cy="20" r="2"/></svg>
@@ -705,7 +749,7 @@
                   <span>Автономный запуск с защитой ядра Windows. Сохраните важные данные перед запуском.</span>
                 </div>
               </div>
-              <div class="hv-hero-actions">
+              <div class="hv-hero-actions equal-button-group">
                 <button class="ghost-button hv-control-button" id="hv-help-button">
                   <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5"/><path d="M6.5 6.5a1.5 1.5 0 0 1 3 .5c0 1-1.5 1.25-1.5 2.25M8 12h.01"/></svg>
                   <span>Подсказки</span>
@@ -738,7 +782,7 @@
                   </div>
                 </div>
               </div>
-              <div class="hv-eclipse-actions">
+              <div class="hv-eclipse-actions equal-button-group">
                 <button class="secondary-button" id="hv-eclipse-check-btn" type="button">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
                   <span>Проверить версию</span>
@@ -769,7 +813,7 @@
                     <option value="">Выберите аккаунт</option>
                   </select>
                 </label>
-                <div class="hv-steam-buttons">
+                <div class="hv-steam-buttons equal-button-group">
                   <button class="primary-button" id="hv-steam-enable" disabled type="button">
                     <svg viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                     <span>Включить для Steam</span>
@@ -795,7 +839,7 @@
                 </div>
               </div>
 
-              <div class="hv-selected-actions">
+              <div class="hv-selected-actions equal-button-group">
                 <button class="ghost-button hv-shortcut-button" id="hv-selected-shortcut-btn" type="button" disabled title="Создать ярлык на рабочем столе">
                   <span>Ярлык</span>
                 </button>
@@ -846,7 +890,7 @@
                       <span class="coming-label">LIVE LOG</span>
                       <h3>Журнал операций</h3>
                     </div>
-                    <div class="hv-log-tools">
+                    <div class="hv-log-tools equal-button-group">
                       <button class="ghost-button" id="hv-copy-log">Копировать</button>
                       <button class="ghost-button" id="hv-clear-log">Очистить</button>
                     </div>
@@ -869,7 +913,7 @@
                 <h2>Античиты</h2>
                 <p>Поиск установленных служб, драйверов, папок и записей популярных античитов. Перед очисткой создаётся локальная резервная копия.</p>
               </div>
-              <div class="ac-hero-actions">
+              <div class="ac-hero-actions equal-button-group">
                 <button class="ac-scan-button" id="ac-scan-button">
                   <svg viewBox="0 0 20 20" style="width:15px;height:15px"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg>
                   <span>Сканировать</span>
@@ -911,11 +955,11 @@
                 <svg viewBox="0 0 24 24"><path d="M12 2 3.5 6v6c0 5.5 3.8 10 8.5 11.5 4.7-1.5 8.5-6 8.5-11.5V6L12 2z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/></svg>
               </div>
               <div class="vbs-hero-copy">
-                <span class="hero-kicker">WINDOWS SECURITY · VBS 2.0</span>
-                <h2>VBS 2.0</h2>
+                <span class="hero-kicker">WINDOWS SECURITY · VBS 2.0.1</span>
+                <h2>VBS 2.0.1</h2>
                 <p>Управление изоляцией ядра, целостностью кода (HVCI), BitLocker, Meltdown mitigation и гипервизором Windows.</p>
               </div>
-              <div class="vbs-hero-actions">
+              <div class="vbs-hero-actions equal-button-group">
                 <button class="vbs-scan-button" id="vbs-scan-button"><svg viewBox="0 0 20 20" style="width:16px;height:16px"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 4 4"/></svg><span>Сканировать</span></button>
                 <button class="vbs-enable-all-button" id="vbs-enable-all-btn" title="Принудительно включить все механизмы защиты ядра Windows">
                   <svg viewBox="0 0 24 24"><path d="M12 2 3.5 6v6c0 5.5 3.8 10 8.5 11.5 4.7-1.5 8.5-6 8.5-11.5V6L12 2z"/><path d="m9 12 2 2 4-4"/></svg>
@@ -930,6 +974,22 @@
                   <span id="vbs-disable-label">Выключить визор</span>
                 </button>
               </div>
+            </section>
+
+            <section class="premium-panel vbs-external-card hidden" id="vbs-external-card" aria-labelledby="vbs-external-title">
+              <div class="vbs-external-copy">
+                <div class="vbs-external-heading">
+                  <h3 id="vbs-external-title">VBS.cmd / ARTIFACT</h3>
+                  <span class="vbs-external-badge" id="vbs-external-badge">ВНЕШНИЙ</span>
+                </div>
+                <p id="vbs-external-detail"></p>
+                <p id="vbs-external-reason" class="vbs-external-reason hidden"></p>
+                <p class="vbs-external-meta"><span>Записей в журнале:</span> <span id="vbs-external-count">0</span></p>
+              </div>
+              <button type="button" class="vbs-external-button" id="vbs-external-restore" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 10 4 6l5-4"/><path d="M4 6h9a8 8 0 1 1-7 12"/></svg>
+                <span>Выключить внешний режим</span>
+              </button>
             </section>
 
             <div class="vbs-grid-row">
@@ -1011,7 +1071,7 @@
 
             <section class="premium-panel vbs-components-panel">
               <div class="vbs-components-header">
-                <div><span class="coming-label">КОМПОНЕНТЫ VBS 2.0</span><h3>Системная защита</h3><p>Отключаются только активные параметры. Исходное состояние сохраняется для отката.</p></div>
+                <div><span class="coming-label">КОМПОНЕНТЫ VBS 2.0.1</span><h3>Системная защита</h3><p>Отключаются только активные параметры. Исходное состояние сохраняется для отката.</p></div>
                 <span class="vbs-scan-time" id="vbs-scan-time">Сканирование ещё не выполнялось</span>
               </div>
               <div class="vbs-loading hidden" id="vbs-loading"><span></span><strong>Проверяем Windows</strong><p>Читаем Device Guard, Code Integrity, Secure Boot и параметры загрузки.</p></div>
@@ -1189,6 +1249,7 @@
             </div>
             <div class="files-regular-divider hidden" id="files-regular-divider"><span>Остальной каталог</span></div>
             <div class="files-empty hidden" id="files-empty"><span><svg viewBox="0 0 24 24" style="width:36px;height:36px"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><circle cx="12" cy="13" r="2.5"/><path d="m14 15 2 2"/></svg></span><strong>Кряки не найдены</strong><p>Измените поисковый запрос или обновите каталог.</p></div>
+            <div class="files-list-head" aria-hidden="true"><div><span>Релиз</span><span>Билд</span><span>Пароль</span><span></span></div></div>
             <div class="files-grid hidden" id="files-grid"></div>
 
             <div class="files-pagination hidden" id="files-pagination">
@@ -1252,6 +1313,10 @@
 
       <section class="view" id="view-settings" data-view-panel="settings">
         <div class="settings-container">
+          <header class="settings-page-head">
+            <h2>Настройки</h2>
+            <p>Интерфейс, главная, боковая панель, модули и пути</p>
+          </header>
           <nav class="settings-segmented-tabs" role="tablist" aria-label="Разделы настроек">
             <button type="button" class="settings-tab-btn active" role="tab" aria-selected="true" data-settings-tab="interface">
               <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm4 12V4"/></svg>
@@ -1275,7 +1340,7 @@
             </button>
           </nav>
 
-          <!-- Раздел: Интерфейс -->
+          <!-- Интерфейс -->
           <div class="settings-tab-panel active" id="settings-panel-interface" role="tabpanel" data-tab-panel="interface">
             <section class="premium-panel settings-card appearance-card">
               <h2>Интерфейс</h2>
@@ -1590,6 +1655,7 @@
                       </div>
                       <div class="font-select-wrap">
                         <select id="ui-font" class="ui-font-select" aria-label="Шрифт интерфейса">
+                          <option value="manrope">Manrope</option>
                           <option value="system">Segoe UI Variable / Segoe UI</option>
                           <option value="jetbrains">JetBrains Mono</option>
                           <option value="minecraft">Minecraft</option>
@@ -1603,7 +1669,7 @@
                     <div class="typography-preview-card" id="ui-font-preview" aria-label="Предпросмотр шрифта">
                       <div class="typography-preview-lead">
                         <strong>Aa Bb Gg 123 · Быстрый старт</strong>
-                        <small id="ui-font-current-name">Segoe UI Variable</small>
+                        <small id="ui-font-current-name">Manrope</small>
                       </div>
                       <div class="typography-preview-chips">
                         <span>Online Fix</span>
@@ -1659,10 +1725,47 @@
                   </div>
                 </div>
               </details>
+
+              <details class="settings-collapsible" id="collapse-search" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="m13.2 13.2 3.6 3.6"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Быстрый поиск</strong>
+                      <small>Поиск по разделам, настройкам, играм и действиям</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="settings-group">
+                    <label class="pref-row" for="search-enabled">
+                      <div><strong>Включить быстрый поиск</strong><small>Кнопка в заголовке окна и вызов сочетанием клавиш</small></div>
+                      <span class="switch"><input type="checkbox" id="search-enabled" checked /><i></i></span>
+                    </label>
+                    <div class="pref-row pref-row-search-hotkey" id="pref-row-search-hotkey">
+                      <div><strong>Сочетание клавиш</strong><small>Нажмите кнопку, затем новое сочетание. Esc — отмена</small><small class="search-hotkey-hint hidden" id="search-hotkey-hint" role="status"></small></div>
+                      <div class="search-hotkey-controls">
+                        <button type="button" class="search-hotkey-button" id="search-hotkey-button" aria-pressed="false" aria-label="Сочетание клавиш для поиска"><kbd>Ctrl</kbd><kbd>K</kbd></button>
+                        <button type="button" class="ghost-button search-hotkey-reset" id="search-hotkey-reset" title="Вернуть Ctrl + K">Сбросить</button>
+                      </div>
+                    </div>
+                    <div class="pref-row pref-row-search-binds" id="pref-row-search-binds">
+                      <div><strong>Сочетания для действий</strong><small>Свои сочетания для любых пунктов поиска: действий, настроек, разделов</small></div>
+                      <button type="button" class="ghost-button search-binds-clear" id="search-binds-clear">Убрать все</button>
+                    </div>
+                    <ul class="search-binds-list" id="search-binds-list" aria-label="Назначенные сочетания"></ul>
+                  </div>
+                </div>
+              </details>
             </section>
           </div>
 
-          <!-- Раздел: Главная и запуск -->
+          <!-- Главная и запуск -->
           <div class="settings-tab-panel hidden" id="settings-panel-home" role="tabpanel" data-tab-panel="home">
             <section class="premium-panel settings-card home-settings-card">
               <h2>Главная и запуск</h2>
@@ -1697,7 +1800,7 @@
                           <option value="lua">Eclipse Manifest</option>
                           <option value="hypervisor">Гипервизор</option>
                           <option value="hypervisor:anticheat">Гипервизор · Античиты</option>
-                          <option value="hypervisor:vbs">Гипервизор · VBS 2.0</option>
+                          <option value="hypervisor:vbs">Гипервизор · VBS 2.0.1</option>
                           <option value="files">Кряки</option>
                           <option value="utilities">Утилиты</option>
                           <option value="settings">Настройки</option>
@@ -1726,7 +1829,7 @@
                 </summary>
                 <div class="settings-collapsible-content">
                   <div class="sidebar-modules-list home-blocks-list" id="home-blocks-list" aria-label="Блоки главной"></div>
-                  <div class="sidebar-settings-actions">
+                  <div class="sidebar-settings-actions equal-button-group">
                     <button type="button" class="secondary-button" id="home-blocks-show-all">Показать все блоки</button>
                     <button type="button" class="ghost-button" id="home-blocks-reset">Сбросить порядок</button>
                   </div>
@@ -1798,7 +1901,7 @@
             </section>
           </div>
 
-          <!-- Раздел: Боковая панель -->
+          <!-- Боковая панель -->
           <div class="settings-tab-panel hidden" id="settings-panel-sidebar" role="tabpanel" data-tab-panel="sidebar">
             <section class="premium-panel settings-card sidebar-settings-card">
               <h2>Боковая панель</h2>
@@ -1839,6 +1942,48 @@
                 </div>
               </details>
 
+              <details class="settings-collapsible" id="collapse-sidebar-dock" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon">
+                      <svg viewBox="0 0 20 20"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M3 4h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM2 8h16M6 11v2M14 11h-4"/></svg>
+                    </span>
+                    <div class="settings-collapsible-title">
+                      <strong>Расположение панелей</strong>
+                      <small>Край окна для боковой панели и место строки поиска в заголовке</small>
+                    </div>
+                  </div>
+                  <span class="settings-collapsible-chevron">
+                    <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg>
+                  </span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="dock-row" id="pref-row-sidebar-dock">
+                    <div class="dock-row-info">
+                      <strong>Положение боковой панели</strong>
+                      <p>Панель можно перетащить мышью: зажмите свободное место на ней и отпустите у нужного края окна</p>
+                    </div>
+                    <div class="dock-picker" role="group" aria-label="Положение боковой панели">
+                      <button type="button" class="dock-btn active" data-sidebar-dock="left" aria-pressed="true"><i class="dock-preview" aria-hidden="true"></i><span>Слева</span></button>
+                      <button type="button" class="dock-btn" data-sidebar-dock="right" aria-pressed="false"><i class="dock-preview" aria-hidden="true"></i><span>Справа</span></button>
+                      <button type="button" class="dock-btn" data-sidebar-dock="top" aria-pressed="false"><i class="dock-preview" aria-hidden="true"></i><span>Сверху</span></button>
+                      <button type="button" class="dock-btn" data-sidebar-dock="bottom" aria-pressed="false"><i class="dock-preview" aria-hidden="true"></i><span>Снизу</span></button>
+                    </div>
+                  </div>
+                  <div class="dock-row" id="pref-row-search-dock">
+                    <div class="dock-row-info">
+                      <strong>Положение строки поиска</strong>
+                      <p>Строку поиска в заголовке окна тоже можно перетащить: влево, в центр или вправо</p>
+                    </div>
+                    <div class="dock-picker dock-picker-search" role="group" aria-label="Положение строки поиска">
+                      <button type="button" class="dock-btn" data-search-dock="left" aria-pressed="false"><i class="dock-preview" aria-hidden="true"></i><span>Слева</span></button>
+                      <button type="button" class="dock-btn active" data-search-dock="center" aria-pressed="true"><i class="dock-preview" aria-hidden="true"></i><span>По центру</span></button>
+                      <button type="button" class="dock-btn" data-search-dock="right" aria-pressed="false"><i class="dock-preview" aria-hidden="true"></i><span>Справа</span></button>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
               <details class="settings-collapsible" id="collapse-sidebar-modules" open>
                 <summary class="settings-collapsible-summary">
                   <div class="settings-collapsible-header">
@@ -1857,7 +2002,7 @@
                 <div class="settings-collapsible-content">
                   <div class="sidebar-modules-list" id="sidebar-modules-list"></div>
 
-                  <div class="sidebar-settings-actions">
+                  <div class="sidebar-settings-actions equal-button-group">
                     <button type="button" class="secondary-button" id="sidebar-show-all">Показать все модули</button>
                     <button type="button" class="ghost-button" id="sidebar-reset-order">Сбросить порядок</button>
                   </div>
@@ -1866,7 +2011,7 @@
             </section>
           </div>
 
-          <!-- Раздел: Модули и API -->
+          <!-- Модули и API -->
           <div class="settings-tab-panel hidden" id="settings-panel-modules" role="tabpanel" data-tab-panel="modules">
             <section class="premium-panel settings-card svc-card">
               <h2>Модули и API</h2>
@@ -1893,7 +2038,7 @@
                     <div class="manifest-loader-copy">
                       <p class="settings-loader-desc">Выберите, какую встроенную версию OpenSteamTool использовать при интеграции манифестов в клиент Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.</p>
                     </div>
-                    <div class="manifest-loader-actions">
+                    <div class="manifest-loader-actions equal-button-group">
                       <button type="button" class="manifest-loader-sync-btn" id="settings-loader-sync-btn" title="Синхронизировать файлы загрузчика с облаком GitHub">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
                         <span>Синхронизация</span>
@@ -1947,7 +2092,7 @@
                           <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M6 3h7v7M13 3L7 9M11 8v5a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>
                         </button>
                       </div>
-                      <small>Нужен свой API-ключ с их сайта</small>
+                      <small>Встроенный ключ Crocodile Gena Studio или свой</small>
                     </div>
                     <div class="svc-option" data-service="hubcap" role="button" tabindex="0">
                       <div class="svc-option-header">
@@ -1962,7 +2107,7 @@
 
                   <div class="svc-key" id="ryuu-key-block">
                     <div class="svc-key-header">
-                      <label class="svc-key-label" for="ryuu-key">API-КЛЮЧ RYUU</label>
+                      <span class="svc-key-label">API-КЛЮЧ RYUU</span>
                       <div class="svc-key-meta">
                         <span class="hubcap-status-badge" id="ryuu-key-status">Ключ не указан</span>
                         <button type="button" class="svc-key-link" id="ryuu-key-get" data-external-url="https://generator.ryuu.lol/api">
@@ -1971,16 +2116,31 @@
                         </button>
                       </div>
                     </div>
-                    <div class="svc-input-box">
-                      <input id="ryuu-key" type="password" autocomplete="off" spellcheck="false" placeholder="Вставьте API-ключ Ryuu…" />
-                      <div class="svc-input-tools">
-                        <button type="button" class="svc-tool-btn" id="ryuu-key-paste" title="Вставить из буфера обмена" aria-label="Вставить из буфера">
-                          <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M5 2h6v2H5zM3 4h2v2h6V4h2a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/></svg>
-                        </button>
-                        <button type="button" class="svc-tool-btn" id="ryuu-key-visibility" title="Показать или скрыть ключ" aria-label="Показать ключ">
-                          <svg class="eye-show" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M1.5 8s2.5-4.5 6.5-4.5 6.5 4.5 6.5 4.5-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
-                          <svg class="eye-hide hidden" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M2 2l12 12M6.5 6.6a2 2 0 0 0 2.9 2.9m-4.2-4A7.2 7.2 0 0 0 1.5 8s2.5-4.5 6.5-4.5c1.6 0 3-.7 4.1-1.7m-1.7-4.1a6.6 6.6 0 0 0-2.4-.7c-4 0-6.5 4.5-6.5 4.5"/></svg>
-                        </button>
+                    <fieldset class="ryuu-key-sources" aria-describedby="ryuu-key-help">
+                      <legend>Какой ключ использовать</legend>
+                      <label class="ryuu-key-source-option active">
+                        <input id="ryuu-key-source-crocodile" type="radio" name="ryuu-key-source" value="crocodile" checked />
+                        <span><strong>Crocodile Gena Studio</strong><small>Встроенный общий ключ</small></span>
+                      </label>
+                      <label class="ryuu-key-source-option">
+                        <input id="ryuu-key-source-custom" type="radio" name="ryuu-key-source" value="custom" />
+                        <span><strong>Свой ключ</strong><small>Ваш API-ключ Ryuu</small></span>
+                      </label>
+                    </fieldset>
+                    <p class="ryuu-key-help" id="ryuu-key-help">Общий ключ встроен в программу. Его доступность зависит от Crocodile Gena Studio.</p>
+                    <div id="ryuu-custom-key-fields" class="hidden">
+                      <label class="svc-key-label" for="ryuu-key">СВОЙ API-КЛЮЧ RYUU</label>
+                      <div class="svc-input-box">
+                        <input id="ryuu-key" type="password" autocomplete="off" spellcheck="false" aria-describedby="ryuu-key-help" placeholder="Вставьте API-ключ Ryuu…" disabled />
+                        <div class="svc-input-tools">
+                          <button type="button" class="svc-tool-btn" id="ryuu-key-paste" title="Вставить из буфера обмена" aria-label="Вставить из буфера">
+                            <svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M5 2h6v2H5zM3 4h2v2h6V4h2a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/></svg>
+                          </button>
+                          <button type="button" class="svc-tool-btn" id="ryuu-key-visibility" title="Показать или скрыть ключ" aria-label="Показать ключ">
+                            <svg class="eye-show" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M1.5 8s2.5-4.5 6.5-4.5 6.5 4.5 6.5 4.5-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2" fill="currentColor"/></svg>
+                            <svg class="eye-hide hidden" viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M2 2l12 12M6.5 6.6a2 2 0 0 0 2.9 2.9m-4.2-4A7.2 7.2 0 0 0 1.5 8s2.5-4.5 6.5-4.5c1.6 0 3-.7 4.1-1.7m-1.7-4.1a6.6 6.6 0 0 0-2.4-.7c-4 0-6.5 4.5-6.5 4.5"/></svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2052,7 +2212,7 @@
             </section>
           </div>
 
-          <!-- Раздел: Пути и загрузки -->
+          <!-- Пути и загрузки -->
           <div class="settings-tab-panel hidden" id="settings-panel-storage" role="tabpanel" data-tab-panel="storage">
             <section class="premium-panel settings-card downloads-card">
               <h2>Пути и обновления</h2>
@@ -2113,13 +2273,13 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">8.4.0</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">9.0.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
                   </div>
-                  <div class="update-download-actions hidden" id="update-download-actions">
-                    <button class="install-button hidden" id="update-install-button">Обновить в 1 клик</button>
+                  <div class="update-download-actions hidden equal-button-group" id="update-download-actions">
+                    <button class="install-button hidden" id="update-install-button">Обновить и перезапустить</button>
                     <button class="ghost-button hidden" id="download-portable-button">Скачать EXE</button>
                     <button class="ghost-button hidden" id="download-installer-button">Скачать Setup</button>
                   </div>
@@ -2142,7 +2302,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">8.4.0</b></div>
+                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">9.0.0</b></div>
                   <div class="about-row"><span>Версия Eclipse HV</span><b id="about-hv-version">Проверка…</b></div>
                   <div class="about-row"><span>Права доступа</span><b id="about-admin-rights">Проверка…</b></div>
                   <div class="about-row"><span>Путь к Steam</span><b id="about-steam-path" class="about-path">Определение…</b></div>
@@ -2156,14 +2316,17 @@
   </div>
 
   <div class="modal-backdrop hidden" id="modal-backdrop">
-    <div class="modal premium-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-message" tabindex="-1"><div class="modal-symbol" id="modal-symbol">!</div><h3 id="modal-title">Подтверждение</h3><p id="modal-message"></p><div class="modal-actions"><button class="secondary-button" id="modal-cancel">Отмена</button><button class="install-button" id="modal-confirm">Продолжить</button></div></div>
+    <div class="modal premium-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-message" tabindex="-1"><div class="modal-symbol" id="modal-symbol">!</div><h3 id="modal-title">Подтверждение</h3><p id="modal-message"></p><div class="modal-actions equal-button-group"><button class="secondary-button" id="modal-cancel">Отмена</button><button class="install-button" id="modal-confirm">Продолжить</button></div></div>
   </div>
 
   <div class="modal-backdrop hidden" id="app-update-backdrop">
-    <div class="modal premium-panel app-update-modal">
+    <div class="modal premium-panel app-update-modal" role="dialog" aria-modal="true" aria-labelledby="app-update-title" aria-describedby="app-update-message">
+      <button type="button" class="app-update-close" id="app-update-close" aria-label="Закрыть" title="Закрыть">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
       <div class="modal-symbol" id="app-update-symbol">↑</div>
       <h3 id="app-update-title">Обновление Eclipse Studio</h3>
-      <p id="app-update-message">Доступна новая версия программы.</p>
+      <p id="app-update-message">Программа обновится и запустится автоматически. Настройки и ярлыки сохранятся.</p>
       <details class="app-update-changelog hidden" id="app-update-changelog">
         <summary class="app-update-changelog-summary">
           <span id="app-update-changelog-toggle-text">Список изменений</span>
@@ -2173,15 +2336,16 @@
         </summary>
         <div class="app-update-changelog-body" id="app-update-changelog-body"></div>
       </details>
-      <p class="app-update-footnote hidden" id="app-update-footnote"></p>
-      <div class="app-update-progress-wrap hidden" id="app-update-progress-wrap">
-        <div class="app-update-progress-bar">
+      <!-- Ход установки: подготовка, загрузка, проверка SHA-256, замена EXE и перезапуск -->
+      <div class="app-update-progress-wrap" id="app-update-progress-wrap" data-state="ready">
+        <div class="app-update-phase">
+          <strong id="app-update-phase" role="status" aria-live="polite">Готово к загрузке</strong>
+          <span id="app-update-percent">0%</span>
+        </div>
+        <div class="app-update-progress-bar" id="app-update-progress" role="progressbar" aria-label="Прогресс обновления" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div class="app-update-progress-fill" id="app-update-progress-fill"></div>
         </div>
-        <div class="app-update-progress-meta">
-          <span id="app-update-progress-bytes">0 МБ / 0 МБ</span>
-          <span id="app-update-progress-speed">0 МБ/с</span>
-        </div>
+        <p class="app-update-detail" id="app-update-detail">Перед заменой EXE проверяются SHA-256 и версия файла. Напоминание можно отложить на 5 запусков.</p>
       </div>
       <!-- Шаг 2 при одновременном обновлении программы и библиотек OpenSteamTool -->
       <div class="app-update-step2 hidden" id="app-update-step2">
@@ -2204,9 +2368,10 @@
         </div>
       </div>
 
-      <div class="modal-actions" id="app-update-actions">
-        <button class="secondary-button" id="app-update-cancel">Отложить</button>
-        <button class="install-button" id="app-update-confirm">Обновить сейчас</button>
+      <div class="modal-actions equal-button-group" id="app-update-actions">
+        <button type="button" class="secondary-button" id="app-update-defer">Отложить на 5 запусков</button>
+        <button type="button" class="secondary-button hidden" id="app-update-cancel">Отменить обновление</button>
+        <button type="button" class="install-button" id="app-update-install">Обновить и перезапустить</button>
       </div>
     </div>
   </div>
@@ -2226,7 +2391,7 @@
         <div class="loader-file-list" id="loader-modal-file-list"></div>
       </div>
 
-      <div class="modal-actions" id="loader-modal-actions">
+      <div class="modal-actions equal-button-group" id="loader-modal-actions">
         <button class="ghost-button" id="loader-modal-cancel">Закрыть</button>
         <button class="secondary-button" id="loader-modal-snooze">Отложить (на 5 запусков)</button>
         <button class="install-button" id="loader-modal-confirm">Обновить сейчас</button>
@@ -2423,7 +2588,6 @@
           </div>
         </div>
       </div>
-
 
 
       <div class="eclipse-hv-modal-footer">

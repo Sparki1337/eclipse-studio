@@ -1,4 +1,4 @@
-/* ---------- Боковая панель: Настройки вкладки ---------- */
+/* Боковая панель: Настройки вкладки */
 .sidebar-mode-picker {
   display: flex;
   gap: 6px;
@@ -219,7 +219,7 @@
   margin-top: 16px;
 }
 
-/* ---------- Боковая панель: Размер x2 для кнопок навигации ---------- */
+/* Боковая панель: Размер x2 для кнопок навигации */
 .nav-item {
   position: relative;
   transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1),
@@ -861,7 +861,7 @@ html[data-theme="rose"] .archive-format select option {
   color: #e2e8f0;
 }
 
-/* ---------- Кряки: сворачивание закреплённых ---------- */
+/* Кряки: сворачивание закреплённых */
 .files-featured-heading { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; padding-bottom: 4px; }
 .files-featured-heading em { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 6px; background: rgba(255,255,255,.05); color: #8a94a3; font-size: 9px; font-style: normal; font-weight: 800; }
 .files-featured-action { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; color: #8a94a3; font-style: normal; transition: .18s; }
@@ -874,7 +874,7 @@ html[data-theme="rose"] .archive-format select option {
 .files-featured.collapsed .files-featured-action svg { transform: rotate(180deg); }
 .files-featured.collapsed .files-featured-heading { padding-bottom: 18px; }
 
-/* ---------- Компактный режим ---------- */
+/* Компактный режим */
 html.compact { --sp: .68; --hs: .82; }
 html.compact .app-shell { grid-template-columns: 216px 1fr !important; grid-template-rows: 40px 1fr !important; }
 html.compact .window-button { width: 42px; }
@@ -1292,7 +1292,7 @@ html.no-motion *, html.no-motion *::before, html.no-motion *::after {
 }
 html.no-motion .ambient { animation: none !important; }
 
-/* Telegram Hub Modal */
+/* Окно каналов Telegram */
 .telegram-hub-modal {
   width: min(540px, calc(100vw - 32px));
   max-width: 540px;
@@ -2005,7 +2005,7 @@ html[data-font="minecraft"]:root[data-weight="light"] :is(p, span, div, a, butto
 :root[data-glow="off"] .nav-item.active svg { filter: none !important; }
 :root[data-glow="off"] .nav-item.active { box-shadow: none !important; }
 
-/* Segmented Control */
+/* Группа переключаемых кнопок */
 .personalization-segment {
   display: flex;
   min-width: 0;
@@ -2413,9 +2413,7 @@ html[data-theme="light"] .settings-collapsible-content {
   border-color: rgba(255, 92, 119, 0.4);
 }
 
-/* ========================================================
-   ПОЛЬЗОВАТЕЛЬСКИЕ ЗВУКОВЫЕ ПРОФИЛИ
-   ======================================================== */
+/* Пользовательские звуковые профили */
 .settings-group .pref-row.pref-row-audio-pack,
 .pref-row.pref-row-audio-pack {
   display: flex !important;
@@ -2657,11 +2655,7 @@ html[data-theme="light"] .settings-collapsible-content {
 }
 
 
-
-/* ========================================================
-   УНИВЕРСАЛЬНЫЙ КАСТОМНЫЙ СЕЛЕКТ (CUSTOM SELECT)
-   Замена устаревших системных комбобоксов Windows
-   ======================================================== */
+/* Выпадающие списки в стиле приложения */
 .custom-select-hidden {
   position: absolute !important;
   width: 1px !important;
@@ -2997,9 +2991,7 @@ html[data-theme="steel"] .custom-select-trigger:hover {
   margin-top: 4px;
 }
 
-/* ========================================================
-   СВЕТЛАЯ ТЕМА (LIGHT THEME)
-   ======================================================== */
+/* Светлая тема */
 html[data-theme="light"] .audio-custom-list {
   background: #f1f5f9;
   border-color: rgba(0, 0, 0, 0.08);
@@ -3081,11 +3073,7 @@ html[data-theme="light"] .custom-select-separator::after {
 }
 
 
-
-
-
-
-/* Новые действия сохранений остаются в строке и имеют удобную область нажатия. */
+/* Новые действия сохранений остаются в строке и имеют удобную область нажатия */
 #save-list .save-location { grid-template-columns: 24px 44px minmax(0, 1fr) minmax(120px, 200px) auto; gap: 12px; }
 #save-list .save-exclude, .save-archive-actions button, .save-selection-actions button { min-height: max(44px, calc(44px * var(--hs, 1))) !important; }
 #save-list .save-location-copy { min-width: 0; }
@@ -3095,7 +3083,7 @@ html[data-theme="light"] .custom-select-separator::after {
   #save-list .save-location-meta { grid-column: 3; align-items: flex-start; }
   #save-list .save-exclude { grid-column: 4; grid-row: 1 / span 2; }
 }
-/* Узкий предпросмотр; нативное окно Windows по-прежнему не меньше 960 × 640. */
+/* Узкий предпросмотр; нативное окно Windows по-прежнему не меньше 960 × 640 */
 @media (max-width: 760px) {
   html:not(.sidebar-icons):not(.sidebar-compact) body .app-shell,
   html.sidebar-compact:not(.sidebar-icons) body .app-shell,
@@ -3125,7 +3113,7 @@ html[data-theme="light"] .custom-select-separator::after {
 #modal-backdrop .modal-symbol svg { width: 24px; height: 24px; stroke-width: 2; flex-shrink: 0; }
 #modal-backdrop .modal-actions button { min-height: max(44px, calc(44px * var(--hs, 1))) !important; }
 
-/* ---------- Настройки: Главная и запуск ---------- */
+/* Настройки: Главная и запуск */
 .home-blocks-list .home-block-row { cursor: default; }
 .home-block-copy {
   flex: 1;

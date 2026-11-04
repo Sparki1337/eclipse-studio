@@ -1,23 +1,42 @@
+//! Проверка релизов Eclipse Studio и обновление внутри программы.
+//! Новый EXE скачивается с докачкой и проверкой SHA-256, затем копия текущей программы
+//! в роли помощника заменяет файл на месте: путь, имя и ярлыки сохраняются.
+use crate::update_core as core;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
-    io::{Read, Write},
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, OnceLock,
+    },
+    time::Duration,
 };
-use tauri::{AppHandle, Emitter};
+// Instant и Emitter нужны только установке обновления, которая работает в Windows
+#[cfg(target_os = "windows")]
+use std::time::Instant;
+use tauri::AppHandle;
+#[cfg(target_os = "windows")]
+use tauri::Emitter;
 
-// Проверка обновлений выполняется через web-релизы и releases.atom без GitHub API
-// (во избежание ограничений rate limit 60 запросов/час).
+// Проверка web-релизов и releases.atom без лимитов GitHub API
+const REPO: &str = "Sparki1337/eclipse-studio";
 const RELEASES_PAGE: &str = "https://github.com/Sparki1337/eclipse-studio/releases";
 const RELEASES_ATOM: &str = "https://github.com/Sparki1337/eclipse-studio/releases.atom";
 const USER_AGENT: &str = "Eclipse-Studio-Update-Checker";
+/// Событие хода обновления для интерфейса
+const PROGRESS_EVENT: &str = "cgs-update-progress";
+const NO_VERIFIED_EXE: &str = "В релизе нет проверяемого EXE для обновления внутри программы.";
+const BUSY: &str = "Дождитесь завершения текущих операций перед обновлением.";
+const DOWNLOAD_ATTEMPTS: u32 = 3;
 
 #[derive(Debug, Deserialize)]
 struct GithubAsset {
     name: String,
     browser_download_url: String,
+    #[serde(default)]
+    sha256: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -40,54 +59,54 @@ pub struct UpdateInfo {
     pub release_url: String,
     pub installer_url: Option<String>,
     pub portable_url: Option<String>,
+    /// В релизе есть портативный EXE с опубликованной SHA-256: можно обновиться внутри программы
+    pub in_app_supported: bool,
+    pub asset_name: Option<String>,
+    pub asset_sha256: Option<String>,
+    #[serde(skip)]
+    asset_url: Option<String>,
 }
 
-/// Данные о прогрессе скачивания обновления для передачи в веб-интерфейс
+/// Этап обновления для окна прогресса
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateProgressPayload {
-    pub percentage: u8,
-    pub downloaded_bytes: u64,
-    pub total_bytes: u64,
-    pub speed_bytes_per_sec: u64,
-    pub status: String,
-    pub completed: bool,
+pub struct UpdateProgress {
+    pub phase: &'static str,
+    pub downloaded: u64,
+    pub total: u64,
+    pub percent: u8,
+    pub attempt: u32,
+    pub message: String,
 }
 
-/// Результат успешной загрузки обновления в локальную папку программы
+impl UpdateProgress {
+    fn phase(phase: &'static str) -> Self {
+        Self {
+            phase,
+            downloaded: 0,
+            total: 0,
+            percent: 0,
+            attempt: 0,
+            message: String::new(),
+        }
+    }
+}
+
+/// Итог запуска после обновления: показывается один раз при загрузке интерфейса
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UpdateDownloadResult {
-    pub file_path: String,
-    pub file_name: String,
+pub struct LaunchOutcome {
+    pub success: bool,
+    pub message: String,
     pub version: String,
-    pub ready_to_install: bool,
 }
 
 fn version_parts(version: &str) -> Option<Vec<u64>> {
-    let clean = version
-        .trim()
-        .trim_start_matches(['v', 'V'])
-        .split_once('-')
-        .map(|(base, _)| base)
-        .unwrap_or_else(|| version.trim().trim_start_matches(['v', 'V']));
-    let parts = clean
-        .split('.')
-        .map(str::parse::<u64>)
-        .collect::<Result<Vec<_>, _>>()
-        .ok()?;
-    (!parts.is_empty()).then_some(parts)
+    core::version_parts(version)
 }
 
 fn is_newer(latest: &str, current: &str) -> bool {
-    let (Some(mut latest), Some(mut current)) = (version_parts(latest), version_parts(current))
-    else {
-        return false;
-    };
-    let length = latest.len().max(current.len());
-    latest.resize(length, 0);
-    current.resize(length, 0);
-    latest > current
+    core::is_newer(latest, current)
 }
 
 fn installer_url(release: &GithubRelease) -> Option<String> {
@@ -170,7 +189,15 @@ fn check_for_update_blocking() -> Result<UpdateInfo, String> {
         ));
     }
 
+    let asset =
+        core_assets(&release).and_then(|assets| core::update_asset(&assets, &latest).cloned());
+    let in_app_supported =
+        cfg!(target_os = "windows") && asset.as_ref().is_some_and(|asset| asset.sha256.is_some());
     Ok(UpdateInfo {
+        in_app_supported,
+        asset_name: asset.as_ref().map(|asset| asset.name.clone()),
+        asset_sha256: asset.as_ref().and_then(|asset| asset.sha256.clone()),
+        asset_url: asset.map(|asset| asset.url),
         available: is_newer(&latest, &current),
         title: release
             .name
@@ -201,15 +228,14 @@ fn check_for_update_via_web(client: &Client) -> Result<GithubRelease, String> {
         .ok_or_else(|| "Не удалось определить номер версии со страницы релизов".to_string())?
         .to_string();
 
-    let assets_url =
-        format!("https://github.com/Sparki1337/eclipse-studio/releases/expanded_assets/{tag}");
+    let assets_url = format!("https://github.com/{REPO}/releases/expanded_assets/{tag}");
     let assets = if let Ok(assets_res) = client
         .get(&assets_url)
         .header(reqwest::header::USER_AGENT, USER_AGENT)
         .send()
     {
         if let Ok(html) = assets_res.text() {
-            extract_assets_from_html(&html, &tag)
+            assets_from_html(&html, &tag)
         } else {
             Vec::new()
         }
@@ -262,24 +288,30 @@ fn unescape_html(input: &str) -> String {
         .replace("&#39;", "'")
 }
 
-fn extract_assets_from_html(html: &str, tag: &str) -> Vec<GithubAsset> {
-    let prefix = format!("/Sparki1337/eclipse-studio/releases/download/{tag}/");
-    let mut assets = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    for part in html.split("href=\"") {
-        if let Some(url_part) = part.split('"').next() {
-            if let Some(file_name) = url_part.strip_prefix(&prefix) {
-                let clean_name = file_name.split('?').next().unwrap_or(file_name).trim();
-                if !clean_name.is_empty() && seen.insert(clean_name.to_string()) {
-                    assets.push(GithubAsset {
-                        name: clean_name.to_string(),
-                        browser_download_url: format!("https://github.com{prefix}{clean_name}"),
-                    });
-                }
-            }
-        }
-    }
-    assets
+/// Файлы релиза со страницы expanded_assets вместе с опубликованными SHA-256
+fn assets_from_html(html: &str, tag: &str) -> Vec<GithubAsset> {
+    core::parse_release_assets(html, REPO, tag)
+        .into_iter()
+        .map(|asset| GithubAsset {
+            name: asset.name,
+            browser_download_url: asset.url,
+            sha256: asset.sha256,
+        })
+        .collect()
+}
+
+fn core_assets(release: &GithubRelease) -> Option<Vec<core::ReleaseAsset>> {
+    Some(
+        release
+            .assets
+            .iter()
+            .map(|asset| core::ReleaseAsset {
+                name: asset.name.clone(),
+                url: asset.browser_download_url.clone(),
+                sha256: asset.sha256.clone(),
+            })
+            .collect(),
+    )
 }
 
 #[tauri::command]
@@ -374,8 +406,12 @@ pub fn cleanup_old_versions_in_dir(
         };
 
         let lower = file_name.to_ascii_lowercase();
+        // Этапы обновления внутри программы обрабатывает update_core::cleanup_stale
+        if lower.starts_with(core::STAGE_PREFIX) {
+            continue;
+        }
 
-        // 1. Очистка временных файлов обновлений и загрузок (.download, .part, .tmp)
+        // Очистка временных файлов обновлений и загрузок (.download, .part, .tmp)
         let is_temp_update_file = (lower.starts_with(".eclipse-studio")
             || lower.starts_with("eclipse-studio"))
             && (lower.ends_with(".download")
@@ -389,7 +425,7 @@ pub fn cleanup_old_versions_in_dir(
             continue;
         }
 
-        // 2. Очистка устаревших исполняемых файлов (.exe)
+        // Очистка устаревших исполняемых файлов (.exe)
         if lower.ends_with(".exe") && (lower.contains("eclipse") || lower.contains("crocodile")) {
             if let Some(old_ver) = extract_version_from_filename(file_name) {
                 // Удаляем только если текущая версия строго новее найденной
@@ -405,8 +441,7 @@ pub fn cleanup_old_versions_in_dir(
     deleted_count
 }
 
-/// Очистка старых версий приложения и временных файлов загрузки вокруг текущего исполняемого файла.
-/// Возвращает количество успешно удаленных устаревших файлов.
+/// Удаление старых версий и временных загрузок рядом с текущим исполняемым файлом
 pub fn cleanup_old_versions() -> u32 {
     let current_exe = match std::env::current_exe() {
         Ok(path) => path,
@@ -419,7 +454,9 @@ pub fn cleanup_old_versions() -> u32 {
     };
 
     let current_version = env!("CARGO_PKG_VERSION");
+    let keep = active_nonce();
     cleanup_old_versions_in_dir(app_dir, Some(&current_exe), current_version)
+        + core::cleanup_stale(app_dir, keep.as_deref(), Some(&current_exe))
 }
 
 /// Команда Tauri: ручной запуск очистки старых версий приложения
@@ -430,176 +467,417 @@ pub async fn cleanup_old_app_versions() -> Result<u32, String> {
         .map_err(|error| format!("Ошибка выполнения очистки: {error}"))
 }
 
-/// Скачивание новой портативной версии приложения в папку текущего исполняемого файла
-#[tauri::command]
-pub async fn download_app_update(
-    app: AppHandle,
-    download_url: Option<String>,
-    version: Option<String>,
-) -> Result<UpdateDownloadResult, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        download_app_update_blocking(&app, download_url.as_deref(), version.as_deref())
-    })
-    .await
-    .map_err(|error| format!("Загрузка обновления прервана: {error}"))?
+// ---------------------------------------------------------------------------
+// Обновление внутри программы
+// ---------------------------------------------------------------------------
+
+struct Install {
+    cancelled: AtomicBool,
+    /// После команды go помощнику отмена уже невозможна
+    committed: AtomicBool,
+    download: Arc<crate::download::Control>,
 }
 
-fn download_app_update_blocking(
-    app: &AppHandle,
-    provided_url: Option<&str>,
-    provided_version: Option<&str>,
-) -> Result<UpdateDownloadResult, String> {
-    let current_exe = std::env::current_exe()
-        .map_err(|error| format!("Не удалось определить путь текущего файла: {error}"))?;
-    let app_dir = current_exe
-        .parent()
-        .ok_or_else(|| "Не удалось определить каталог приложения".to_string())?;
+static INSTALL: OnceLock<Mutex<Option<Arc<Install>>>> = OnceLock::new();
 
-    // Получаем URL для скачивания и версию (из аргументов или через проверку релизов)
-    let (url, target_version) = if let (Some(u), Some(v)) = (provided_url, provided_version) {
-        (u.to_string(), v.to_string())
-    } else {
-        let update_info = check_for_update_blocking()?;
-        let portable = update_info.portable_url.ok_or_else(|| {
-            "Для новой версии не найдена ссылка на портативный EXE-файл".to_string()
-        })?;
-        (portable, update_info.latest_version)
+fn install_slot() -> &'static Mutex<Option<Arc<Install>>> {
+    INSTALL.get_or_init(|| Mutex::new(None))
+}
+
+/// Скачивание, проверка и передача замены помощнику; при успехе программа закрывается
+#[tauri::command]
+pub async fn install_update(app: AppHandle, version: String) -> Result<(), String> {
+    let install = Arc::new(Install {
+        cancelled: AtomicBool::new(false),
+        committed: AtomicBool::new(false),
+        download: Arc::new(crate::download::Control::default()),
+    });
+    {
+        let mut slot = install_slot().lock().map_err(|_| "Обновление недоступно")?;
+        if slot.is_some() {
+            return Err("Обновление уже выполняется.".into());
+        }
+        *slot = Some(install.clone());
+    }
+    let worker = install.clone();
+    let result =
+        tauri::async_runtime::spawn_blocking(move || install_blocking(&app, &version, &worker))
+            .await
+            .map_err(|error| format!("Обновление прервано: {error}"))
+            .and_then(|result| result);
+    // После передачи помощнику повторный запуск не допускается до выхода программы
+    if result.is_err() {
+        if let Ok(mut slot) = install_slot().lock() {
+            *slot = None;
+        }
+    }
+    result
+}
+
+/// Отмена до начала замены EXE
+#[tauri::command]
+pub fn cancel_update() -> Result<bool, String> {
+    let slot = install_slot().lock().map_err(|_| "Обновление недоступно")?;
+    let Some(install) = slot.as_ref() else {
+        return Ok(false);
     };
-
-    if !url.starts_with("https://") {
-        return Err("Разрешены только безопасные HTTPS-ссылки для обновления".into());
+    if install.committed.load(Ordering::SeqCst) {
+        return Err("Замена EXE уже началась: отмена невозможна.".into());
     }
-
-    let target_filename = format!("Eclipse-Studio-v{target_version}.exe");
-    let target_path = app_dir.join(&target_filename);
-    let temp_filename = format!(".{target_filename}.download");
-    let temp_path = app_dir.join(&temp_filename);
-
-    let client = Client::builder()
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(600))
-        .user_agent(USER_AGENT)
-        .build()
-        .map_err(|error| format!("Не удалось инициализировать HTTP-клиент: {error}"))?;
-
-    let mut response = client
-        .get(&url)
-        .send()
-        .and_then(reqwest::blocking::Response::error_for_status)
-        .map_err(|error| format!("Не удалось начать загрузку обновления: {error}"))?;
-
-    let total_bytes = response.content_length().unwrap_or(0);
-    let mut file = fs::File::create(&temp_path)
-        .map_err(|error| format!("Не удалось создать временный файл обновления: {error}"))?;
-
-    let mut downloaded_bytes: u64 = 0;
-    let mut buffer = [0u8; 64 * 1024];
-    let start_time = Instant::now();
-    let mut last_emit = Instant::now();
-
-    loop {
-        let read = response
-            .read(&mut buffer)
-            .map_err(|error| format!("Ошибка чтения данных обновления: {error}"))?;
-        if read == 0 {
-            break;
-        }
-
-        file.write_all(&buffer[..read])
-            .map_err(|error| format!("Ошибка записи данных обновления: {error}"))?;
-
-        downloaded_bytes += read as u64;
-
-        if last_emit.elapsed() >= Duration::from_millis(150)
-            || (total_bytes > 0 && downloaded_bytes >= total_bytes)
-        {
-            let elapsed_secs = start_time.elapsed().as_secs_f64().max(0.001);
-            let speed = (downloaded_bytes as f64 / elapsed_secs) as u64;
-            let percentage = if total_bytes > 0 {
-                ((downloaded_bytes as f64 / total_bytes as f64) * 100.0).min(99.0) as u8
-            } else {
-                0
-            };
-
-            let _ = app.emit(
-                "app-update-progress",
-                UpdateProgressPayload {
-                    percentage,
-                    downloaded_bytes,
-                    total_bytes,
-                    speed_bytes_per_sec: speed,
-                    status: "Скачивание…".into(),
-                    completed: false,
-                },
-            );
-            last_emit = Instant::now();
-        }
-    }
-
-    file.flush()
-        .map_err(|error| format!("Не удалось завершить запись файла: {error}"))?;
-    drop(file);
-
-    // Удаляем предыдущий файл с таким же именем, если он существовал
-    if target_path.exists() {
-        let _ = delete_file_with_retry(&target_path, 3, Duration::from_millis(200));
-    }
-
-    fs::rename(&temp_path, &target_path)
-        .map_err(|error| format!("Не удалось сохранить скачанное обновление: {error}"))?;
-
-    // Финальное оповещение о 100% завершении
-    let _ = app.emit(
-        "app-update-progress",
-        UpdateProgressPayload {
-            percentage: 100,
-            downloaded_bytes,
-            total_bytes: downloaded_bytes,
-            speed_bytes_per_sec: 0,
-            status: "Готово к запуску".into(),
-            completed: true,
-        },
-    );
-
-    Ok(UpdateDownloadResult {
-        file_path: target_path.display().to_string(),
-        file_name: target_filename,
-        version: target_version,
-        ready_to_install: true,
-    })
+    install.cancelled.store(true, Ordering::SeqCst);
+    install.download.cancelled.store(true, Ordering::SeqCst);
+    Ok(true)
 }
 
-/// Запуск скачанной новой версии приложения и немедленное завершение текущего процесса
+fn check_cancel(install: &Install) -> Result<(), String> {
+    if install.cancelled.load(Ordering::SeqCst) {
+        Err(core::CANCELLED.into())
+    } else {
+        Ok(())
+    }
+}
+
+/// Папка этапа удаляется при любой ошибке до передачи помощнику
+#[cfg(target_os = "windows")]
+struct StageGuard {
+    stage: PathBuf,
+    nonce: String,
+    armed: bool,
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for StageGuard {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let _ = core::signal(&self.stage, core::ABORT, &self.nonce);
+        // Помощник мог ещё не выйти: его EXE лежит в папке этапа
+        for _ in 0..10 {
+            if fs::remove_dir_all(&self.stage).is_ok() || !self.stage.exists() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(300));
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn install_blocking(_app: &AppHandle, _version: &str, _install: &Install) -> Result<(), String> {
+    Err("Обновление внутри программы доступно только в Windows.".into())
+}
+
+#[cfg(target_os = "windows")]
+fn install_blocking(app: &AppHandle, version: &str, install: &Install) -> Result<(), String> {
+    let emit = |progress: UpdateProgress| {
+        let _ = app.emit(PROGRESS_EVENT, progress);
+    };
+    emit(UpdateProgress::phase("preparing"));
+    let current = std::env::current_exe()
+        .map_err(|error| format!("Не удалось определить путь программы: {error}"))?;
+    let target = crate::safe_path::strip_verbatim(fs::canonicalize(&current).unwrap_or(current));
+    let directory = target
+        .parent()
+        .ok_or("Не удалось определить папку программы")?
+        .to_path_buf();
+    // Сведения о релизе запрашиваются заново: интерфейс мог показать устаревшую версию
+    let release = check_for_update_blocking()?;
+    if !release.available || !core::same_version(&release.latest_version, version) {
+        return Err(format!(
+            "Версия {version} больше не предлагается для обновления. Проверьте обновления ещё раз."
+        ));
+    }
+    let (Some(url), Some(sha256)) = (release.asset_url.clone(), release.asset_sha256.clone())
+    else {
+        return Err(NO_VERIFIED_EXE.into());
+    };
+    check_cancel(install)?;
+    let (stage, nonce) = core::create_stage(&directory)?;
+    let mut guard = StageGuard {
+        stage: stage.clone(),
+        nonce: nonce.clone(),
+        armed: true,
+    };
+    let payload = download_payload(app, &url, &sha256, &stage, install)?;
+    check_cancel(install)?;
+    emit(UpdateProgress {
+        percent: 100,
+        ..UpdateProgress::phase("verifying")
+    });
+    let bytes =
+        fs::read(&payload).map_err(|error| format!("Не удалось прочитать обновление: {error}"))?;
+    core::verify_payload(&bytes, version)?;
+    drop(bytes);
+    let new_hash = crate::durable::hash_file(&payload)?;
+    if !new_hash.eq_ignore_ascii_case(&sha256) {
+        return Err("SHA-256 скачанного EXE не совпадает с опубликованной в релизе.".into());
+    }
+    check_cancel(install)?;
+    emit(UpdateProgress {
+        percent: 100,
+        ..UpdateProgress::phase("installing")
+    });
+    crate::durable::copy(&target, &stage.join(core::UPDATER))?;
+    let plan = core::Plan {
+        schema: core::PLAN_SCHEMA,
+        nonce: nonce.clone(),
+        target: target.display().to_string(),
+        parent_pid: std::process::id(),
+        old_hash: crate::durable::hash_file(&target)?,
+        new_hash,
+        version: version.to_string(),
+    };
+    let plan_hash = core::write_plan(&stage, &plan)?;
+    let mut helper = spawn_helper(&stage, &plan_hash)?;
+    let started = Instant::now();
+    while !core::has_signal(&stage, core::READY, &nonce) {
+        if install.cancelled.load(Ordering::SeqCst) {
+            let _ = core::signal(&stage, core::ABORT, &nonce);
+            let _ = wait_child(&mut helper, Duration::from_secs(5));
+            return Err(core::CANCELLED.into());
+        }
+        if let Ok(Some(status)) = helper.try_wait() {
+            let reason = fs::read_to_string(stage.join(core::LOG))
+                .ok()
+                .and_then(|log| log.lines().last().map(str::to_string))
+                .unwrap_or_else(|| status.to_string());
+            return Err(format!("Помощник обновления завершился: {reason}"));
+        }
+        if started.elapsed() > Duration::from_secs(30) {
+            let _ = helper.kill();
+            return Err("Помощник обновления не ответил за 30 секунд.".into());
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    check_cancel(install)?;
+    // Новые операции больше не запускаются; занятые ресурсы отменяют обновление
+    let handoff = crate::resource_lock::begin_handoff().map_err(|_| BUSY.to_string())?;
+    install.committed.store(true, Ordering::SeqCst);
+    emit(UpdateProgress {
+        percent: 100,
+        ..UpdateProgress::phase("restarting")
+    });
+    if let Err(error) = core::signal(&stage, core::GO, &nonce) {
+        install.committed.store(false, Ordering::SeqCst);
+        return Err(error);
+    }
+    guard.armed = false;
+    std::mem::forget(handoff);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        // Окно успевает показать этап перезапуска
+        std::thread::sleep(Duration::from_millis(400));
+        app.exit(0);
+    });
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn wait_child(child: &mut std::process::Child, timeout: Duration) -> bool {
+    let started = Instant::now();
+    while started.elapsed() < timeout {
+        if let Ok(Some(_)) = child.try_wait() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    false
+}
+
+/// Скачивание с докачкой и повтором: проверенные части сохраняются между попытками
+#[cfg(target_os = "windows")]
+fn download_payload(
+    app: &AppHandle,
+    url: &str,
+    sha256: &str,
+    stage: &Path,
+    install: &Install,
+) -> Result<PathBuf, String> {
+    let last = Mutex::new(Instant::now() - Duration::from_secs(1));
+    let progress = |downloaded: u64, total: Option<u64>, _resumable: bool| {
+        let total = total.unwrap_or(0);
+        let finished = total > 0 && downloaded >= total;
+        if let Ok(mut last) = last.lock() {
+            if !finished && last.elapsed() < Duration::from_millis(120) {
+                return;
+            }
+            *last = Instant::now();
+        }
+        let percent = if total > 0 {
+            (downloaded.saturating_mul(100) / total).min(100) as u8
+        } else {
+            0
+        };
+        let _ = app.emit(
+            PROGRESS_EVENT,
+            UpdateProgress {
+                downloaded,
+                total,
+                percent,
+                ..UpdateProgress::phase("downloading")
+            },
+        );
+    };
+    let mut attempt = 1;
+    loop {
+        match crate::download::fetch(
+            url,
+            core::PAYLOAD,
+            stage,
+            Some(sha256),
+            &install.download,
+            &progress,
+        ) {
+            Ok(done) => {
+                let path = PathBuf::from(done.path);
+                let payload = stage.join(core::PAYLOAD);
+                if path != payload {
+                    fs::rename(&path, &payload)
+                        .map_err(|error| format!("Не удалось подготовить обновление: {error}"))?;
+                }
+                return Ok(payload);
+            }
+            Err(_) if install.cancelled.load(Ordering::SeqCst) => {
+                return Err(core::CANCELLED.into())
+            }
+            Err(error) if attempt < DOWNLOAD_ATTEMPTS && retryable(&error) => {
+                let _ = app.emit(
+                    PROGRESS_EVENT,
+                    UpdateProgress {
+                        // Номер следующей попытки: интерфейс показывает «Попытка N из 3»
+                        attempt: attempt + 1,
+                        message: error,
+                        ..UpdateProgress::phase("retrying")
+                    },
+                );
+                let pause = Instant::now();
+                while pause.elapsed() < Duration::from_secs(2 * u64::from(attempt)) {
+                    check_cancel(install)?;
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                attempt += 1;
+            }
+            Err(error) => return Err(format!("Не удалось скачать обновление: {error}")),
+        }
+    }
+}
+
+/// Сетевые сбои повторяются, а несовпадение контрольной суммы и размера — нет
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn retryable(error: &str) -> bool {
+    !["SHA-256", "HTTPS", "лимит", "размер"]
+        .iter()
+        .any(|marker| error.contains(marker))
+}
+
+/// Помощник отделяется от задания процесса программы, чтобы пережить её закрытие
+#[cfg(target_os = "windows")]
+fn spawn_helper(stage: &Path, plan_hash: &str) -> Result<std::process::Child, String> {
+    use std::os::windows::process::CommandExt;
+    const DETACHED_PROCESS: u32 = 0x0000_0008;
+    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+    let exe = stage.join(core::UPDATER);
+    let command = |flags: u32| {
+        let mut command = std::process::Command::new(&exe);
+        command
+            .arg(core::HELPER_ARG)
+            .arg(stage)
+            .arg(plan_hash)
+            .current_dir(stage)
+            .creation_flags(flags);
+        command
+    };
+    command(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB)
+        .spawn()
+        .or_else(|_| command(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP).spawn())
+        .map_err(|error| format!("Не удалось запустить помощник обновления: {error}"))
+}
+
+/// Режим помощника выполняется до запуска Tauri и WebView
+pub fn helper_main() -> Option<i32> {
+    let args: Vec<String> = std::env::args_os()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    let (stage, hash) = core::helper_request(&args)?;
+    let outcome = core::run_helper(&stage, &hash, &core::HelperOptions::default());
+    Some(if outcome.success { 0 } else { 1 })
+}
+
+enum LaunchContext {
+    /// Новая версия подтверждает запуск помощнику
+    Probe(PathBuf, String),
+    /// Прежняя версия после отката показывает причину
+    Failed(PathBuf, String),
+}
+
+static LAUNCH: OnceLock<Mutex<Option<LaunchContext>>> = OnceLock::new();
+static ACTIVE_NONCE: OnceLock<Option<String>> = OnceLock::new();
+
+/// Разбор аргументов запуска после обновления (вызывается до Tauri)
+pub fn init_launch_context() {
+    let args: Vec<String> = std::env::args_os()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    let context = match args.as_slice() {
+        [_, flag, stage, nonce, ..] if flag == core::PROBE_ARG && core::valid_nonce(nonce) => {
+            Some(LaunchContext::Probe(PathBuf::from(stage), nonce.clone()))
+        }
+        [_, flag, stage, nonce, ..] if flag == core::FAILED_ARG && core::valid_nonce(nonce) => {
+            Some(LaunchContext::Failed(PathBuf::from(stage), nonce.clone()))
+        }
+        _ => None,
+    };
+    let nonce = context.as_ref().map(|context| match context {
+        LaunchContext::Probe(_, nonce) | LaunchContext::Failed(_, nonce) => nonce.clone(),
+    });
+    let _ = ACTIVE_NONCE.set(nonce);
+    let _ = LAUNCH.set(Mutex::new(context));
+}
+
+fn active_nonce() -> Option<String> {
+    ACTIVE_NONCE.get().cloned().flatten()
+}
+
+fn remove_stage_later(stage: PathBuf, nonce: String) {
+    std::thread::spawn(move || {
+        core::remove_stage_when_done(&stage, &nonce, Duration::from_secs(180));
+    });
+}
+
+/// Интерфейс загрузился: новая версия подтверждает запуск, прежняя показывает причину отката
 #[tauri::command]
-pub fn launch_app_update(file_path: String) -> Result<(), String> {
-    let target = PathBuf::from(&file_path);
-    if !target.is_file() {
-        return Err(format!("Файл обновления не найден: {file_path}"));
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        let mut cmd = std::process::Command::new(&target);
-        if let Some(parent) = target.parent() {
-            cmd.current_dir(parent);
+pub fn update_launch_ready() -> Option<LaunchOutcome> {
+    let context = LAUNCH.get()?.lock().ok()?.take()?;
+    let version = env!("CARGO_PKG_VERSION").to_string();
+    Some(match context {
+        LaunchContext::Probe(stage, nonce) => match core::confirm_probe(&stage, &nonce) {
+            Ok(()) => {
+                remove_stage_later(stage, nonce);
+                LaunchOutcome {
+                    success: true,
+                    message: format!("Eclipse Studio обновлён до версии {version}."),
+                    version,
+                }
+            }
+            Err(error) => LaunchOutcome {
+                success: false,
+                message: format!("Не удалось подтвердить запуск новой версии: {error}"),
+                version,
+            },
+        },
+        LaunchContext::Failed(stage, nonce) => {
+            let reason = core::read_outcome(&stage, &nonce)
+                .map(|outcome| outcome.message)
+                .unwrap_or_else(|| "новая версия не запустилась, восстановлена прежняя.".into());
+            remove_stage_later(stage, nonce);
+            LaunchOutcome {
+                success: false,
+                message: format!("Обновление не установлено: {reason}"),
+                version,
+            }
         }
-        cmd.spawn()
-            .map_err(|error| format!("Не удалось запустить обновленную версию: {error}"))?;
-
-        // Завершаем текущий процесс приложения, освобождая дескриптор исполняемого файла
-        std::process::exit(0);
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let mut cmd = std::process::Command::new(&target);
-        if let Some(parent) = target.parent() {
-            cmd.current_dir(parent);
-        }
-        cmd.spawn()
-            .map_err(|error| format!("Не удалось запустить обновленную версию: {error}"))?;
-        std::process::exit(0);
-    }
+    })
 }
 
 #[cfg(test)]
@@ -632,10 +910,12 @@ mod tests {
                 GithubAsset {
                     name: "portable.exe".into(),
                     browser_download_url: "https://example.test/portable.exe".into(),
+                    sha256: None,
                 },
                 GithubAsset {
                     name: "Eclipse Studio_4.0.1_x64-setup.exe".into(),
                     browser_download_url: "https://example.test/setup.exe".into(),
+                    sha256: None,
                 },
             ],
         };
@@ -660,10 +940,12 @@ mod tests {
                 GithubAsset {
                     name: "alternate.exe".into(),
                     browser_download_url: "https://example.test/alternate.exe".into(),
+                    sha256: None,
                 },
                 GithubAsset {
                     name: "eclipse-studio.exe".into(),
                     browser_download_url: "https://example.test/eclipse-studio.exe".into(),
+                    sha256: None,
                 },
             ],
         };
@@ -684,10 +966,12 @@ mod tests {
                 GithubAsset {
                     name: "eclipse-v5.exe".into(),
                     browser_download_url: "https://example.test/eclipse-v5.exe".into(),
+                    sha256: None,
                 },
                 GithubAsset {
                     name: "Eclipse.Studio.exe".into(),
                     browser_download_url: "https://example.test/Eclipse.Studio.exe".into(),
+                    sha256: None,
                 },
             ],
         };
@@ -708,10 +992,12 @@ mod tests {
                 GithubAsset {
                     name: "random-tool.exe".into(),
                     browser_download_url: "https://example.test/random-tool.exe".into(),
+                    sha256: None,
                 },
                 GithubAsset {
                     name: "Eclipse.zip".into(),
                     browser_download_url: "https://example.test/Eclipse.zip".into(),
+                    sha256: None,
                 },
             ],
         };

@@ -31,6 +31,8 @@ desktop.ini
 .env
 .env.local
 *.local
+/.secrets/
+ryuu-builtin-key.txt
 
 # Preserve essential hidden asset directories for Tauri compilation
 !eclipse-manifest/.millennium/

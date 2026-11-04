@@ -1,4 +1,4 @@
-/// The Explorer-style Windows folder picker. Shared by every folder action.
+/// Общий диалог выбора папки Windows в стиле Проводника
 pub(crate) fn pick_folder(title: &str, owner: isize) -> Result<Option<String>, String> {
     #[cfg(windows)]
     {

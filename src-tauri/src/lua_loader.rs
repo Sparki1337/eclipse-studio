@@ -1,5 +1,4 @@
-// Модуль закрепления и управления библиотеками загрузчика OpenSteamTool.
-// Schema 2 фиксирует точные относительные пути библиотек, включая bin/dwmapi.dll.
+// Схема 2 хранит точные пути библиотек OpenSteamTool, включая bin/dwmapi.dll
 use crate::{
     loader_github::{self, Bundle},
     luatools,

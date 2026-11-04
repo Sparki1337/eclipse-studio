@@ -1,6 +1,4 @@
-// Модуль гипервизора для изолированного запуска игр в Eclipse Studio.
-// Использует исключительно авторский метод: автономный высокопроизводительный лаунчер Eclipse-HV.
-// Все устаревшие механизмы (KVC, батники, сторонние скрипты) полностью вырезаны.
+// Интеграция автономного лаунчера Eclipse-HV
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -70,15 +68,15 @@ fn ensure_helper(dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// Получение списка сохранённых аккаунтов Steam
-#[tauri::command]
+// Чтение аккаунтов Steam вне главного потока
+#[tauri::command(async)]
 pub(crate) fn steam_launch_accounts() -> Result<Vec<crate::steam_hv::Account>, String> {
     let steam = crate::luatools::resolve_steam_path(None).ok_or("Папка Steam не найдена")?;
     crate::steam_hv::accounts(&steam)
 }
 
-// Запрос статуса интеграции запуска для выбранной игры
-#[tauri::command]
+// Проверка интеграции выбранной игры вне главного потока
+#[tauri::command(async)]
 pub(crate) fn steam_launch_status(id: String, account: Option<String>) -> Result<crate::steam_hv::Status, String> {
     let (steam, appid, helper) = steam_target(&id)?;
     crate::steam_hv::status_for(&steam, appid, &helper, account.as_deref())
@@ -421,8 +419,8 @@ pub(crate) struct RunReport {
     pub message: String,
 }
 
-// Получение общего статуса гипервизора и выбранной игры
-#[tauri::command]
+// Проверка гипервизора и выбранной игры вне главного потока
+#[tauri::command(async)]
 pub(crate) fn get_app_status() -> Result<AppStatus, String> {
     let library = refresh_library(load_library()?);
     let selected_game = selected_game(&library).cloned();
@@ -444,8 +442,8 @@ pub(crate) fn get_app_status() -> Result<AppStatus, String> {
     })
 }
 
-// Проверка процесса выбранной игры на активность
-#[tauri::command]
+// Проверка процесса игры вне главного потока
+#[tauri::command(async)]
 pub(crate) fn is_selected_game_running() -> Result<bool, String> {
     let library = refresh_library(load_library()?);
     let Some(game) = selected_game(&library) else {
@@ -859,7 +857,7 @@ fn prepare_game_files(app: &tauri::AppHandle, game_id: &str, dir: &Path) -> Resu
                     Some(game_id.into()),
                 );
             }
-            // Не удаляем kvc.exe, 7zr.exe и сторонние папки по одному лишь имени.
+            // Не удаляем kvc.exe, 7zr.exe и сторонние папки по одному лишь имени
             Ok(())
         },
     )?
@@ -1044,9 +1042,7 @@ pub(crate) fn tasklist_contains_process(output: &str, process_name: &str) -> boo
     })
 }
 
-// ============================================================
-// Модуль интеграции автономного лаунчера Eclipse-HV
-// ============================================================
+// Интеграция автономного лаунчера Eclipse-HV
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1183,7 +1179,7 @@ pub(crate) async fn eclipse_hv_download(target_dir: Option<String>) -> Result<St
         }
         let target_exe = dest.join("Eclipse-HV.exe");
 
-        // 1. Устанавливаем из встроенных ресурсов лаунчера (100% надёжность без внешних запросов)
+        // Устанавливаем из встроенных ресурсов лаунчера (100% надёжность без внешних запросов)
         if !EMBEDDED_ECLIPSE_HV.is_empty() {
             fs::write(&target_exe, EMBEDDED_ECLIPSE_HV).map_err(|e| {
                 format!(
@@ -1197,7 +1193,7 @@ pub(crate) async fn eclipse_hv_download(target_dir: Option<String>) -> Result<St
             ));
         }
 
-        // 2. Резервный поиск в локальной папке Hypervisor
+        // Резервный поиск в локальной папке Hypervisor
         let local_path =
             PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-HV.exe");
         if local_path.is_file() {
@@ -1209,7 +1205,7 @@ pub(crate) async fn eclipse_hv_download(target_dir: Option<String>) -> Result<St
             ));
         }
 
-        // 3. Прямая загрузка с GitHub при отсутствии локальных бинарников
+        // Прямая загрузка с GitHub при отсутствии локальных бинарников
         let download_url =
             "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
         let client = reqwest::blocking::Client::builder()

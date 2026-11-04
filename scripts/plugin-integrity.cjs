@@ -1,4 +1,4 @@
-// Связывает поставляемый Dist с исходниками и lock-файлом конкретной сборки.
+// Связывает поставляемый Dist с исходниками и lock-файлом конкретной сборки
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const root=path.resolve(__dirname,'../eclipse-manifest');
 const manifest=path.join(root,'.millennium/Dist/build-integrity.json');

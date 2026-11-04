@@ -1,7 +1,9 @@
-// Модуль VBS 2.0: расширенное управление изоляцией ядра, защитой целостности памяти (HVCI),
-// безопасностью BitLocker, Meltdown mitigation (KVA Shadow), UEFI Lock и системным гипервизором Windows.
+// Управление VBS, HVCI, BitLocker, KVA Shadow, UEFI Lock и гипервизором Windows
 
 use serde::{Deserialize, Serialize};
+
+#[path = "vbs_external.rs"]
+mod external;
 use std::{
     fs,
     path::PathBuf,
@@ -231,10 +233,7 @@ const ALL_ENABLE_REGISTRY_TARGETS: &[EnableRegistryTarget] = &[
     },
 ];
 
-// Чтение младших 32 бит маски расширенных состояний процессора (XCR0)
-// из системной структуры KUSER_SHARED_DATA (фиксированный адрес 0x7FFE03D8 в пространстве пользователя Windows).
-// Если значение > 7, в процессоре активен AVX-512 (регистры zmm0..zmm31), требующий
-// BCD-параметра xsaveremovefeature для исключения сбоев гипервизорного хука при переключении XSAVE.
+// XCR0 > 7 требует xsaveremovefeature в BCD для совместимости с гипервизором
 #[cfg(all(windows, target_arch = "x86_64"))]
 fn read_xcr0() -> u32 {
     unsafe {
@@ -258,6 +257,8 @@ struct SystemProbe {
     virtualization_firmware_enabled: bool,
     secure_boot: String,
     dse_mode: i32,
+    #[serde(default)]
+    boot_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -334,13 +335,16 @@ pub(crate) struct VbsReport {
     hypervisor_present: bool,
     restart_required: bool,
     can_restore: bool,
+    external: external::ExternalStatus,
+    preferred_boot_mode: String,
+    enable_block_reason: Option<String>,
     test_signing_configured: Option<bool>,
     test_signing_active: bool,
     dse: VbsDseStatus,
     components: Vec<VbsComponent>,
     enabled_count: usize,
     warnings: Vec<String>,
-    // Расширения VBS 2.0
+    // Расширения VBS 2.0.1
     bitlocker: BitLockerInfo,
     kva_shadow: KvaShadowInfo,
     uefi_lock: UefiLockInfo,
@@ -408,6 +412,10 @@ struct VbsSnapshot {
     #[serde(default)]
     schema_version: u32,
     #[serde(default)]
+    boot_id: String,
+    #[serde(default)]
+    scoped_bcd: Vec<BcdSnapshot>,
+    #[serde(default)]
     bcd: Vec<BcdSnapshot>,
     #[serde(default)]
     services: Vec<ServiceSnapshot>,
@@ -434,6 +442,7 @@ struct VbsSnapshot {
 
 #[derive(Clone, Copy)]
 enum BootMode {
+    Auto,
     AdvancedOptions,
     TestSigning,
 }
@@ -441,18 +450,20 @@ enum BootMode {
 fn boot_changes(mode: BootMode) -> Vec<(&'static str, &'static str)> {
     let mut changes = vec![("hypervisorlaunchtype", "off"), ("vsmlaunchtype", "off")];
     match mode {
-        BootMode::AdvancedOptions => changes.push(("onetimeadvancedoptions", "on")),
+        BootMode::Auto | BootMode::AdvancedOptions => {
+            changes.push(("onetimeadvancedoptions", "on"))
+        }
         BootMode::TestSigning => changes.push(("testsigning", "on")),
     }
     changes
 }
 
-// Сканирование состояния системы в рамках VBS 2.0
+// Сканирование состояния системы в рамках VBS 2.0.1
 #[tauri::command]
 pub(crate) async fn vbs_scan(app: AppHandle) -> Result<VbsReport, String> {
     tauri::async_runtime::spawn_blocking(move || scan_report(&app))
         .await
-        .map_err(|error| format!("Проверка VBS 2.0 была прервана: {error}"))?
+        .map_err(|error| format!("Проверка VBS 2.0.1 была прервана: {error}"))?
 }
 
 // Отключение VBS и подготовка к запуску неподписанных драйверов
@@ -465,7 +476,7 @@ pub(crate) async fn vbs_disable(
         crate::jobs::run(
             &[crate::jobs::system_resource(&app)],
             "Изменение VBS",
-            || disable_vbs(&app, BootMode::AdvancedOptions, allow_uefi.unwrap_or(false)),
+            || disable_vbs(&app, BootMode::Auto, allow_uefi.unwrap_or(false)),
         )?
     })
     .await
@@ -486,9 +497,24 @@ pub(crate) async fn vbs_restore(app: AppHandle) -> Result<VbsChangeResult, Strin
     .map_err(|error| format!("Восстановление VBS было прервано: {error}"))?
 }
 
-// Принудительное включение всех защитных механизмов ядра Windows
-// (VBS, HVCI, изоляция памяти, блокировка уязвимых драйверов, Credential Guard)
-// с возможностью немедленной перезагрузки системы.
+// Восстановление внешнего режима без подмены собственного снимка Eclipse.
+#[tauri::command]
+pub(crate) async fn vbs_restore_external(
+    app: AppHandle,
+    allow_uefi: Option<bool>,
+) -> Result<VbsChangeResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::jobs::run(
+            &[crate::jobs::system_resource(&app)],
+            "Восстановление внешнего VBS.cmd",
+            || external::restore(&app, allow_uefi.unwrap_or(false)),
+        )?
+    })
+    .await
+    .map_err(|error| format!("Внешний откат VBS был прерван: {error}"))?
+}
+
+// Включение защит ядра Windows с необязательной немедленной перезагрузкой
 #[tauri::command]
 pub(crate) async fn vbs_enable_all(
     app: AppHandle,
@@ -659,7 +685,6 @@ pub(crate) async fn vbs_troubleshoot(app: AppHandle, action: String) -> Result<S
     .map_err(|e| e.to_string())?
 }
 
-
 const OPT_OUT_GUID: &str = "{0cb3b571-2f2e-4343-a879-d86a476d7215}";
 
 // Определение абсолютного пути к системным утилитам Windows в System32
@@ -707,14 +732,18 @@ fn setup_uefi_optout_inner(app: &AppHandle, allow_uefi: bool) -> Result<String, 
     let drive = efi_mount()?;
     let result = (|| -> Result<String, String> {
         let target_dir = PathBuf::from(format!(r"{drive}\EFI\Microsoft\Boot"));
-        fs::create_dir_all(&target_dir).map_err(|e| format!("Не удалось создать папку EFI: {e}"))?;
+        fs::create_dir_all(&target_dir)
+            .map_err(|e| format!("Не удалось создать папку EFI: {e}"))?;
         let target_file = target_dir.join("SecConfig.efi");
 
         let mut snapshot = ensure_snapshot(app)?;
         if !snapshot.uefi_optout_configured {
             snapshot.efi_file_existed = target_file.is_file();
             snapshot.efi_backup = if snapshot.efi_file_existed {
-                Some(fs::read(&target_file).map_err(|e| format!("Ошибка чтения SecConfig.efi: {e}"))?)
+                Some(
+                    fs::read(&target_file)
+                        .map_err(|e| format!("Ошибка чтения SecConfig.efi: {e}"))?,
+                )
             } else {
                 None
             };
@@ -745,10 +774,24 @@ fn setup_uefi_optout_inner(app: &AppHandle, allow_uefi: bool) -> Result<String, 
         ] {
             run_command("bcdedit.exe", &["/set", OPT_OUT_GUID, name, value])?;
         }
-        run_command("bcdedit.exe", &["/set", OPT_OUT_GUID, "device", &format!("partition={drive}")])?;
-        run_command("bcdedit.exe", &["/set", "{bootmgr}", "bootsequence", OPT_OUT_GUID])?;
+        run_command(
+            "bcdedit.exe",
+            &[
+                "/set",
+                OPT_OUT_GUID,
+                "device",
+                &format!("partition={drive}"),
+            ],
+        )?;
+        run_command(
+            "bcdedit.exe",
+            &["/set", "{bootmgr}", "bootsequence", OPT_OUT_GUID],
+        )?;
 
-        let _ = app.emit("vbs-progress", "SecConfig.efi подготовлен в разделе EFI. BCD bootsequence настроен.");
+        let _ = app.emit(
+            "vbs-progress",
+            "SecConfig.efi подготовлен в разделе EFI. BCD bootsequence настроен.",
+        );
         Ok("Параметры SecConfig.efi успешно подготовлены. При перезагрузке подтвердите изменение UEFI на экране компьютера.".into())
     })();
     let _ = run_command("mountvol.exe", &[&drive, "/d"]);
@@ -764,7 +807,8 @@ fn restore_uefi_optout_inner(snapshot: &VbsSnapshot) -> Result<(), String> {
     let drive = efi_mount()?;
     let target_file = PathBuf::from(format!(r"{drive}\EFI\Microsoft\Boot\SecConfig.efi"));
     let res = if let Some(bytes) = &snapshot.efi_backup {
-        fs::write(&target_file, bytes).map_err(|e| format!("Ошибка восстановления SecConfig.efi: {e}"))
+        fs::write(&target_file, bytes)
+            .map_err(|e| format!("Ошибка восстановления SecConfig.efi: {e}"))
     } else if !snapshot.efi_file_existed && target_file.exists() {
         fs::remove_file(&target_file).map_err(|e| format!("Ошибка удаления SecConfig.efi: {e}"))
     } else {
@@ -775,12 +819,20 @@ fn restore_uefi_optout_inner(snapshot: &VbsSnapshot) -> Result<(), String> {
 }
 
 // Запуск системной утилиты с потоковой трансляцией строк вывода в реальном времени
-fn stream_command_progress(app: &AppHandle, program: &str, args: &[&str]) -> Result<(i32, String), String> {
+fn stream_command_progress(
+    app: &AppHandle,
+    program: &str,
+    args: &[&str],
+) -> Result<(i32, String), String> {
     use std::io::{BufRead, BufReader};
     use std::process::Stdio;
 
     let sys = system_tool(program);
-    let mut command = Command::new(if sys.is_file() { sys } else { PathBuf::from(program) });
+    let mut command = Command::new(if sys.is_file() {
+        sys
+    } else {
+        PathBuf::from(program)
+    });
     command.args(args);
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
@@ -813,7 +865,11 @@ fn run_repair_inner(app: &AppHandle, kind: &str) -> Result<String, String> {
         "wmi" => fix_wmi_inner(app),
         "dism" => {
             let _ = app.emit("vbs-progress", "Запуск DISM RestoreHealth...");
-            let (code, output) = stream_command_progress(app, "dism.exe", &["/Online", "/English", "/Cleanup-Image", "/RestoreHealth"])?;
+            let (code, output) = stream_command_progress(
+                app,
+                "dism.exe",
+                &["/Online", "/English", "/Cleanup-Image", "/RestoreHealth"],
+            )?;
             let _ = app.emit("vbs-progress", format!("DISM завершён с кодом {code}"));
             Ok(output)
         }
@@ -829,28 +885,44 @@ fn run_repair_inner(app: &AppHandle, kind: &str) -> Result<String, String> {
 
 // Безопасное восстановление WMI без повреждения Windows Server
 fn fix_wmi_inner(app: &AppHandle) -> Result<String, String> {
-    if let Ok(k) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion") {
+    if let Ok(k) = RegKey::predef(HKEY_LOCAL_MACHINE)
+        .open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
+    {
         if let Ok(installation_type) = k.get_value::<String, _>("InstallationType") {
             if installation_type.to_lowercase().contains("server") {
                 return Err("Fix WMI не выполняет перестройку WMI на Windows Server.".into());
             }
         }
     }
-    let _ = app.emit("vbs-progress", "Проверка работоспособности репозитория WMI...");
+    let _ = app.emit(
+        "vbs-progress",
+        "Проверка работоспособности репозитория WMI...",
+    );
 
     let verify = run_command("winmgmt.exe", &["/verifyrepository"]);
     if let Ok(out) = verify {
         let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
-        if text.contains("consistent") || text.contains("целостен") || text.contains("не поврежден") {
-            let _ = app.emit("vbs-progress", "Репозиторий WMI в норме, восстановление не требуется.");
+        if text.contains("consistent") || text.contains("целостен") || text.contains("не поврежден")
+        {
+            let _ = app.emit(
+                "vbs-progress",
+                "Репозиторий WMI в норме, восстановление не требуется.",
+            );
             return Ok("Репозиторий WMI целостен и не повреждён.".into());
         }
     }
 
-    let _ = app.emit("vbs-progress", "Остановка службы Winmgmt и зависимых служб...");
-    let _ = powershell_output("$ErrorActionPreference='SilentlyContinue'; Stop-Service Winmgmt -Force");
+    let _ = app.emit(
+        "vbs-progress",
+        "Остановка службы Winmgmt и зависимых служб...",
+    );
+    let _ =
+        powershell_output("$ErrorActionPreference='SilentlyContinue'; Stop-Service Winmgmt -Force");
 
-    let _ = app.emit("vbs-progress", "Выполнение winmgmt.exe /salvagerepository...");
+    let _ = app.emit(
+        "vbs-progress",
+        "Выполнение winmgmt.exe /salvagerepository...",
+    );
     let salvage = run_command("winmgmt.exe", &["/salvagerepository"]);
     let salvage_msg = match salvage {
         Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
@@ -869,28 +941,45 @@ fn fix_wmi_inner(app: &AppHandle) -> Result<String, String> {
 fn run_troubleshoot_inner(app: &AppHandle, action: &str) -> Result<String, String> {
     match action {
         "wmi" => {
-            let _ = app.emit("vbs-progress", "Запуск диагностики репозитория WMI (/verifyrepository)...");
-            let (code, output) = stream_command_progress(app, "winmgmt.exe", &["/verifyrepository"])?;
-            let _ = app.emit("vbs-progress", format!("Проверка WMI завершена (код {code})"));
+            let _ = app.emit(
+                "vbs-progress",
+                "Запуск диагностики репозитория WMI (/verifyrepository)...",
+            );
+            let (code, output) =
+                stream_command_progress(app, "winmgmt.exe", &["/verifyrepository"])?;
+            let _ = app.emit(
+                "vbs-progress",
+                format!("Проверка WMI завершена (код {code})"),
+            );
             Ok(output)
         }
         "sfc" => {
             let _ = app.emit("vbs-progress", "Запуск диагностики SFC (/verifyonly)...");
             let (code, output) = stream_command_progress(app, "sfc.exe", &["/verifyonly"])?;
-            let _ = app.emit("vbs-progress", format!("Проверка SFC завершена (код {code})"));
+            let _ = app.emit(
+                "vbs-progress",
+                format!("Проверка SFC завершена (код {code})"),
+            );
             Ok(output)
         }
         "dism" => {
             let _ = app.emit("vbs-progress", "Запуск диагностики DISM (/scanhealth)...");
-            let (code, output) = stream_command_progress(app, "dism.exe", &["/Online", "/English", "/Cleanup-Image", "/ScanHealth"])?;
-            let _ = app.emit("vbs-progress", format!("Проверка DISM завершена (код {code})"));
+            let (code, output) = stream_command_progress(
+                app,
+                "dism.exe",
+                &["/Online", "/English", "/Cleanup-Image", "/ScanHealth"],
+            )?;
+            let _ = app.emit(
+                "vbs-progress",
+                format!("Проверка DISM завершена (код {code})"),
+            );
             Ok(output)
         }
         other => Err(format!("Неизвестное действие диагностики: {other}")),
     }
 }
 
-// Сбор полного отчёта VBS 2.0
+// Сбор полного отчёта VBS 2.0.1
 fn scan_report(app: &AppHandle) -> Result<VbsReport, String> {
     let probe = system_probe()?;
     let configured = parse_service_ids(&probe.configured_services);
@@ -994,14 +1083,56 @@ fn scan_report(app: &AppHandle) -> Result<VbsReport, String> {
         warnings.push(xsave_mask_warning(&value).into());
     }
 
+    let own_exists = snapshot_path(app)?.exists();
+    let own_snapshot = if own_exists {
+        match read_snapshot(app) {
+            Ok(snapshot) => Some(snapshot),
+            Err(error) => {
+                warnings.push(error);
+                None
+            }
+        }
+    } else {
+        None
+    };
+    let external = external::status(app, &probe.boot_id, own_exists);
+    let enable_block_reason = if external.detected || external.pending_restart {
+        Some(
+            external.blocked_reason.clone().unwrap_or_else(|| {
+                "Сначала выключите внешний режим VBS.cmd по его журналу.".into()
+            }),
+        )
+    } else if own_exists && own_snapshot.is_none() {
+        Some("Снимок Eclipse не прошёл проверку. Новые изменения заблокированы, чтобы не потерять исходные параметры.".into())
+    } else {
+        windows_hello_preflight().err()
+    };
+    if let Some(reason) = &enable_block_reason {
+        warnings.push(reason.clone());
+    }
+    let test_configured = configured_test_signing();
+    let pending_own = own_snapshot
+        .as_ref()
+        .is_some_and(|snapshot| !snapshot.boot_id.is_empty() && snapshot.boot_id == probe.boot_id);
+    let preferred_boot_mode = if probe.secure_boot == "false" {
+        "testsigning"
+    } else {
+        "advanced"
+    }
+    .into();
     Ok(VbsReport {
         admin: is_admin(),
         secure_boot: probe.secure_boot,
         virtualization_enabled: probe.virtualization_firmware_enabled || probe.hypervisor_present,
         hypervisor_present: probe.hypervisor_present,
-        restart_required: snapshot_path(app)?.exists(),
-        can_restore: snapshot_path(app)?.exists(),
-        test_signing_configured: configured_test_signing(),
+        restart_required: pending_own
+            || external.pending_restart
+            || test_configured.is_some_and(|configured| configured != (probe.dse_mode == 1)),
+        can_restore: own_snapshot.is_some(),
+        external,
+        preferred_boot_mode,
+        enable_block_reason,
+        test_signing_configured: test_configured,
         test_signing_active: probe.dse_mode == 1,
         dse: dse_status(probe.dse_mode),
         components,
@@ -1059,8 +1190,7 @@ fn dse_status(mode: i32) -> VbsDseStatus {
 
 // Проверка статуса BitLocker
 fn check_bitlocker() -> BitLockerInfo {
-    // Скрипт всегда печатает ASCII-JSON: локализованный текст ошибок PowerShell в интерфейс
-    // не попадает, а категория и код ошибки позволяют распознать нехватку прав
+    // PowerShell возвращает ASCII-JSON; категория и код ошибки определяют нехватку прав
     let script = r#"$ErrorActionPreference='Stop'
 try {
   $d=$env:SystemDrive
@@ -1261,7 +1391,7 @@ fn check_uefi_lock() -> UefiLockInfo {
 fn check_conflicts() -> Vec<ConflictItem> {
     let mut items = Vec::new();
 
-    // 1. FACEIT Anti-Cheat
+    // Проверка FACEIT Anti-Cheat
     let faceit_found = run_command("sc.exe", &["query", "FACEIT"])
         .map(|o| {
             let s = String::from_utf8_lossy(&o.stdout);
@@ -1289,7 +1419,7 @@ fn check_conflicts() -> Vec<ConflictItem> {
         });
     }
 
-    // 2. MacType
+    // Проверка MacType
     let mactype_found = run_command("sc.exe", &["query", "MacType"])
         .map(|o| String::from_utf8_lossy(&o.stdout).contains("RUNNING"))
         .unwrap_or(false)
@@ -1310,7 +1440,7 @@ fn check_conflicts() -> Vec<ConflictItem> {
         });
     }
 
-    // 3. Smart App Control (Windows 11)
+    // Проверка Smart App Control в Windows 11
     if let Some(sac_val) = registry_dword(
         r"SYSTEM\CurrentControlSet\Control\CI\Policy",
         "VerifiedAndReputablePolicyState",
@@ -1327,7 +1457,7 @@ fn check_conflicts() -> Vec<ConflictItem> {
         }
     }
 
-    // 4. Bitdefender ATD
+    // Проверка Bitdefender ATD
     let bitdefender_found = RegKey::predef(HKEY_LOCAL_MACHINE)
         .open_subkey_with_flags(r"SOFTWARE\Bitdefender", KEY_READ | KEY_WOW64_64KEY)
         .is_ok();
@@ -1358,7 +1488,7 @@ fn ensure_snapshot(app: &AppHandle) -> Result<VbsSnapshot, String> {
     )?;
     crate::durable::write(&path, &data)?;
     let verified = read_snapshot(app)?;
-    if verified.schema_version != 2 {
+    if ![2, 3].contains(&verified.schema_version) {
         return Err("Снимок не прошёл проверку".into());
     }
     Ok(verified)
@@ -1368,7 +1498,7 @@ fn read_snapshot(app: &AppHandle) -> Result<VbsSnapshot, String> {
         .map_err(|e| format!("Нет проверяемого снимка восстановления: {e}"))?;
     let decoded = crate::secure_state::crypt(&data, false).map_err(|_| "Старый или неподтверждённый снимок VBS. Он сохранён, но точный автоматический откат по нему невозможен.")?;
     let snapshot: VbsSnapshot = serde_json::from_slice(&decoded).map_err(|e| e.to_string())?;
-    if snapshot.schema_version != 2 {
+    if ![2, 3].contains(&snapshot.schema_version) {
         return Err("Версия снимка не поддерживает точный откат".into());
     }
     if snapshot
@@ -1392,9 +1522,46 @@ fn read_snapshot(app: &AppHandle) -> Result<VbsSnapshot, String> {
     {
         return Err("Снимок не соответствует разрешённым параметрам".into());
     }
+    let registry_unique = snapshot
+        .registry
+        .iter()
+        .map(|r| (&r.path, &r.name))
+        .collect::<std::collections::BTreeSet<_>>();
+    let bcd_unique = snapshot
+        .bcd
+        .iter()
+        .map(|b| (&b.entry, &b.name))
+        .collect::<std::collections::BTreeSet<_>>();
+    let scoped_unique = snapshot
+        .scoped_bcd
+        .iter()
+        .map(|b| (&b.entry, &b.name))
+        .collect::<std::collections::BTreeSet<_>>();
+    let services_unique = snapshot
+        .services
+        .iter()
+        .map(|s| &s.name)
+        .collect::<std::collections::BTreeSet<_>>();
+    if registry_unique.len() != snapshot.registry.len()
+        || bcd_unique.len() != snapshot.bcd.len()
+        || services_unique.len() != snapshot.services.len()
+        || scoped_unique.len() != snapshot.scoped_bcd.len()
+        || snapshot.scoped_bcd.len() > 2
+        || snapshot.bcd.iter().chain(&snapshot.scoped_bcd).any(|b| {
+            !permitted_bcd_target(&b.entry, &b.name)
+                || !valid_bcd_value(&b.name, b.value.as_deref())
+        })
+        || snapshot.scoped_bcd.iter().any(|b| b.entry == "{current}")
+        || (snapshot.schema_version == 2 && !snapshot.scoped_bcd.is_empty())
+    {
+        return Err("Снимок содержит повторяющиеся или неразрешённые параметры".into());
+    }
     Ok(snapshot)
 }
 fn prepare_bitlocker(snapshot: &VbsSnapshot) -> Result<(), String> {
+    prepare_bitlocker_state(snapshot.bitlocker_state.as_deref())
+}
+fn prepare_bitlocker_state(original_state: Option<&str>) -> Result<(), String> {
     let status = check_bitlocker();
     if status.state == "unknown" {
         return Err(format!(
@@ -1412,7 +1579,7 @@ fn prepare_bitlocker(snapshot: &VbsSnapshot) -> Result<(), String> {
         if after.state != "suspended" {
             return Err("Приостановка BitLocker не подтверждена. Остальные изменения отменены; снимок сохранён.".into());
         }
-    } else if snapshot.bitlocker_state.as_deref() == Some("unknown") {
+    } else if original_state == Some("unknown") {
         return Err("Снимок не содержит известного состояния BitLocker".into());
     }
     Ok(())
@@ -1430,28 +1597,59 @@ fn change_result(changed: usize, failed: Vec<String>, success_message: &str) -> 
         restart_required: changed > 0,
     }
 }
-fn disable_vbs(app: &AppHandle, mode: BootMode, allow_uefi: bool) -> Result<VbsChangeResult, String> {
+fn disable_vbs(
+    app: &AppHandle,
+    mode: BootMode,
+    allow_uefi: bool,
+) -> Result<VbsChangeResult, String> {
     if !is_admin() {
         return Err("Для изменения параметров запустите программу от имени администратора".into());
     }
-    let test_mode = matches!(mode, BootMode::TestSigning);
-    if test_mode && system_probe()?.secure_boot == "true" {
-        return Err("Тестовый режим недоступен при включённом Secure Boot".into());
+    let probe = system_probe()?;
+    if !probe.virtualization_firmware_enabled && !probe.hypervisor_present {
+        return Err(
+            "Включите аппаратную виртуализацию VT-x/SVM в BIOS/UEFI перед изменением VBS".into(),
+        );
+    }
+    windows_hello_preflight()?;
+    external::guard_enable(app, &probe.boot_id)?;
+    let mode = match mode {
+        BootMode::Auto if probe.secure_boot == "false" => BootMode::TestSigning,
+        BootMode::Auto => BootMode::AdvancedOptions,
+        mode => mode,
+    };
+    if matches!(mode, BootMode::TestSigning) && probe.secure_boot != "false" {
+        return Err(
+            "Для тестового режима необходимо подтверждённое отключение Secure Boot в BIOS/UEFI"
+                .into(),
+        );
+    }
+    let uefi = check_uefi_lock();
+    if uefi.is_locked && !allow_uefi {
+        return Err("Требуется подтверждение снятия блокировок UEFI.".into());
     }
     let snapshot = ensure_snapshot(app)?;
     prepare_bitlocker(&snapshot)?;
-
-    // Проверка наличия аппаратных блокировок UEFI
-    let uefi = check_uefi_lock();
     if uefi.is_locked {
-        if !allow_uefi {
-            return Err("Требуется подтверждение снятия блокировок UEFI.".into());
-        }
         let _ = setup_uefi_optout_inner(app, true)?;
     }
     let mut changed = 0;
     let mut failed = Vec::new();
     for target in REGISTRY_TARGETS {
+        // Как VBS.cmd 2.0.1: не создаём отсутствующие неподдерживаемые параметры.
+        match raw_registry(target.path, target.name) {
+            Ok((_, None)) => continue,
+            Ok((_, Some(raw)))
+                if raw.kind == 4 && raw.bytes == target.disabled_value.to_le_bytes() =>
+            {
+                continue
+            }
+            Ok(_) => {}
+            Err(error) => {
+                failed.push(error);
+                continue;
+            }
+        }
         match set_registry_dword(target.path, target.name, target.disabled_value)
             .and_then(|_| verify_dword(target.path, target.name, Some(target.disabled_value)))
         {
@@ -1485,7 +1683,28 @@ fn disable_vbs(app: &AppHandle, mode: BootMode, allow_uefi: bool) -> Result<VbsC
             Err(e) => failed.push(e),
         }
     }
-    Ok(change_result(changed,failed,"Параметры изменены и проверены. Если BitLocker был активен, защита приостановлена только на одну перезагрузку. Перезапустите Windows."))
+    for item in &snapshot.scoped_bcd {
+        if item.value.as_deref() == Some("auto") {
+            match write_bcd_at(&item.entry, &item.name, Some("off")) {
+                Ok(()) => changed += 1,
+                Err(error) => failed.push(error),
+            }
+        }
+    }
+    let mut message = if matches!(mode, BootMode::TestSigning) {
+        "Параметры VBS 2.0.1 изменены и проверены. Secure Boot отключён: выбран Test Signing. Для применения нужна обычная перезагрузка Windows."
+    } else {
+        "Параметры VBS 2.0.1 изменены и проверены. Подготовлено одноразовое меню: после перезагрузки выберите отключение обязательной проверки подписи драйверов."
+    }.to_string();
+    message.push_str(
+        " Если BitLocker был активен, его защита приостановлена только на одну перезагрузку.",
+    );
+    if snapshot.scoped_bcd.len() < 2 {
+        message.push_str(
+            " Недоступные общие записи BCD не изменялись; настройки текущей загрузки проверены.",
+        );
+    }
+    Ok(change_result(changed, failed, &message))
 }
 fn restore_vbs(app: &AppHandle, _disable_test_mode: bool) -> Result<VbsChangeResult, String> {
     if !is_admin() {
@@ -1512,9 +1731,9 @@ fn restore_vbs(app: &AppHandle, _disable_test_mode: bool) -> Result<VbsChangeRes
     // Маска XSAVE визора снимается, даже если стояла до снимка (Eclipse-HV, VBS.cmd)
     let xsave_mask_set = read_bcd(XSAVE_BCD).ok().flatten().is_some();
     let mut xsave_mask_removed = false;
-    for item in &snapshot.bcd {
+    for item in snapshot.bcd.iter().chain(&snapshot.scoped_bcd) {
         let value = restore_bcd_value(&item.name, item.value.as_deref());
-        match write_bcd(&item.name, value) {
+        match write_bcd_at(&item.entry, &item.name, value) {
             Ok(()) => {
                 changed += 1;
                 xsave_mask_removed |= xsave_mask_set && item.name == XSAVE_BCD && value.is_none();
@@ -1522,18 +1741,8 @@ fn restore_vbs(app: &AppHandle, _disable_test_mode: bool) -> Result<VbsChangeRes
             Err(e) => failed.push(e),
         }
     }
-    if snapshot.bitlocker_state.as_deref() == Some("protected") {
-        let state = check_bitlocker();
-        if state.state == "suspended" {
-            let drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
-            if let Err(e) = run_command("manage-bde.exe", &["-protectors", "-enable", &drive]) {
-                failed.push(e);
-            }
-        }
-        if check_bitlocker().state != "protected" {
-            failed.push("Исходная защита BitLocker не подтверждена".into());
-        }
-    }
+    // После изменения BCD не возобновляем BitLocker до перезагрузки: rebootcount=1
+    // автоматически вернёт защиту после загрузки с уже восстановленными параметрами.
     for service in &snapshot.services {
         let result = run_command(
             "sc.exe",
@@ -1568,6 +1777,7 @@ fn enable_all_protections(app: &AppHandle, reboot: bool) -> Result<VbsChangeResu
     if !is_admin() {
         return Err("Для изменения параметров требуются права администратора".into());
     }
+    external::guard_enable(app, &system_probe()?.boot_id)?;
     let snapshot = ensure_snapshot(app)?;
     prepare_bitlocker(&snapshot)?;
     let mut changed = 0;
@@ -1601,7 +1811,15 @@ fn enable_all_protections(app: &AppHandle, reboot: bool) -> Result<VbsChangeResu
             Err(e) => failed.push(e),
         }
     }
-    // Сторонние ключи и режимы запуска служб здесь больше не сбрасываются.
+    for item in &snapshot.scoped_bcd {
+        if item.value.is_some() {
+            match write_bcd_at(&item.entry, &item.name, Some("auto")) {
+                Ok(()) => changed += 1,
+                Err(error) => failed.push(error),
+            }
+        }
+    }
+    // Сторонние ключи и режимы запуска служб здесь больше не сбрасываются
     if reboot && failed.is_empty() {
         if let Err(e) = run_command("shutdown.exe", &["/r", "/t", "5"]) {
             failed.push(e);
@@ -1618,8 +1836,7 @@ const BCD_NAMES: &[&str] = &[
     "xsaveremovefeature",
     "advancedoptions",
 ];
-// Маска XSAVE визора: её ставят «Включить визор», Eclipse-HV и VBS.cmd на процессорах с XCR0 > 7.
-// Программам остаются только x87, SSE и AVX, AVX-512 и другие расширения скрываются.
+// Маска XSAVE скрывает расширения сверх x87, SSE и AVX при XCR0 > 7
 const XSAVE_BCD: &str = "xsaveremovefeature";
 const XSAVE_HV_MASK: u64 = 0xFFFF_FFFF_FFFF_FFF8;
 const XSAVE_HV_MASK_VALUE: &str = "0xFFFFFFFFFFFFFFF8";
@@ -1640,8 +1857,7 @@ fn bcd_integer(value: &str) -> Option<u64> {
 fn is_hv_xsave_mask(value: &str) -> bool {
     bcd_integer(value) == Some(XSAVE_HV_MASK)
 }
-// Значение BCD для отката. Снимок мог быть сделан, когда маску визора уже поставили
-// Eclipse-HV или VBS.cmd, поэтому её откат снимает всегда; остальные значения — как в снимке.
+// При откате всегда снимаем маску XSAVE; остальные значения BCD восстанавливаем из снимка
 fn restore_bcd_value<'a>(name: &str, snapshot: Option<&'a str>) -> Option<&'a str> {
     if name == XSAVE_BCD && snapshot.is_some_and(is_hv_xsave_mask) {
         None
@@ -1717,7 +1933,9 @@ fn get_individual_protections(_app: &AppHandle) -> Result<Vec<IndividualProtecti
             id: "vulnerable-drivers".into(),
             name: "Черный список уязвимых драйверов".into(),
             category: "Целостность драйверов".into(),
-            description: "Блокировка загрузки драйверов из списка Microsoft Vulnerable Driver Blocklist".into(),
+            description:
+                "Блокировка загрузки драйверов из списка Microsoft Vulnerable Driver Blocklist"
+                    .into(),
             enabled: blocklist_on,
             locked: false,
             lock_reason: None,
@@ -1748,7 +1966,8 @@ fn get_individual_protections(_app: &AppHandle) -> Result<Vec<IndividualProtecti
             id: "kva-shadow".into(),
             name: "KVA Shadow (Meltdown Mitigation)".into(),
             category: "Процессор".into(),
-            description: "Теневое разделение адресных пространств ядра для защиты от Meltdown".into(),
+            description: "Теневое разделение адресных пространств ядра для защиты от Meltdown"
+                .into(),
             enabled: kva_on,
             locked: false,
             lock_reason: None,
@@ -1757,7 +1976,8 @@ fn get_individual_protections(_app: &AppHandle) -> Result<Vec<IndividualProtecti
             id: "xsave-mask".into(),
             name: "Маска XSAVE в загрузчике (xsaveremovefeature)".into(),
             category: "Параметры загрузчика (BCD)".into(),
-            description: "Скрытие AVX-512 и расширенных наборов инструкций процессора от программ".into(),
+            description: "Скрытие AVX-512 и расширенных наборов инструкций процессора от программ"
+                .into(),
             enabled: xsave_on,
             locked: false,
             lock_reason: None,
@@ -1864,11 +2084,9 @@ fn set_individual_protection(
             } else {
                 changed += 1;
             }
-            if let Err(e) = set_registry_dword(
-                r"SYSTEM\CurrentControlSet\Control\Lsa",
-                "LsaCfgFlags",
-                val,
-            ) {
+            if let Err(e) =
+                set_registry_dword(r"SYSTEM\CurrentControlSet\Control\Lsa", "LsaCfgFlags", val)
+            {
                 failed.push(e);
             } else {
                 changed += 1;
@@ -1935,10 +2153,16 @@ fn set_individual_protection(
         _ => return Err(format!("Неизвестный параметр защиты: {id}")),
     }
 
-    let status_word = if enable { "включен" } else { "отключен" };
+    let status_word = if enable {
+        "включен"
+    } else {
+        "отключен"
+    };
     let message = if failed.is_empty() {
         if restart_required {
-            format!("Параметр успешно {status_word}. Для применения требуется перезагрузка Windows.")
+            format!(
+                "Параметр успешно {status_word}. Для применения требуется перезагрузка Windows."
+            )
         } else {
             format!("Параметр успешно {status_word} и применён.")
         }
@@ -2080,9 +2304,35 @@ fn bcd_values_match(name: &str, current: Option<&str>, expected: Option<&str>) -
     }
 }
 
+fn permitted_bcd_target(entry: &str, name: &str) -> bool {
+    (entry == "{current}" && BCD_NAMES.contains(&name))
+        || (["{hypervisorsettings}", "{bootloadersettings}"].contains(&entry)
+            && name == "hypervisorlaunchtype")
+}
+fn valid_bcd_value(name: &str, value: Option<&str>) -> bool {
+    let Some(value) = value else {
+        return true;
+    };
+    match name {
+        "hypervisorlaunchtype" | "vsmlaunchtype" => {
+            ["auto", "off"].contains(&value.to_ascii_lowercase().as_str())
+        }
+        "testsigning" | "onetimeadvancedoptions" | "advancedoptions" => {
+            bcd_boolean(value).is_some()
+        }
+        "xsaveremovefeature" => bcd_integer(value).is_some(),
+        _ => false,
+    }
+}
 fn read_bcd(name: &str) -> Result<Option<String>, String> {
-    let output = run_command("bcdedit.exe", &["/enum", "{current}"])?;
-    let text = String::from_utf8_lossy(&output.stdout);
+    read_bcd_at("{current}", name)
+}
+fn read_bcd_at(entry: &str, name: &str) -> Result<Option<String>, String> {
+    if !permitted_bcd_target(entry, name) {
+        return Err("Неразрешённая цель BCD".into());
+    }
+    let output = run_command("bcdedit.exe", &["/enum", entry])?;
+    let text = decode_windows_output(&output.stdout);
     Ok(text.lines().find_map(|line| {
         let mut parts = line.split_whitespace();
         let key = parts.next()?;
@@ -2108,10 +2358,13 @@ fn read_bcd(name: &str) -> Result<Option<String>, String> {
 }
 
 fn write_bcd(name: &str, value: Option<&str>) -> Result<(), String> {
-    if !BCD_NAMES.contains(&name) {
+    write_bcd_at("{current}", name, value)
+}
+fn write_bcd_at(entry: &str, name: &str, value: Option<&str>) -> Result<(), String> {
+    if !permitted_bcd_target(entry, name) || !valid_bcd_value(name, value) {
         return Err("Неразрешённый параметр BCD".into());
     }
-    let current = read_bcd(name)?;
+    let current = read_bcd_at(entry, name)?;
     let expected = value.map(|v| {
         if name == "xsaveremovefeature" {
             bcd_integer(v)
@@ -2131,31 +2384,34 @@ fn write_bcd(name: &str, value: Option<&str>) -> Result<(), String> {
     }
 
     if let Some(val) = value {
-        if let Err(err) = run_command("bcdedit.exe", &["/set", "{current}", name, val]) {
+        if let Err(err) = run_command("bcdedit.exe", &["/set", entry, name, val]) {
             // Если по имени не удалось записать xsaveremovefeature, пробуем через идентификатор типа custom:25000129
             if name == "xsaveremovefeature" {
-                run_command("bcdedit.exe", &["/set", "{current}", "custom:25000129", val])
+                run_command("bcdedit.exe", &["/set", entry, "custom:25000129", val])
                     .map_err(|_| err)?;
             } else {
                 return Err(err);
             }
         }
     } else {
-        if let Err(err) = run_command("bcdedit.exe", &["/deletevalue", "{current}", name]) {
+        if let Err(err) = run_command("bcdedit.exe", &["/deletevalue", entry, name]) {
             // Если по имени не удалось удалить xsaveremovefeature, пробуем через идентификатор типа custom:25000129
             if name == "xsaveremovefeature" {
-                let _ = run_command("bcdedit.exe", &["/deletevalue", "{current}", "custom:25000129"]);
+                let _ = run_command("bcdedit.exe", &["/deletevalue", entry, "custom:25000129"]);
             } else {
                 // Если элемент и так не существовал в хранилище BCD, bcdedit может возвращать ошибку отсутствия
                 let lower = err.to_ascii_lowercase();
-                if !lower.contains("не найден") && !lower.contains("not found") && !lower.contains("element not found") {
+                if !lower.contains("не найден")
+                    && !lower.contains("not found")
+                    && !lower.contains("element not found")
+                {
                     return Err(err);
                 }
             }
         }
     }
 
-    let updated = read_bcd(name)?;
+    let updated = read_bcd_at(entry, name)?;
     if !bcd_values_match(name, updated.as_deref(), expected.as_deref()) {
         return Err(format!("BCD {name}: значение после записи не подтверждено"));
     }
@@ -2163,7 +2419,7 @@ fn write_bcd(name: &str, value: Option<&str>) -> Result<(), String> {
 }
 fn service_running(name: &str) -> Result<bool, String> {
     let output = run_command("sc.exe", &["query", name])?;
-    let text = String::from_utf8_lossy(&output.stdout);
+    let text = decode_windows_output(&output.stdout);
     for line in text.lines() {
         let parts = line.split_whitespace().collect::<Vec<_>>();
         if let Some(colon) = parts.iter().position(|p| *p == ":") {
@@ -2223,7 +2479,20 @@ fn capture_snapshot() -> Result<VbsSnapshot, String> {
         }
     }
     Ok(VbsSnapshot {
-        schema_version: 2,
+        schema_version: 3,
+        boot_id: system_probe()?.boot_id,
+        scoped_bcd: ["{hypervisorsettings}", "{bootloadersettings}"]
+            .iter()
+            .filter_map(|entry| {
+                read_bcd_at(entry, "hypervisorlaunchtype")
+                    .ok()
+                    .map(|value| BcdSnapshot {
+                        entry: (*entry).into(),
+                        name: "hypervisorlaunchtype".into(),
+                        value,
+                    })
+            })
+            .collect(),
         registry,
         bcd,
         services,
@@ -2246,6 +2515,7 @@ $ErrorActionPreference='SilentlyContinue'
 $dg=Get-CimInstance -Namespace 'root\Microsoft\Windows\DeviceGuard' -ClassName 'Win32_DeviceGuard'
 $cs=Get-CimInstance -ClassName Win32_ComputerSystem
 $cpu=Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1
+$os=Get-CimInstance -ClassName Win32_OperatingSystem
 $sb='unknown'; try { $sb=([bool](Confirm-SecureBootUEFI)).ToString().ToLowerInvariant() } catch [System.PlatformNotSupportedException] { $sb='false' } catch {}
 $dse=-1
 try {
@@ -2256,7 +2526,7 @@ try {
   $status=$t::NtQuerySystemInformation(103,$p,8,[ref]$r)
   if($status -eq 0){
     $o=[uint32][Runtime.InteropServices.Marshal]::ReadInt32($p,4)
-    if($o -band 2){$dse=1}elseif(-not($o -band 1)){$dse=0}else{$dse=2}
+    if(-not($o -band 1)){$dse=0}elseif($o -band 2){$dse=1}else{$dse=2}
   }
   [Runtime.InteropServices.Marshal]::FreeHGlobal($p)
 } catch {}
@@ -2268,6 +2538,7 @@ try {
   virtualizationFirmwareEnabled=[bool]$cpu.VirtualizationFirmwareEnabled
   secureBoot=$sb
   dseMode=[int]$dse
+  bootId=if($os.LastBootUpTime){$os.LastBootUpTime.ToUniversalTime().ToString('o')}else{''}
 } | ConvertTo-Json -Compress
 "#;
     let output = powershell_output(script)?;
@@ -2280,6 +2551,46 @@ fn parse_service_ids(value: &str) -> Vec<i32> {
         .split(',')
         .filter_map(|item| item.trim().parse::<i32>().ok())
         .collect()
+}
+
+// Не отключаем изоляцию учётных данных, пока Windows Hello остаётся способом входа.
+fn windows_hello_preflight() -> Result<(), String> {
+    let (_, enabled) = raw_registry(
+        r"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\WindowsHello",
+        "Enabled",
+    )?;
+    let Some(enabled) = enabled else {
+        return Ok(());
+    };
+    if enabled.kind != 4 || enabled.bytes.len() != 4 {
+        return Err("Windows Hello: тип настройки не определён; изменения отменены".into());
+    }
+    if enabled.bytes != 1u32.to_le_bytes() {
+        return Ok(());
+    }
+    let sid = powershell_output("$ErrorActionPreference='Stop'; [Security.Principal.WindowsIdentity]::GetCurrent().User.Value")?;
+    if !sid.starts_with("S-1-")
+        || !sid
+            .bytes()
+            .all(|b| b == b'-' || b == b'S' || b.is_ascii_digit())
+    {
+        return Err("Не удалось проверить учётные данные Windows Hello; изменения отменены".into());
+    }
+    let path = format!(
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{{D6886603-9D2F-4EB2-B667-1971041FA96B}}\{sid}"
+    );
+    let (_, credential) = raw_registry(&path, "LogonCredsAvailable")?;
+    if let Some(credential) = credential {
+        if credential.kind != 4 || credential.bytes.len() != 4 {
+            return Err(
+                "Не удалось проверить учётные данные Windows Hello; изменения отменены".into(),
+            );
+        }
+        if credential.bytes == 1u32.to_le_bytes() {
+            return Err("Windows Hello используется для входа. Сначала настройте обычный пароль и вручную отключите Windows Hello в параметрах входа Windows; затем повторите проверку.".into());
+        }
+    }
+    Ok(())
 }
 
 fn registry_dword(path: &str, name: &str) -> Option<u32> {
@@ -2307,7 +2618,8 @@ fn delete_registry_value(path: &str, name: &str) -> Result<(), String> {
         .open_subkey_with_flags(path, KEY_WRITE | KEY_WOW64_64KEY)
     {
         Ok(key) => key,
-        Err(_) => return Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(format!("HKLM\\{path}\\{name}: {error}")),
     };
     match key.delete_value(name) {
         Ok(()) => Ok(()),
@@ -2339,7 +2651,7 @@ fn test_signing_from_bcd(text: &str) -> Option<bool> {
 
 fn configured_test_signing() -> Option<bool> {
     let output = run_command("bcdedit.exe", &["/enum", "{current}"]).ok()?;
-    test_signing_from_bcd(&String::from_utf8_lossy(&output.stdout))
+    test_signing_from_bcd(&decode_windows_output(&output.stdout))
 }
 
 fn snapshot_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -2373,8 +2685,64 @@ fn powershell_output(script: &str) -> Result<String, String> {
         .to_string())
 }
 
+// bcdedit/sc выводят локализованный текст в OEM-кодировке, не обязательно UTF-8.
+fn decode_windows_output(bytes: &[u8]) -> String {
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return text.to_owned();
+    }
+    #[cfg(windows)]
+    unsafe {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetOEMCP() -> u32;
+            fn MultiByteToWideChar(
+                code_page: u32,
+                flags: u32,
+                source: *const u8,
+                source_len: i32,
+                target: *mut u16,
+                target_len: i32,
+            ) -> i32;
+        }
+        if bytes.len() <= i32::MAX as usize {
+            let page = GetOEMCP();
+            let count = MultiByteToWideChar(
+                page,
+                0,
+                bytes.as_ptr(),
+                bytes.len() as i32,
+                std::ptr::null_mut(),
+                0,
+            );
+            if count > 0 {
+                let mut wide = vec![0u16; count as usize];
+                if MultiByteToWideChar(
+                    page,
+                    0,
+                    bytes.as_ptr(),
+                    bytes.len() as i32,
+                    wide.as_mut_ptr(),
+                    count,
+                ) == count
+                {
+                    return String::from_utf16_lossy(&wide);
+                }
+            }
+        }
+    }
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
 fn run_command(program: &str, args: &[&str]) -> Result<Output, String> {
-    let mut command = Command::new(program);
+    // Для системных утилит не используем текущую папку и пользовательский PATH.
+    let executable = match program {
+        "powershell.exe" => system_tool(r"WindowsPowerShell\v1.0\powershell.exe"),
+        "winmgmt.exe" => system_tool(r"wbem\winmgmt.exe"),
+        "bcdedit.exe" | "sc.exe" | "manage-bde.exe" | "mountvol.exe" | "shutdown.exe"
+        | "fltmc.exe" | "tasklist.exe" => system_tool(program),
+        _ => return Err("Неразрешённая системная утилита VBS".into()),
+    };
+    let mut command = Command::new(executable);
     command.args(args);
     #[cfg(target_os = "windows")]
     command.creation_flags(CREATE_NO_WINDOW);
@@ -2561,10 +2929,26 @@ mod tests {
         assert!(matches_bcd_key("25000129", "xsaveremovefeature"));
         assert!(!matches_bcd_key("custom:25000128", "xsaveremovefeature"));
 
-        assert!(bcd_values_match("xsaveremovefeature", Some("0xfffffffffffffff8"), Some("0xFFFFFFFFFFFFFFF8")));
-        assert!(bcd_values_match("xsaveremovefeature", Some("18446744073709551608"), Some("0xfffffffffffffff8")));
+        assert!(bcd_values_match(
+            "xsaveremovefeature",
+            Some("0xfffffffffffffff8"),
+            Some("0xFFFFFFFFFFFFFFF8")
+        ));
+        assert!(bcd_values_match(
+            "xsaveremovefeature",
+            Some("18446744073709551608"),
+            Some("0xfffffffffffffff8")
+        ));
         assert!(bcd_values_match("xsaveremovefeature", None, None));
-        assert!(!bcd_values_match("xsaveremovefeature", Some("0xfffffffffffffff8"), None));
-        assert!(!bcd_values_match("xsaveremovefeature", None, Some("0xfffffffffffffff8")));
+        assert!(!bcd_values_match(
+            "xsaveremovefeature",
+            Some("0xfffffffffffffff8"),
+            None
+        ));
+        assert!(!bcd_values_match(
+            "xsaveremovefeature",
+            None,
+            Some("0xfffffffffffffff8")
+        ));
     }
 }

@@ -1,10 +1,10 @@
-//! Единая политика путей для архивов, манифестов и конечных каталогов Windows.
+//! Единая политика путей для архивов, манифестов и конечных каталогов Windows
 use std::{
     fs,
     path::{Component, Path, PathBuf},
 };
 
-/// Удаляет префикс Windows verbatim (\\?\ или \\?\UNC\) для совместимости путей.
+/// Удаляет префикс Windows verbatim (\\?\ или \\?\UNC\) для совместимости путей
 pub fn strip_verbatim(path: PathBuf) -> PathBuf {
     #[cfg(windows)]
     {
@@ -71,7 +71,7 @@ pub fn validate_absolute(path: &Path) -> Result<(), String> {
             _ => {}
         }
     }
-    // Component скрывает внутренние /./; проверяем исходную строку отдельно.
+    // Component скрывает внутренние /./; проверяем исходную строку отдельно
     if path
         .to_string_lossy()
         .split(['/', '\\'])
@@ -96,14 +96,14 @@ pub fn is_link(metadata: &fs::Metadata) -> bool {
     false
 }
 
-/// Корень выбирается доверенным кодом (Known Folder или диалогом), его редирект разрешён.
+/// Корень выбирается доверенным кодом (Known Folder или диалогом), его редирект разрешён
 pub fn root(path: &Path) -> Result<PathBuf, String> {
     validate_absolute(path)?;
     fs::canonicalize(path)
         .map_err(|e| format!("Недоступен корневой каталог {}: {e}", path.display()))
 }
 
-/// Разрешённый корень может ещё не существовать на новом компьютере.
+/// Разрешённый корень может ещё не существовать на новом компьютере
 pub fn resolve_root(path: &Path) -> Result<PathBuf, String> {
     validate_absolute(path)?;
     if path.exists() {
@@ -133,7 +133,7 @@ pub fn resolve_root(path: &Path) -> Result<PathBuf, String> {
     Ok(resolved)
 }
 
-/// Каждый существующий дочерний компонент проверяется без следования ссылкам/junction.
+/// Каждый существующий дочерний компонент проверяется без следования ссылкам/junction
 pub fn join(base: &Path, name: &str) -> Result<PathBuf, String> {
     let relative = relative(name)?;
     let base = resolve_root(base)?;
@@ -191,7 +191,7 @@ pub fn child(base: &Path, path: &Path) -> Result<PathBuf, String> {
     join(base, &rel.to_string_lossy())
 }
 
-/// Для системных путей не разрешаются даже ссылки в родительских каталогах.
+/// Для системных путей не разрешаются даже ссылки в родительских каталогах
 pub fn no_links(path: &Path) -> Result<(), String> {
     validate_absolute(path)?;
     let mut current = PathBuf::new();

@@ -1,7 +1,7 @@
 {
   "name": "eclipse-studio",
   "private": true,
-  "version": "8.4.0",
+  "version": "9.0.0",
   "description": "Eclipse Studio — premium Tauri desktop client",
   "scripts": {
     "tauri": "tauri",
@@ -10,6 +10,7 @@
     "test": "node tests/contracts.cjs && node tests/ui.test.js",
     "test:ui": "node tests/ui.test.js",
     "test:contracts": "node tests/contracts.cjs",
+    "test:secret-config": "python tests/ryuu_secret_test.py",
     "test:safety": "cargo test --manifest-path tests/safety-core/Cargo.toml --locked",
     "check:plugin": "node scripts/plugin-integrity.cjs check",
     "build:plugin": "npm --prefix eclipse-manifest run build",

@@ -19,6 +19,12 @@
   const nativeKey = "__native_state";
   const nativeRead = () => JSON.parse(sessionStorage.getItem(nativeKey) || '{"migrated":false,"values":{}}');
   const nativeSave = data => sessionStorage.setItem(nativeKey, JSON.stringify(data));
+  const localCloudKey = "__local_cloud_state";
+  const localCloudState = () => JSON.parse(sessionStorage.getItem(localCloudKey) || "null") || {
+    enabled: false, managed: false, folder: null, eligibleApps: [480, 620], loaderSupported: true, issue: null,
+    steamPath: "C:\\Program Files (x86)\\Steam", componentVersion: "1.0.0", componentOutdated: false,
+    ...(config.localCloud || {}),
+  };
   window.__mockEmit = (name, payload) => (listeners[name] || []).forEach(handler => handler({ payload }));
   const defaults = {
     state_bootstrap: ({legacy}) => {
@@ -65,13 +71,33 @@
     files_pause_download: () => {window.__pendingDownload?.reject("Загрузка приостановлена; проверенные сегменты сохранены для докачки");return true;},
     files_cancel_download: () => {window.__pendingDownload?.reject("Загрузка отменена");return true;},
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "8.4.0", latest_version: "8.4.0", currentVersion: "8.4.0", latestVersion: "8.4.0" }),
-    download_app_update: async (args) => {
-      const ver = args?.version || "6.6.8";
-      const name = `Eclipse-Studio-v${ver}.exe`;
-      return { filePath: `C:\\Users\\Test\\Desktop\\Programms\\Hypervisor\\${name}`, fileName: name, version: ver, readyToInstall: true };
+    check_for_update: () => ({ available: false, current_version: "9.0.0", latest_version: "9.0.0", currentVersion: "9.0.0", latestVersion: "9.0.0" }),
+    platform_info: () => ({ os: "windows", windows: true, windowsOnlyModules: [], sessionId: config.sessionId || "test-session" }),
+    update_launch_ready: () => config.launchOutcome ?? null,
+    // Установка обновления: с installPending остаётся ожидающей, ход задаётся через __mockEmit
+    install_update: (args) => {
+      if (config.installError) throw config.installError;
+      if (!config.installPending) return null;
+      return new Promise((resolve, reject) => {
+        window.__pendingInstall = { resolve, reject, args };
+        window.__mockEmit("cgs-update-progress", { phase: "preparing", downloaded: 0, total: 0, percent: 0, attempt: 0, message: "" });
+      });
     },
-    launch_app_update: () => null,
+    cancel_update: () => {
+      const pending = window.__pendingInstall;
+      window.__pendingInstall = null;
+      pending?.reject("Обновление отменено.");
+      return Boolean(pending);
+    },
+    // Локальное облако: состояние хранится в sessionStorage, чтобы переживать перезагрузку страницы
+    local_cloud_status: () => localCloudState(),
+    local_cloud_set: ({ enabled, folder }) => {
+      if (config.localCloudSetError) throw config.localCloudSetError;
+      const next = { ...localCloudState(), enabled, folder: folder || localCloudState().folder, issue: null };
+      sessionStorage.setItem(localCloudKey, JSON.stringify(next));
+      return next;
+    },
+    local_cloud_pick_folder: () => (config.localCloudPick === undefined ? "D:\\Cloud Saves" : config.localCloudPick),
     cleanup_old_app_versions: () => 0,
     luatools_restore_manifests: () => null,
     luatools_detect_steam: () => "C:\\Program Files (x86)\\Steam",
@@ -183,10 +209,20 @@
       bitlocker: config.bitlocker || { state: "off", protected: false, suspended: false, message: "BitLocker не используется на системном диске" },
       kvaShadow: { needed: false, disabled: false, label: "Не требуется (современный CPU)" },
       uefiLock: { isLocked: false, vbsLocked: false, hvciLocked: false, credentialLocked: false, secConfigAvailable: true },
-      conflicts: []
+      conflicts: [],
+      external: { detected: false, canRestore: false, trackedChanges: 0, requiresUefiConsent: false, pendingRestart: false, detail: "", blockedReason: null },
+      preferredBootMode: "testsigning",
+      enableBlockReason: null,
+      ...(config.vbs || {})
     }),
-    vbs_disable: () => ({ success: true, message: "VBS 2.0: гипервизор отключён", changed: 3, failed: [], restartRequired: true }),
-    vbs_restore: () => ({ success: true, message: "VBS 2.0: параметры восстановлены", changed: 3, failed: [], restartRequired: true }),
+    vbs_restore_external: () => {
+      config.vbs = { ...(config.vbs || {}), canRestore: false, testSigningConfigured: false,
+        external: { detected: false, canRestore: false, trackedChanges: 0, requiresUefiConsent: false, pendingRestart: true,
+          detail: "Внешний режим восстановлен. Изменения загрузки вступят в силу после перезагрузки Windows.", blockedReason: "Сначала перезагрузите Windows для завершения отката внешнего режима." } };
+      return { success: true, message: "Внешние настройки восстановлены по журналу VBS.cmd.", changed: 3, failed: [], restartRequired: true };
+    },
+    vbs_disable: () => ({ success: true, message: "VBS 2.0.1: гипервизор отключён", changed: 3, failed: [], restartRequired: true }),
+    vbs_restore: () => ({ success: true, message: "VBS 2.0.1: параметры восстановлены", changed: 3, failed: [], restartRequired: true }),
     vbs_set_test_mode: (args) => ({ success: true, message: args?.enabled ? "Тестовый режим включён" : "Тестовый режим выключен", changed: 1, failed: [], restartRequired: true }),
     vbs_restart: () => ({ success: true }),
     vbs_repair: (args) => `Восстановление ${args?.kind || "компонентов"} успешно завершено.`,

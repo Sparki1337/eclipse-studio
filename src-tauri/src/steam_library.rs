@@ -259,7 +259,7 @@ fn games_in_library(root: &Path, warnings: &mut Vec<String>) -> Vec<InstalledSte
             .unwrap_or(0);
         if flags & 4 == 0 {
             continue;
-        } // FullyInstalled, also with pending updates.
+        } // Игра полностью установлена, включая состояние с ожидающими обновлениями
         let Some(install) = app
             .get("installdir")
             .and_then(Value::as_str)

@@ -460,7 +460,7 @@ def update_build_helpers(old_ver: str, new_ver: str) -> bool:
     # Обновление скриптов сборки и хелперов релиза
     success = True
 
-    # 1. build.py
+    # Версия в скрипте сборки
     if BUILD_PY.exists():
         try:
             content = BUILD_PY.read_text(encoding="utf-8")
@@ -479,7 +479,7 @@ def update_build_helpers(old_ver: str, new_ver: str) -> bool:
             print(f"[!] Ошибка при обновлении build.py: {e}")
             success = False
 
-    # 2. release.py
+    # Версия в скрипте релиза
     for file_path in [RELEASE_PY]:
         if not file_path.exists():
             continue
@@ -500,7 +500,7 @@ def update_build_helpers(old_ver: str, new_ver: str) -> bool:
             print(f"[!] Ошибка при обновлении {file_path.name}: {e}")
             success = False
 
-    # 3. .agents/skills/build/SKILL.md
+    # Версия в инструкции сборки
     if SKILL_BUILD_MD.exists():
         try:
             content = SKILL_BUILD_MD.read_text(encoding="utf-8")

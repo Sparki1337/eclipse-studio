@@ -29,9 +29,13 @@
       const finish = value => {
         if (done) return; done = true; accept.onclick = null; cancel.onclick = null;
         document.removeEventListener("keydown", keydown, true); document.removeEventListener("focusin", focusin, true);
-        backdrop.classList.add("hidden"); siblings.forEach(([node, inert]) => { node.inert = inert; });
-        if (previous?.isConnected && !previous.closest("[inert]")) previous.focus({ preventScroll: true });
-        resolve(value);
+        const close = () => {
+          backdrop.classList.add("hidden"); siblings.forEach(([node, inert]) => { node.inert = inert; });
+          if (previous?.isConnected && !previous.closest("[inert]")) previous.focus({ preventScroll: true });
+          resolve(value);
+        };
+        if (window.cgsMotion) window.cgsMotion.dismiss(backdrop, close);
+        else close();
       };
       const keydown = event => {
         if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); finish(false); }

@@ -1,5 +1,4 @@
-// Кастомный компонент выпадающих списков (Custom Select) для Eclipse Studio
-// Заменяет устаревшие системные комбобоксы Windows на нативный неоновый интерфейс программы
+// Выпадающие списки в стиле приложения
 (() => {
   "use strict";
 
@@ -11,8 +10,13 @@
   // Закрытие всех активных выпадающих списков
   function closeAll() {
     if (activeDropdown) {
-      activeDropdown.classList.remove("open");
-      activeDropdown.remove();
+      const dropdown = activeDropdown;
+      dropdown.classList.remove("open");
+      dropdown.inert = true;
+      dropdown.setAttribute("aria-hidden", "true");
+      dropdown.style.pointerEvents = "none";
+      if (window.cgsMotion) window.cgsMotion.dismiss(dropdown, () => dropdown.remove());
+      else dropdown.remove();
       activeDropdown = null;
     }
     if (activeTrigger) {

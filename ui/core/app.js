@@ -6,6 +6,18 @@
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
+  // Текущие операции разделов: обновление программы не начинается, пока они не завершены
+  // id → источник: "button" (кнопка с setBusy) или "module" (сообщение раздела через cgsReportBusy)
+  const activeOperations = new Map();
+  // Кнопки самого обновления не считаются посторонней операцией
+  const UPDATE_OWN_BUSY_IDS = new Set(["check-update-button", "update-install-button", "app-update-install", "app-update-cancel", "app-update-defer", "app-update-close"]);
+  function reportOperation(id, busy, source) {
+    if (!id || UPDATE_OWN_BUSY_IDS.has(id)) return;
+    if (busy) activeOperations.set(id, source); else activeOperations.delete(id);
+  }
+  window.cgsReportBusy = (id, busy) => reportOperation(id, busy, "module");
+  window.addEventListener("cgs:busy-changed", ({ detail }) => reportOperation(detail?.id, detail?.busy, "button"));
+
   // Кэш прямых ссылок на обложки добавленных игр в window.cgsStorage
   const LUA_COVERS_STORAGE_KEY = "cgs-lua-covers";
 
@@ -28,7 +40,7 @@
   }
 
   const state = {
-    version: "8.4.0",
+    version: "9.0.0",
     gameDir: "",
     appid: null,
     gameName: "",
@@ -86,6 +98,7 @@
       service: "ryuu",
       hubcapKey: "",
       ryuuKey: "",
+      ryuuKeySource: "crocodile",
       hubcapUsage: { dailyUsage: 0, dailyLimit: 25, remaining: 25 },
       hubcapUsageError: "",
       hubcapUsageLoading: false,
@@ -113,6 +126,15 @@
       checking: false,
       promptedVersion: "",
       latest: null,
+      // Ход установки обновления внутри программы
+      installing: false,
+      cancelling: false,
+      committing: false,
+      downloadSamples: [],
+      // Отложено пользователем на этот запуск или подавлено после неудачной установки
+      snoozedThisLaunch: false,
+      suppressAuto: false,
+      ready: null,
     },
   };
 
@@ -173,7 +195,24 @@
     }
     const item = document.createElement("div");
     item.className = `toast ${type}`;
-    item.textContent = message;
+    // Уведомление: значок, текст и полоса времени
+    const TOAST_ICONS = {
+      success: '<path d="M20 6 9 17l-5-5"/>',
+      error: '<path d="M18 6 6 18M6 6l12 12"/>',
+      warning: '<path d="M12 8v5m0 3.5h.01"/>',
+      info: '<path d="M12 11v6m0-9.5h.01"/>'
+    };
+    const icon = document.createElement("span");
+    icon.className = "toast-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = `<svg viewBox="0 0 24 24">${TOAST_ICONS[type] || TOAST_ICONS.info}</svg>`;
+    const text = document.createElement("span");
+    text.className = "toast-text";
+    text.textContent = message;
+    const bar = document.createElement("span");
+    bar.className = "toast-bar";
+    bar.setAttribute("aria-hidden", "true");
+    item.append(icon, text, bar);
     $("#toast-stack").appendChild(item);
     setTimeout(() => {
       item.style.opacity = "0";
@@ -205,9 +244,12 @@
       if (button.dataset.original) button.innerHTML = button.dataset.original;
       delete button.dataset.original;
     }
+    window.dispatchEvent(new CustomEvent("cgs:busy-changed", { detail: { id: button.id, busy } }));
   }
 
   function switchView(name) {
+    // Во время обновления доступен только раздел настроек с ходом установки
+    if (state.updates.installing && name !== "settings") return;
     if (!viewMeta[name]) return;
     $$("[data-view-panel]").forEach((panel) => panel.classList.toggle("active", panel.dataset.viewPanel === name));
     $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === name));
@@ -745,7 +787,7 @@
 
   function loadCover(cover, img, appid) {
     const key = String(appid);
-    // 1. Проверяем сохранённый URL обложки из кэша
+    // Проверяем сохранённый URL обложки из кэша
     const cached = state.lua.headers[key];
     if (cached) {
       img.onload = () => cover.classList.add("loaded");
@@ -765,7 +807,7 @@
         if (index < urls.length) {
           img.src = urls[index];
         } else {
-          // 2. Если статические пути вернули 404, запрашиваем точный URL обложки из Steam Store API
+          // Если статические пути вернули 404, запрашиваем точный URL обложки из Steam Store API
           try {
             const storeUrl = await call("game_artwork_store_url", { appid: Number(appid) });
             if (storeUrl) {
@@ -1358,7 +1400,7 @@
   async function performLoaderUpdate(variant) {
     const isEn = window.cgsI18n?.language === "en";
 
-    // 1. Проверяем, запущен ли Steam
+    // Проверяем, запущен ли Steam
     const canProceed = await ensureSteamClosedForLoader();
     if (!canProceed) return false;
 
@@ -1381,8 +1423,7 @@
         state.lua.loaderUpdate.updateAvailable = false;
       }
 
-      // Закрываем окно обновления со списком DLL перед показом экрана об успешном завершении,
-      // чтобы окно не перекрывало финальный диалог
+      // Закрываем список обновлений DLL перед показом итогового диалога
       closeLoaderUpdateModal();
 
       toast(result?.message || (isEn ? "OpenSteamTool libraries updated successfully" : "Библиотеки OpenSteamTool успешно обновлены"), "success");
@@ -1432,7 +1473,7 @@
       });
       state.lua.loaderUpdate = updateInfo;
 
-      // Управляем отображением неонового баннера в LuaTools
+      // Видимость баннера обновлений LuaTools
       const banner = $("#loader-update-banner");
       if (banner) {
         banner.classList.toggle("hidden", !updateInfo?.updateAvailable);
@@ -1479,8 +1520,7 @@
 
       const selectedVariant = state.lua.loaderSource || "v1";
 
-      // Если информация не получена из бэкенда (например, в демо-режиме или при отсутствии Steam),
-      // формируем реалистичный демонстрационный набор библиотек
+      // Без данных бэкенда используем демонстрационный список библиотек
       if (!info || !info.variants || !info.variants.length) {
         info = {
           selectedVariant,
@@ -1516,9 +1556,7 @@
         info = JSON.parse(JSON.stringify(info));
         info.updateAvailable = true;
 
-        // Если все размеры совпадают (библиотеки уже обновлены до последней версии),
-        // для наглядного тестирования новой системы сравнения весов слегка уменьшаем
-        // текущий размер у файлов с одинаковым размером, чтобы отображалась подсветка и стрелка
+        // В деморежиме различаем размеры одинаковых версий для проверки подсветки
         info.variants?.forEach((v) => {
           v.updateAvailable = true;
           let hasDiff = false;
@@ -1981,8 +2019,8 @@
       luaDropdownMessage("Укажите API-ключ HubCap в настройках");
       return;
     }
-    if (!hubcap && !state.lua.ryuuKey.trim()) {
-      luaDropdownMessage("Укажите API-ключ Ryuu в настройках");
+    if (!hubcap && !hasRyuuKey()) {
+      luaDropdownMessage("Укажите свой API-ключ Ryuu в настройках");
       return;
     }
     $("#lua-search-spin").classList.remove("hidden");
@@ -2331,7 +2369,7 @@
     if (input) input.placeholder = svc === "hubcap"
       ? "Поиск через HubCap — название или AppID…"
       : "Введите название игры или AppID…";
-    // Ошибка лимита HubCap не должна «висеть» после переключения на Ryuu.
+    // Ошибка лимита HubCap не должна «висеть» после переключения на Ryuu
     if (svc !== "hubcap") state.lua.hubcapUsageError = "";
     renderHubcapUsage();
     if (svc === "hubcap" && state.lua.hubcapKey.trim()) refreshHubcapUsage();
@@ -2346,11 +2384,35 @@
     }
   }
 
+  function hasRyuuKey() {
+    return state.lua.ryuuKeySource === "crocodile" || Boolean(state.lua.ryuuKey.trim());
+  }
+
+  function applyRyuuKeySource(source) {
+    const selected = source === "custom" ? "custom" : "crocodile";
+    const builtin = selected === "crocodile";
+    state.lua.ryuuKeySource = selected;
+    $$('input[name="ryuu-key-source"]').forEach((input) => {
+      input.checked = input.value === selected;
+      input.closest(".ryuu-key-source-option")?.classList.toggle("active", input.checked);
+    });
+    $("#ryuu-custom-key-fields")?.classList.toggle("hidden", builtin);
+    if ($("#ryuu-key")) $("#ryuu-key").disabled = builtin;
+    const help = $("#ryuu-key-help");
+    if (help) help.textContent = builtin
+      ? "Общий ключ встроен в программу. Его доступность зависит от Crocodile Gena Studio."
+      : "Свой ключ хранится в защищённом хранилище Windows. Переключение режима не удаляет его.";
+    window.cgsStorage.setItem("ryuuKeySource", selected);
+    updateRyuuKeyStatus();
+  }
+
   function updateRyuuKeyStatus() {
     const status = $("#ryuu-key-status");
     if (status) {
-      const hasKey = Boolean(state.lua.ryuuKey.trim());
-      status.textContent = hasKey ? "Ключ активен" : "Ключ не указан";
+      const hasKey = hasRyuuKey();
+      status.textContent = state.lua.ryuuKeySource === "crocodile"
+        ? "Встроенный ключ"
+        : hasKey ? "Свой ключ указан" : "Ключ не указан";
       status.classList.toggle("active", hasKey);
     }
   }
@@ -2392,8 +2454,7 @@
 
 
   async function refreshHubcapUsage() {
-    // Лимит HubCap запрашивается только когда HubCap выбран источником манифестов:
-    // при выбранном Ryuu фоновые запросы и их ошибки пользователю не нужны.
+    // Запрашиваем лимит HubCap только при выборе этого источника
     if (!invoke || state.lua.hubcapUsageLoading || state.lua.service !== "hubcap") return;
     if (!state.lua.hubcapKey.trim()) {
       state.lua.hubcapUsage = { dailyUsage: 0, dailyLimit: 25, remaining: 25 };
@@ -2416,22 +2477,22 @@
 
   // Обновление полезной системной информации в блоке «О программе»
   async function updateAboutInfo() {
-    // 1. Версия программы (без суффикса Portable x64, так как других сборок нет)
+    // Версия программы (без суффикса Portable x64, так как других сборок нет)
     const appVerEl = $("#about-app-version");
     if (appVerEl) {
-      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "8.4.0";
+      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "9.0.0";
       state.version = currentVer;
       appVerEl.textContent = currentVer;
     }
 
-    // 2. Версия Eclipse HV (без буквы v)
+    // Версия Eclipse HV (без буквы v)
     const hvVerEl = $("#about-hv-version");
     if (hvVerEl) {
       if (invoke) {
         try {
           const hvStatus = await call("eclipse_hv_status");
           if (hvStatus && hvStatus.installed) {
-            const rawVer = hvStatus.version || "8.4.0";
+            const rawVer = hvStatus.version || "9.0.0";
             hvVerEl.textContent = rawVer.replace(/^v/i, "");
           } else {
             hvVerEl.textContent = "Не установлен";
@@ -2444,7 +2505,7 @@
       }
     }
 
-    // 3. Права доступа
+    // Права доступа
     const adminEl = $("#about-admin-rights");
     if (adminEl) {
       if (invoke) {
@@ -2459,7 +2520,7 @@
       }
     }
 
-    // 4. Путь к Steam
+    // Путь к Steam
     const steamEl = $("#about-steam-path");
     if (steamEl) {
       const path = state.lua.steamPath || window.cgsStorage.getItem("luaSteamPath") || "";
@@ -2473,10 +2534,6 @@
     }
   }
 
-  // Переменные состояния процесса скачивания и обновления приложения
-  let appUpdateUnlisten = null;
-  let isUpdatingApp = false;
-
   // Извлечение полного списка изменений (changelog) на выбранном языке (RU / EN)
   function extractChangelog(notesRaw, lang = "ru") {
     if (!notesRaw || typeof notesRaw !== "string") return "";
@@ -2486,8 +2543,7 @@
     let enPart = "";
     let ruPart = "";
 
-    // Поиск заголовка русской секции (Markdown ## Русский или HTML <h2>...Русский...</h2>)
-    // Обязательно учитываем границы слов для "RU", чтобы исключить ложное совпадение с "Antivirus"
+    // Ищем русскую секцию Markdown или HTML; границы RU исключают совпадение с Antivirus
     const ruHeaderRegex = /(?:(?:^|\n)##?\s*(?:Русский|\b(?:Russian|RU)\b)|<h[1-3][^>]*>(?:(?!<\/h[1-3]>).)*?(?:(?<=^|[\s>"'«])Русский(?=$|[\s<"'».,:;])|\b(?:Russian|RU)\b)(?:(?!<\/h[1-3]>).)*?<\/h[1-3]>)/iu;
     const ruHeaderMatch = clean.match(ruHeaderRegex);
 
@@ -2540,297 +2596,493 @@
     return target.replace(/^[ \t]+/gm, "").replace(/\n\s*\n\s*\n/g, "\n\n").trim();
   }
 
+  // Окно обновления программы: проверенная загрузка EXE, замена с откатом и перезапуск
+  const UPDATE_SNOOZE_KEY = "cgs-update-snooze-launches";
+  const UPDATE_SESSIONS_KEY = "cgs-update-snooze-sessions";
+  const UPDATE_SNOOZE_LAUNCHES = 5;
+  const UPDATE_CANCELLED = "Обновление отменено.";
   let activeUpdatePrompt = null;
 
-  function closeAppUpdateModal() {
+  const updateText = (ru, en) => (window.cgsI18n?.language === "en" ? en : ru);
+  const formatMegabytes = (bytes) => (Math.max(0, Number(bytes) || 0) / 1048576).toFixed(1);
+
+  // Идентификатор запуска процесса: перезагрузка окна не расходует откладывание
+  function updateSessionId() {
+    if (window.cgsAppSession) return window.cgsAppSession;
+    let id = sessionStorage.getItem("cgs-update-preview-session");
+    if (!id) {
+      id = crypto.randomUUID();
+      sessionStorage.setItem("cgs-update-preview-session", id);
+    }
+    return id;
+  }
+
+  function readUpdateSessions() {
+    try {
+      const entries = JSON.parse(window.cgsStorage.getItem(UPDATE_SESSIONS_KEY) || "[]");
+      return Array.isArray(entries) ? entries : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function rememberUpdateSnooze(skipped) {
+    const id = updateSessionId();
+    const entries = readUpdateSessions().filter((item) => item?.id !== id).slice(-19);
+    entries.push({ id, skipped });
+    window.cgsStorage.setItem(UPDATE_SESSIONS_KEY, JSON.stringify(entries));
+  }
+
+  // Каждый новый запуск расходует одно откладывание; на шестом запуске окно появится снова
+  function consumeUpdateSnooze() {
+    try {
+      const previous = readUpdateSessions().find((item) => item?.id === updateSessionId());
+      if (previous) return Boolean(previous.skipped);
+      const count = Number(window.cgsStorage.getItem(UPDATE_SNOOZE_KEY));
+      if (Number.isInteger(count) && count > 0 && count <= UPDATE_SNOOZE_LAUNCHES) {
+        window.cgsStorage.setItem(UPDATE_SNOOZE_KEY, String(count - 1));
+        rememberUpdateSnooze(true);
+        return true;
+      }
+      window.cgsStorage.removeItem(UPDATE_SNOOZE_KEY);
+      rememberUpdateSnooze(false);
+    } catch (_) {}
+    return false;
+  }
+
+  // Посторонние операции: обновление ждёт их завершения, чтобы не прервать запись файлов
+  function otherOperationsRunning() {
+    for (const [id, source] of [...activeOperations]) {
+      // Кнопка, удалённая из DOM или снятая с занятости без события, больше не блокирует обновление
+      if (source === "button" && !document.getElementById(id)?.classList.contains("busy")) activeOperations.delete(id);
+    }
+    if (activeOperations.size) return true;
+    const jobs = window.cgsJobs?.list?.() || [];
+    if (jobs.some((job) => job.status === "running" && job.command !== "install_update")) return true;
+    return Boolean(document.querySelector('[aria-busy="true"], [data-busy="true"]'));
+  }
+
+  // Строка состояния в карточке «Обновления» с переводом при смене языка
+  function setUpdateStatus(ru, en = ru, kind = "") {
+    state.updates.status = { ru, en, kind };
+    renderUpdateStatus();
+  }
+
+  function renderUpdateStatus() {
+    const status = $("#update-status");
+    const value = state.updates.status;
+    if (!status || !value) return;
+    status.textContent = updateText(value.ru, value.en);
+    status.classList.toggle("available", value.kind === "available");
+    status.classList.toggle("error", value.kind === "error");
+  }
+
+  // Видимая часть приложения недоступна, пока открыто окно; кнопки окна Windows остаются
+  function setUpdateShellInert(inert) {
+    const shell = $(".app-shell");
+    if (!shell) return;
+    [...shell.children]
+      .filter((node) => !node.classList.contains("titlebar"))
+      .concat([$("#titlebar-search"), $("#open-telegram-hub")])
+      .filter(Boolean)
+      .forEach((node) => { node.inert = inert; });
+  }
+
+  function updatePhaseLabel(phase) {
+    return {
+      loader: updateText("Обновление библиотек OpenSteamTool…", "Updating OpenSteamTool libraries…"),
+      preparing: updateText("Подготовка обновления…", "Preparing update…"),
+      downloading: updateText("Скачивание обновления", "Downloading update"),
+      retrying: updateText("Переподключение к серверу…", "Reconnecting to the server…"),
+      verifying: updateText("Проверка целостности и версии EXE…", "Verifying EXE integrity and version…"),
+      installing: updateText("Подготовка установки…", "Preparing installation…"),
+      restarting: updateText("Установка и перезапуск программы…", "Installing and restarting the app…"),
+    }[phase] || updateText("Подготовка обновления…", "Preparing update…");
+  }
+
+  function setUpdateProgress(percent, indeterminate = false) {
+    const bar = $("#app-update-progress");
+    const fill = $("#app-update-progress-fill");
+    bar.classList.toggle("indeterminate", indeterminate);
+    if (indeterminate) {
+      bar.removeAttribute("aria-valuenow");
+      fill.style.width = "";
+      $("#app-update-percent").textContent = "…";
+      return;
+    }
+    const value = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+    bar.setAttribute("aria-valuenow", String(value));
+    fill.style.width = `${value}%`;
+    $("#app-update-percent").textContent = `${value}%`;
+  }
+
+  // Подписи этапа, полосы и подробностей для текущего состояния установки
+  function renderUpdateProgress(view) {
+    const phaseNode = $("#app-update-phase");
+    const detailNode = $("#app-update-detail");
+    $("#app-update-progress-wrap").dataset.state = view;
+    if (view === "ready") {
+      phaseNode.textContent = updateText("Готово к загрузке", "Ready to download");
+      detailNode.textContent = updateText(
+        "Перед заменой EXE проверяются SHA-256 и версия файла. Напоминание можно отложить на 5 запусков.",
+        "The EXE's SHA-256 and version are verified before replacement. You can postpone the reminder for 5 launches."
+      );
+      setUpdateProgress(0);
+      return;
+    }
+    if (view === "error" || view === "cancelled") {
+      // Заголовок окна уже называет итог, здесь — пояснение к подробностям
+      phaseNode.textContent = view === "error"
+        ? updateText("Что пошло не так", "What went wrong")
+        : updateText("Загрузка остановлена", "Download stopped");
+      detailNode.textContent = view === "error"
+        ? state.updates.failure
+        : updateText("Загруженные файлы удалены, текущая версия не изменена.", "Downloaded files were removed; the current version is unchanged.");
+      return;
+    }
+    const value = state.updates.progress || { phase: "preparing" };
+    const phase = value.phase || "preparing";
+    let detail = updateText("До начала замены EXE обновление можно отменить.", "You can cancel until the EXE replacement begins.");
+    if (phase === "downloading") {
+      const total = Number(value.total) || 0;
+      const downloaded = Number(value.downloaded) || 0;
+      const speed = state.updates.speed || 0;
+      detail = total
+        ? `${formatMegabytes(downloaded)} / ${formatMegabytes(total)} ${updateText("МБ", "MB")}`
+        : `${formatMegabytes(downloaded)} ${updateText("МБ", "MB")}`;
+      if (speed > 0) {
+        detail += ` · ${(speed / 1048576).toFixed(2)} ${updateText("МБ/с", "MB/s")}`;
+        if (total > downloaded) {
+          const seconds = Math.max(1, Math.ceil((total - downloaded) / speed));
+          detail += updateText(` · осталось примерно ${seconds} с`, ` · about ${seconds}s remaining`);
+        }
+      }
+      setUpdateProgress(value.percent ?? (total ? (downloaded / total) * 100 : 0), !total);
+    } else if (phase === "retrying") {
+      const attempt = Number(value.attempt) || 2;
+      detail = updateText(`Попытка ${attempt} из 3. ${value.message || ""}`, `Attempt ${attempt} of 3. ${value.message || ""}`).trim();
+      setUpdateProgress(0, true);
+    } else if (phase === "verifying") {
+      detail = updateText("Сверяем SHA-256 из релиза GitHub, разрядность и версию EXE.", "Checking the GitHub release SHA-256, architecture and EXE version.");
+      setUpdateProgress(100);
+    } else if (phase === "installing") {
+      detail = updateText("Текущая версия сохраняется для автоматического отката.", "The current version is kept for an automatic rollback.");
+      setUpdateProgress(100);
+    } else if (phase === "restarting") {
+      detail = updateText("Программа закроется и запустится уже обновлённой. Отмена больше недоступна.", "The app closes and starts again updated. Cancelling is no longer possible.");
+      setUpdateProgress(100);
+    } else {
+      setUpdateProgress(0, true);
+    }
+    phaseNode.textContent = state.updates.cancelling
+      ? updateText("Отменяем обновление…", "Cancelling update…")
+      : updatePhaseLabel(phase);
+    detailNode.textContent = detail;
+  }
+
+  // Полная отрисовка окна на текущем языке и этапе
+  function renderUpdateDialog() {
+    const prompt = activeUpdatePrompt;
+    const update = prompt?.update || state.updates.latest;
+    if (!update) return;
+    const installing = state.updates.installing;
+    const view = installing ? "working" : (state.updates.dialogState || "ready");
+    const step2 = view === "ready" && prompt?.step === 2;
+    const hasLoader = Boolean(prompt?.loaderUpdate);
+    const version = update.latestVersion;
+
+    $("#app-update-symbol").textContent = { working: "↓", error: "!" }[view] || "↑";
+    $("#app-update-title").textContent = view === "error"
+      ? updateText("Обновление не выполнено", "Update failed")
+      : view === "cancelled"
+        ? updateText("Обновление отменено", "Update cancelled")
+        : installing
+          ? updateText(`Обновление до версии ${version}`, `Updating to version ${version}`)
+          : updateText(`Доступна версия ${version}`, `Version ${version} available`);
+    $("#app-update-message").textContent = installing
+      ? updateText("Не закрывайте программу: после проверки файла она перезапустится сама.", "Keep the app open: it restarts by itself after the file is verified.")
+      : view === "ready"
+        ? updateText("Программа обновится и запустится автоматически. Настройки и ярлыки сохранятся.", "The app updates and restarts automatically. Your settings and shortcuts stay in place.")
+        : updateText("Текущая версия не изменена. Можно повторить попытку или отложить обновление.", "The current version is unchanged. You can try again or postpone the update.");
+
+    const changelogText = extractChangelog(update.notes, window.cgsI18n?.language === "en" ? "en" : "ru");
+    $("#app-update-changelog").classList.toggle("hidden", !changelogText || installing || step2);
+    $("#app-update-changelog-toggle-text").textContent = updateText(`Список изменений (v${version})`, `Changelog (v${version})`);
+    $("#app-update-changelog-body").textContent = changelogText;
+    $("#app-update-step2").classList.toggle("hidden", !step2);
+    $("#app-update-progress-wrap").classList.toggle("hidden", step2);
+    renderUpdateProgress(view);
+
+    const install = $("#app-update-install");
+    const defer = $("#app-update-defer");
+    const cancel = $("#app-update-cancel");
+    const close = $("#app-update-close");
+    install.classList.toggle("hidden", installing);
+    defer.classList.toggle("hidden", installing);
+    cancel.classList.toggle("hidden", !installing);
+    cancel.disabled = state.updates.cancelling || state.updates.committing;
+    close.disabled = state.updates.committing;
+    install.textContent = hasLoader && view === "ready" && !step2
+      ? updateText("Далее →", "Next →")
+      : view === "error" || view === "cancelled"
+        ? updateText("Повторить", "Try again")
+        : updateText("Обновить и перезапустить", "Update and restart");
+    defer.textContent = step2 ? updateText("Назад", "Back") : updateText("Отложить на 5 запусков", "Remind me after 5 launches");
+    cancel.textContent = state.updates.cancelling ? updateText("Отменяем…", "Cancelling…") : updateText("Отменить обновление", "Cancel update");
+    const closeLabel = installing ? updateText("Отменить обновление", "Cancel update") : updateText("Закрыть", "Close");
+    close.setAttribute("aria-label", closeLabel);
+    close.title = closeLabel;
+  }
+
+  function updateDialogOpen() {
+    return !$("#app-update-backdrop").classList.contains("hidden");
+  }
+
+  function showUpdateDialog(loaderUpdate = null) {
+    const update = state.updates.latest;
+    if (!update?.available) return;
+    if (!update.inAppSupported && !state.updates.installing) return;
+    if (!activeUpdatePrompt || activeUpdatePrompt.update !== update) activeUpdatePrompt = { update, loaderUpdate: null, step: 1 };
+    if (loaderUpdate?.updateAvailable) activeUpdatePrompt.loaderUpdate = loaderUpdate;
+    if (!state.updates.installing) {
+      state.updates.dialogState = "ready";
+      activeUpdatePrompt.step = 1;
+      $("#app-update-changelog").open = false;
+    }
+    renderUpdateDialog();
     const backdrop = $("#app-update-backdrop");
+    backdrop.classList.remove("hidden", "closing");
+    setUpdateShellInert(true);
+    (state.updates.installing ? $("#app-update-cancel") : $("#app-update-install")).focus({ preventScroll: true });
+  }
+
+  function hideUpdateDialog() {
+    const backdrop = $("#app-update-backdrop");
+    if (backdrop.classList.contains("hidden")) return;
+    setUpdateShellInert(false);
     backdrop.classList.add("closing");
     setTimeout(() => {
       backdrop.classList.add("hidden");
       backdrop.classList.remove("closing");
-      // Сбрасываем отображение шага 2 комбинированного обновления
-      $("#app-update-step2")?.classList.add("hidden");
     }, 190);
   }
 
-  // Отрисовка данных в окне обновления на актуальном языке интерфейса
-  function renderAppUpdateModal(update) {
-    const isEn = window.cgsI18n?.language === "en";
-    const title = $("#app-update-title");
-    const message = $("#app-update-message");
-    const symbol = $("#app-update-symbol");
-    const changelog = $("#app-update-changelog");
-    const changelogToggleText = $("#app-update-changelog-toggle-text");
-    const changelogBody = $("#app-update-changelog-body");
-    const footnote = $("#app-update-footnote");
-    const confirmBtn = $("#app-update-confirm");
-    const cancelBtn = $("#app-update-cancel");
-    const progressWrap = $("#app-update-progress-wrap");
-
-    symbol.textContent = "↑";
-    title.textContent = isEn 
-      ? `Version ${update.latestVersion} available` 
-      : `Доступна версия ${update.latestVersion}`;
-    message.textContent = isEn 
-      ? "A new version of Eclipse Studio is available." 
-      : "Опубликована новая версия программы Eclipse Studio.";
-
-    // Извлекаем changelog строго на выбранном пользователем языке
-    const changelogText = extractChangelog(update.notes, isEn ? "en" : "ru");
-    if (changelogText) {
-      changelog.classList.remove("hidden");
-      changelogToggleText.textContent = isEn 
-        ? `Changelog (v${update.latestVersion})` 
-        : `Список изменений (v${update.latestVersion})`;
-      changelogBody.textContent = changelogText;
-    } else {
-      changelog.classList.add("hidden");
+  // Крестик и Esc во время установки отменяют её, иначе просто закрывают окно
+  function closeUpdateDialog() {
+    if (state.updates.installing) {
+      cancelAppUpdate();
+      return;
     }
-
-    footnote.classList.remove("hidden");
-    footnote.textContent = isEn 
-      ? "The new version will be automatically downloaded directly into this folder, and the old version will be removed upon restart." 
-      : "Новая версия будет автоматически скачана прямо в эту папку, а старая версия удалится при перезапуске.";
-
-    progressWrap.classList.add("hidden");
-
-    confirmBtn.classList.remove("hidden");
-    confirmBtn.textContent = update.portableUrl 
-      ? (isEn ? "Update now" : "Обновить сейчас") 
-      : (isEn ? "Download from website" : "Скачать с сайта");
-
-    cancelBtn.classList.remove("hidden");
-    cancelBtn.textContent = isEn ? "Postpone (10 launches)" : "Отложить (на 10 запусков)";
+    hideUpdateDialog();
   }
 
-  // Отображение диалога обновления со свёрнутым списком изменений и поддержкой комбинированного режима
-  function promptAppUpdate(update, loaderUpdate = null) {
-    activeUpdatePrompt = { update, loaderUpdate };
-    const isEn = window.cgsI18n?.language === "en";
-    const backdrop = $("#app-update-backdrop");
-    const changelog = $("#app-update-changelog");
-    const step2 = $("#app-update-step2");
-    if (changelog) changelog.open = false; // Список изменений по умолчанию свёрнут
-    if (step2) step2.classList.add("hidden");
-
-    renderAppUpdateModal(update);
-    backdrop.classList.remove("hidden", "closing");
-
-    const confirmBtn = $("#app-update-confirm");
-    const cancelBtn = $("#app-update-cancel");
-    const hasLoaderUpdate = Boolean(loaderUpdate?.updateAvailable);
-
-    if (hasLoaderUpdate) {
-      // Комбинированный режим: если есть обновление программы и DLL — на шаге 1 показываем кнопку "Далее"
-      confirmBtn.textContent = isEn ? "Next →" : "Далее →";
-      cancelBtn.textContent = isEn ? "Postpone (10 launches)" : "Отложить (на 10 запусков)";
-
-      confirmBtn.onclick = () => {
-        // Переход на шаг 2: выбор параметров обновления программы и библиотек Steam
-        changelog?.classList.add("hidden");
-        $("#app-update-footnote")?.classList.add("hidden");
-        step2?.classList.remove("hidden");
-
-        confirmBtn.textContent = update.portableUrl
-          ? (isEn ? "Update now" : "Обновить сейчас")
-          : (isEn ? "Download from website" : "Скачать с сайта");
-        cancelBtn.textContent = isEn ? "Back" : "Назад";
-
-        cancelBtn.onclick = () => {
-          // Возврат к шагу 1 (просмотр списка изменений программы)
-          promptAppUpdate(update, loaderUpdate);
-        };
-
-        confirmBtn.onclick = async () => {
-          const scope = $("input[name='app-update-scope']:checked")?.value || "both";
-          clearPostponeUpdate();
-          clearLoaderPostpone();
-
-          if (scope === "both") {
-            const closed = await ensureSteamClosedForLoader();
-            if (!closed) return;
-
-            try {
-              const res = await call("luatools_update_loader", {
-                steamPath: state.lua.steamPath || null,
-                variant: state.lua.loaderSource || null,
-              });
-              if (res?.success) {
-                toast(isEn ? "OpenSteamTool libraries updated successfully" : "Библиотеки OpenSteamTool успешно обновлены", "success");
-                $("#loader-update-banner")?.classList.add("hidden");
-                if (state.lua.loaderUpdate) state.lua.loaderUpdate.updateAvailable = false;
-              }
-            } catch (err) {
-              log(`Ошибка обновления DLL в комбинированном режиме: ${err}`, "warn");
-            }
-          }
-
-          if (update.portableUrl) {
-            await startAppUpdate(update);
-          } else {
-            const preferredUrl = update.installerUrl || update.releaseUrl;
-            await call("open_external", { url: preferredUrl });
-            closeAppUpdateModal();
-          }
-        };
-      };
-
-      cancelBtn.onclick = () => {
-        postponeStartupUpdate(update.latestVersion);
-        closeAppUpdateModal();
-        toast(isEn ? "Update reminder postponed for 10 launches" : "Напоминание об обновлении отложено на 10 запусков");
-      };
-    } else {
-      // Обычный режим обновления только приложения
-      confirmBtn.onclick = async () => {
-        clearPostponeUpdate();
-        if (update.portableUrl) {
-          await startAppUpdate(update);
-        } else {
-          const preferredUrl = update.installerUrl || update.releaseUrl;
-          await call("open_external", { url: preferredUrl });
-          closeAppUpdateModal();
-        }
-      };
-
-      cancelBtn.onclick = () => {
-        postponeStartupUpdate(update.latestVersion);
-        closeAppUpdateModal();
-        toast(isEn ? "Update reminder postponed for 10 launches" : "Напоминание об обновлении отложено на 10 запусков");
-      };
+  function deferUpdate() {
+    if (state.updates.installing) return;
+    if (activeUpdatePrompt?.step === 2 && (state.updates.dialogState || "ready") === "ready") {
+      activeUpdatePrompt.step = 1;
+      renderUpdateDialog();
+      return;
     }
-  }
-
-  async function startAppUpdate(updateInfo) {
-    if (isUpdatingApp) return;
-    isUpdatingApp = true;
-
-    const isEn = window.cgsI18n?.language === "en";
-    const backdrop = $("#app-update-backdrop");
-    const title = $("#app-update-title");
-    const message = $("#app-update-message");
-    const symbol = $("#app-update-symbol");
-    const changelog = $("#app-update-changelog");
-    const footnote = $("#app-update-footnote");
-    const progressWrap = $("#app-update-progress-wrap");
-    const progressFill = $("#app-update-progress-fill");
-    const bytesText = $("#app-update-progress-bytes");
-    const speedText = $("#app-update-progress-speed");
-    const confirmBtn = $("#app-update-confirm");
-    const cancelBtn = $("#app-update-cancel");
-
-    // Переводим окно в режим скачивания: скрываем changelog и сноску, открываем прогресс-бар
-    changelog?.classList.add("hidden");
-    footnote?.classList.add("hidden");
-    backdrop.classList.remove("hidden", "closing");
-
-    title.textContent = isEn 
-      ? `Downloading Eclipse Studio v${updateInfo.latestVersion}` 
-      : `Загрузка Eclipse Studio v${updateInfo.latestVersion}`;
-    message.textContent = isEn 
-      ? "Downloading new binary into application folder…" 
-      : "Скачивание нового файла в папку программы…";
-    symbol.textContent = "↓";
-    progressWrap.classList.remove("hidden");
-    progressFill.style.width = "0%";
-    bytesText.textContent = isEn ? "Connecting to server…" : "Подключение к серверу…";
-    speedText.textContent = "";
-    confirmBtn.classList.add("hidden");
-    cancelBtn.classList.add("hidden");
-
     try {
-      if (window.__TAURI__?.event?.listen) {
-        appUpdateUnlisten = await window.__TAURI__.event.listen("app-update-progress", (event) => {
-          const payload = event.payload;
-          if (!payload) return;
-          const pct = Math.min(100, Math.max(0, payload.percentage || 0));
-          progressFill.style.width = `${pct}%`;
+      window.cgsStorage.setItem(UPDATE_SNOOZE_KEY, String(UPDATE_SNOOZE_LAUNCHES));
+      rememberUpdateSnooze(true);
+    } catch (_) {}
+    state.updates.snoozedThisLaunch = true;
+    hideUpdateDialog();
+    setUpdateStatus("Напомним об обновлении после следующих пяти запусков.", "We will remind you after the next five launches.", "available");
+    toast(updateText("Обновление отложено на 5 запусков", "Update postponed for 5 launches"));
+  }
 
-          const dlMb = (payload.downloadedBytes / (1024 * 1024)).toFixed(1);
-          const totalMb = (payload.totalBytes / (1024 * 1024)).toFixed(1);
-          const speedMb = (payload.speedBytesPerSec / (1024 * 1024)).toFixed(1);
-
-          if (payload.totalBytes > 0) {
-            bytesText.textContent = isEn 
-              ? `${dlMb} MB / ${totalMb} MB (${pct}%)` 
-              : `${dlMb} МБ / ${totalMb} МБ (${pct}%)`;
-          } else {
-            bytesText.textContent = isEn 
-              ? `${dlMb} MB downloaded` 
-              : `${dlMb} МБ скачано`;
-          }
-          speedText.textContent = payload.completed 
-            ? (isEn ? "Completed" : "Завершено") 
-            : (isEn ? `${speedMb} MB/s` : `${speedMb} МБ/с`);
-        });
-      }
-
-      // Запуск скачивания в бэкенде
-      const result = await call("download_app_update", {
-        downloadUrl: updateInfo.portableUrl || null,
-        version: updateInfo.latestVersion || null,
-      });
-
-      // Успешно загружено
-      title.textContent = isEn ? "Update ready to install!" : "Обновление готово к установке!";
-      message.textContent = isEn 
-        ? `Version v${result.version} successfully downloaded. Restart application now? On startup, the old version will be replaced automatically.` 
-        : `Версия v${result.version} успешно скачана. Перезапустить приложение сейчас? При запуске старая версия будет автоматически заменена.`;
-      symbol.textContent = "✓";
-      progressFill.style.width = "100%";
-      bytesText.textContent = isEn ? "100% — download completed" : "100% — загрузка завершена";
-      speedText.textContent = "";
-
-      confirmBtn.textContent = isEn ? "Restart now" : "Перезапустить сейчас";
-      confirmBtn.classList.remove("hidden");
-      cancelBtn.textContent = isEn ? "Later" : "Позже";
-      cancelBtn.classList.remove("hidden");
-
-      confirmBtn.onclick = async () => {
-        try {
-          setBusy(confirmBtn, true, isEn ? "Restarting…" : "Перезапуск…");
-          await call("launch_app_update", { filePath: result.filePath });
-        } catch (error) {
-          toast(errorText(error), "error");
-          setBusy(confirmBtn, false);
-        }
-      };
-
-      cancelBtn.onclick = () => {
-        closeAppUpdateModal();
-        toast(isEn ? `Update v${result.version} is ready in application folder` : `Обновление v${result.version} готово в папке программы`);
-      };
-
+  async function cancelAppUpdate() {
+    if (!state.updates.installing || state.updates.cancelling || state.updates.committing) return;
+    state.updates.cancelling = true;
+    renderUpdateDialog();
+    // До запуска загрузки отмена применяется после текущего шага (обновления библиотек)
+    if (!state.updates.nativeStarted) return;
+    try {
+      await call("cancel_update");
     } catch (error) {
-      title.textContent = isEn ? "Update download failed" : "Ошибка загрузки обновления";
-      message.textContent = errorText(error);
-      symbol.textContent = "!";
-      progressWrap.classList.add("hidden");
-      confirmBtn.classList.add("hidden");
-      cancelBtn.textContent = isEn ? "Close" : "Закрыть";
-      cancelBtn.classList.remove("hidden");
-      cancelBtn.onclick = () => closeAppUpdateModal();
+      state.updates.cancelling = false;
+      renderUpdateDialog();
       toast(errorText(error), "error");
-    } finally {
-      isUpdatingApp = false;
-      if (appUpdateUnlisten) {
-        try { appUpdateUnlisten(); } catch (_) {}
-        appUpdateUnlisten = null;
+    }
+  }
+
+  // Библиотеки OpenSteamTool обновляются перед программой, если пользователь выбрал оба пункта
+  async function updateLoaderBeforeApp() {
+    const closed = await ensureSteamClosedForLoader();
+    if (!closed) return false;
+    try {
+      const result = await call("luatools_update_loader", {
+        steamPath: state.lua.steamPath || null,
+        variant: state.lua.loaderSource || null,
+      });
+      if (result?.success) {
+        clearLoaderPostpone();
+        toast(updateText("Библиотеки OpenSteamTool успешно обновлены", "OpenSteamTool libraries updated successfully"), "success");
+        $("#loader-update-banner")?.classList.add("hidden");
+        if (state.lua.loaderUpdate) state.lua.loaderUpdate.updateAvailable = false;
+      } else {
+        log(`Обновление DLL перед обновлением программы: ${result?.message || "без подробностей"}`, "warn");
       }
+    } catch (error) {
+      log(`Ошибка обновления DLL в комбинированном режиме: ${errorText(error)}`, "warn");
+    }
+    return true;
+  }
+
+  function finishUpdateAttempt(view, message = "") {
+    state.updates.installing = false;
+    state.updates.cancelling = false;
+    state.updates.committing = false;
+    state.updates.nativeStarted = false;
+    state.updates.dialogState = view;
+    state.updates.failure = message;
+    $("#check-update-button").disabled = false;
+    renderUpdateDownloads(state.updates.latest);
+    if (updateDialogOpen()) renderUpdateDialog();
+  }
+
+  async function installAppUpdate() {
+    const update = state.updates.latest;
+    const prompt = activeUpdatePrompt;
+    if (state.updates.installing || !update?.inAppSupported) return;
+    const view = state.updates.dialogState || "ready";
+    // Комбинированный режим: сначала выбор, обновлять ли библиотеки Steam
+    if (prompt?.loaderUpdate && view === "ready" && prompt.step !== 2) {
+      prompt.step = 2;
+      renderUpdateDialog();
+      $("#app-update-install").focus({ preventScroll: true });
+      return;
+    }
+    if (otherOperationsRunning()) {
+      toast(updateText("Дождитесь завершения текущих операций перед обновлением.", "Wait for current operations to finish before updating."), "info");
+      return;
+    }
+    const scope = prompt?.loaderUpdate && prompt.step === 2
+      ? ($("input[name='app-update-scope']:checked")?.value || "both")
+      : "app_only";
+    const loaderPending = scope === "both" && state.lua.loaderUpdate?.updateAvailable !== false;
+    state.updates.installing = true;
+    state.updates.cancelling = false;
+    state.updates.committing = false;
+    state.updates.nativeStarted = false;
+    state.updates.downloadSamples = [];
+    state.updates.speed = 0;
+    state.updates.failure = "";
+    state.updates.progress = { phase: loaderPending ? "loader" : "preparing" };
+    try { window.cgsStorage.removeItem(UPDATE_SNOOZE_KEY); } catch (_) {}
+    $("#check-update-button").disabled = true;
+    renderUpdateDialog();
+    renderUpdateDownloads(update);
+    setUpdateStatus(updateText("Обновление программы…", "Updating the app…"));
+    $("#app-update-cancel").focus({ preventScroll: true });
+    try {
+      if (loaderPending) {
+        const proceed = await updateLoaderBeforeApp();
+        if (!proceed && !state.updates.cancelling) {
+          finishUpdateAttempt("ready");
+          setUpdateStatus(`Доступна версия ${update.latestVersion}`, `Version ${update.latestVersion} available`, "available");
+          return;
+        }
+      }
+      if (state.updates.cancelling) throw UPDATE_CANCELLED;
+      state.updates.progress = { phase: "preparing" };
+      state.updates.nativeStarted = true;
+      renderUpdateDialog();
+      await call("install_update", { version: update.latestVersion });
+      // Программа закроется сама: окно остаётся в состоянии перезапуска
+      state.updates.committing = true;
+      state.updates.progress = { phase: "restarting" };
+      renderUpdateDialog();
+      setUpdateStatus("Установка и перезапуск программы…", "Installing and restarting the app…");
+    } catch (error) {
+      const message = errorText(error);
+      const cancelled = state.updates.cancelling || message === UPDATE_CANCELLED;
+      finishUpdateAttempt(cancelled ? "cancelled" : "error", cancelled ? "" : message);
+      if (cancelled) setUpdateStatus("Обновление отменено", "Update cancelled", "available");
+      else setUpdateStatus(message, message, "error");
+      log(cancelled ? "Обновление программы отменено" : `Обновление программы: ${message}`, cancelled ? "info" : "error");
+      if (!updateDialogOpen()) toast(cancelled ? updateText("Обновление отменено", "Update cancelled") : message, cancelled ? "info" : "error");
+    }
+  }
+
+  // Ход установки из бэкенда (событие cgs-update-progress)
+  function updateProgress(value = {}) {
+    if (!state.updates.installing || !value) return;
+    const phase = value.phase || "preparing";
+    if (phase === "downloading") {
+      const now = performance.now();
+      let samples = state.updates.downloadSamples || [];
+      const downloaded = Number(value.downloaded) || 0;
+      if (samples.length && downloaded < samples.at(-1).bytes) samples = [];
+      samples.push({ time: now, bytes: downloaded });
+      while (samples.length > 2 && now - samples[0].time > 3000) samples.shift();
+      state.updates.downloadSamples = samples;
+      const elapsed = (now - samples[0].time) / 1000;
+      state.updates.speed = elapsed > 0.05 ? Math.max(0, (downloaded - samples[0].bytes) / elapsed) : 0;
+    } else {
+      state.updates.downloadSamples = [];
+      state.updates.speed = 0;
+    }
+    state.updates.committing = phase === "restarting";
+    state.updates.progress = value;
+    renderUpdateDialog();
+    renderUpdateDownloads(state.updates.latest);
+    const label = updatePhaseLabel(phase);
+    state.updates.status = { ru: label, en: label, kind: "" };
+    $("#update-status").textContent = label;
+    $("#update-status").classList.remove("available", "error");
+  }
+
+  // Запуск: сигнал здоровья новой версии, итог прошлой установки и счётчик откладываний
+  async function initUpdates() {
+    if (!invoke) return;
+    try {
+      const outcome = await call("update_launch_ready");
+      if (typeof outcome?.success === "boolean") {
+        if (outcome.success) window.cgsStorage.removeItem(UPDATE_SNOOZE_KEY);
+        else state.updates.suppressAuto = true;
+        setUpdateStatus(outcome.message, outcome.message, outcome.success ? "" : "error");
+        log(outcome.message, outcome.success ? "success" : "error");
+        toast(outcome.message, outcome.success ? "success" : "error");
+      }
+    } catch (error) {
+      log(`Итог обновления: ${errorText(error)}`, "error");
+    }
+    // Старый счётчик «10 запусков» больше не используется
+    for (const key of ["cgs-postpone-update-version", "cgs-postpone-update-launches"]) {
+      try { window.cgsStorage.removeItem(key); } catch (_) {}
+    }
+    try {
+      const info = await call("platform_info");
+      window.cgsAppSession = info?.sessionId || null;
+    } catch (_) {}
+    state.updates.snoozedThisLaunch = consumeUpdateSnooze();
+    try {
+      await tauri?.event?.listen?.("cgs-update-progress", (event) => updateProgress(event.payload));
+    } catch (error) {
+      log(`Ход обновления: ${errorText(error)}`, "error");
     }
   }
 
   function renderUpdateDownloads(update = null) {
     state.updates.latest = update;
-    const actions = $("#update-download-actions");
+    const available = Boolean(update?.available);
     const installBtn = $("#update-install-button");
-    const portable = $("#download-portable-button");
-    const installer = $("#download-installer-button");
-    const hasPortable = Boolean(update?.portableUrl);
-    installBtn?.classList.toggle("hidden", !hasPortable);
-    portable.classList.toggle("hidden", !update?.portableUrl);
-    installer.classList.toggle("hidden", !update?.installerUrl);
-    actions.classList.toggle("hidden", !update?.portableUrl && !update?.installerUrl);
+    if (installBtn) {
+      installBtn.classList.toggle("hidden", !available);
+      installBtn.disabled = !update?.inAppSupported && !state.updates.installing;
+      installBtn.textContent = state.updates.installing
+        ? updateText("Ход обновления", "Update progress")
+        : updateText("Обновить и перезапустить", "Update and restart");
+      installBtn.title = update?.inAppSupported || !available
+        ? ""
+        : updateText("В релизе нет проверяемого EXE для обновления внутри программы.", "This release has no verified EXE for in-app updates.");
+    }
+    $("#download-portable-button").classList.toggle("hidden", !update?.portableUrl);
+    $("#download-installer-button").classList.toggle("hidden", !update?.installerUrl);
+    $("#update-download-actions").classList.toggle("hidden", !available);
   }
 
   async function openUpdateDownload(kind) {
@@ -2840,59 +3092,21 @@
     await call("open_external", { url: url || update.releaseUrl });
   }
 
-  const POSTPONE_LAUNCH_COUNT = 10;
-
-  function shouldPromptStartupUpdate(version) {
-    try {
-      const postponedVersion = window.cgsStorage.getItem("cgs-postpone-update-version");
-      const launchesLeftStr = window.cgsStorage.getItem("cgs-postpone-update-launches");
-      if (postponedVersion !== version) {
-        return true;
-      }
-      const launchesLeft = Number(launchesLeftStr) || 0;
-      if (launchesLeft > 0) {
-        window.cgsStorage.setItem("cgs-postpone-update-launches", String(launchesLeft - 1));
-        return false;
-      }
-      return true;
-    } catch (_) {
-      return true;
-    }
-  }
-
-  function postponeStartupUpdate(version) {
-    try {
-      window.cgsStorage.setItem("cgs-postpone-update-version", version);
-      window.cgsStorage.setItem("cgs-postpone-update-launches", String(POSTPONE_LAUNCH_COUNT));
-    } catch (_) {}
-  }
-
-  function clearPostponeUpdate() {
-    try {
-      window.cgsStorage.removeItem("cgs-postpone-update-version");
-      window.cgsStorage.removeItem("cgs-postpone-update-launches");
-    } catch (_) {}
-  }
-
   async function checkForUpdates(interactive = false) {
-    if (state.updates.checking) return;
-    const isEn = window.cgsI18n?.language === "en";
+    if (!interactive) await state.updates.ready;
+    if (state.updates.checking || state.updates.installing) return;
 
     if (!invoke) {
-      if (interactive) {
-        toast(isEn ? "Development mode (no Tauri backend)." : "Режим разработки (без Tauri backend).");
-      }
+      if (interactive) toast(updateText("Режим разработки (без Tauri backend).", "Development mode (no Tauri backend)."));
       return;
     }
     state.updates.checking = true;
     const button = $("#check-update-button");
-    const status = $("#update-status");
-    setBusy(button, true, isEn ? "Checking…" : "Проверяем…");
-    status.classList.remove("available", "error");
-    status.textContent = isEn ? "Connecting to GitHub…" : "Подключение к GitHub…";
+    setBusy(button, true, updateText("Проверяем…", "Checking…"));
+    setUpdateStatus("Подключение к GitHub…", "Connecting to GitHub…");
 
     try {
-      // При фоновой проверке на старте запускаем параллельную проверку обновлений программы и библиотек OpenSteamTool
+      // При фоновой проверке на старте параллельно проверяем библиотеки OpenSteamTool
       const [update, loaderUpdate] = await Promise.all([
         call("check_for_update"),
         !interactive
@@ -2902,65 +3116,69 @@
 
       if (loaderUpdate) {
         state.lua.loaderUpdate = loaderUpdate;
-        const banner = $("#loader-update-banner");
-        if (banner) {
-          banner.classList.toggle("hidden", !loaderUpdate.updateAvailable);
-        }
+        $("#loader-update-banner")?.classList.toggle("hidden", !loaderUpdate.updateAvailable);
       }
 
       $("#update-current-version").textContent = update.currentVersion;
       state.version = update.currentVersion;
       const aboutVerEl = $("#about-app-version");
-      if (aboutVerEl) {
-        aboutVerEl.textContent = update.currentVersion;
-      }
+      if (aboutVerEl) aboutVerEl.textContent = update.currentVersion;
+      const promptLoader = () => {
+        if (!interactive && loaderUpdate?.updateAvailable && shouldPromptLoaderStartupUpdate()) promptLoaderUpdateModal(loaderUpdate);
+      };
+
       if (!update.available) {
         renderUpdateDownloads();
-        status.textContent = isEn ? `Latest version ${update.currentVersion} is installed` : `Установлена актуальная версия ${update.currentVersion}`;
-        if (interactive) toast(isEn ? "You have the latest version installed" : "У вас установлена последняя версия");
-
-        // Если обновления приложения нет, но есть фоновое обновление библиотек OpenSteamTool при запуске
-        if (!interactive && loaderUpdate?.updateAvailable && shouldPromptLoaderStartupUpdate()) {
-          promptLoaderUpdateModal(loaderUpdate);
-        }
+        setUpdateStatus(`Установлена актуальная версия ${update.currentVersion}`, `Version ${update.currentVersion} is up to date`);
+        if (interactive) toast(updateText("У вас установлена последняя версия", "You have the latest version installed"));
+        promptLoader();
         return;
       }
 
       renderUpdateDownloads(update);
-      status.textContent = isEn ? `Version ${update.latestVersion} available` : `Доступна версия ${update.latestVersion}`;
-      status.classList.add("available");
+      if (!update.inAppSupported) {
+        setUpdateStatus(
+          `Доступна версия ${update.latestVersion}. В релизе нет проверяемого EXE для обновления внутри программы — скачайте его вручную.`,
+          `Version ${update.latestVersion} is available. This release has no verified EXE for in-app updates, so download it manually.`,
+          "available"
+        );
+        if (interactive || state.updates.promptedVersion !== update.latestVersion) {
+          state.updates.promptedVersion = update.latestVersion;
+          toast(updateText(`Доступна версия ${update.latestVersion}: скачайте её в разделе «Обновления»`, `Version ${update.latestVersion} is available: download it in Updates`));
+        }
+        promptLoader();
+        return;
+      }
+      setUpdateStatus(`Доступна версия ${update.latestVersion}`, `Version ${update.latestVersion} available`, "available");
       if (!interactive) {
-        if (!shouldPromptStartupUpdate(update.latestVersion)) {
-          // Если обновление приложения отложено, проверяем показ обновления библиотек
-          if (loaderUpdate?.updateAvailable && shouldPromptLoaderStartupUpdate()) {
-            promptLoaderUpdateModal(loaderUpdate);
-          }
+        // Отложено, подавлено после неудачной установки, уже показано или идут операции
+        const skip = state.updates.snoozedThisLaunch || state.updates.suppressAuto
+          || state.updates.promptedVersion === update.latestVersion || otherOperationsRunning();
+        if (skip) {
+          promptLoader();
           return;
         }
-        if (state.updates.promptedVersion === update.latestVersion) return;
       }
       state.updates.promptedVersion = update.latestVersion;
-
-      // Открываем модальное окно с выбором и свёрнутым changelog (с поддержкой комбинированного режима)
-      promptAppUpdate(update, loaderUpdate);
+      showUpdateDialog(loaderUpdate);
     } catch (error) {
       const message = errorText(error);
-      status.textContent = message;
-      status.classList.add("error");
+      setUpdateStatus(message, message, "error");
       log(`Проверка обновлений: ${message}`, "error");
       if (interactive) toast(message, "error");
     } finally {
       state.updates.checking = false;
       setBusy(button, false);
+      button.disabled = state.updates.installing;
     }
   }
 
   function bindEvents() {
     // Мгновенное обновление окна обновления при смене языка интерфейса
     window.addEventListener("cgs:language-changed", () => {
-      if (activeUpdatePrompt && !$("#app-update-backdrop").classList.contains("hidden") && !isUpdatingApp) {
-        renderAppUpdateModal(activeUpdatePrompt);
-      }
+      if (updateDialogOpen()) renderUpdateDialog();
+      renderUpdateStatus();
+      if (state.updates.latest) renderUpdateDownloads(state.updates.latest);
     });
 
     document.addEventListener("contextmenu", (event) => event.preventDefault(), { capture: true });
@@ -3076,7 +3294,7 @@
     $("#lua-steam-browse").addEventListener("click", async () => {
       try {
         const path = await call("pick_game_directory");
-        if (path) { state.lua.steamPath = path; window.cgsStorage.setItem("luaSteamPath", path); await luaRefresh(); }
+        if (path) { state.lua.steamPath = path; window.cgsStorage.setItem("luaSteamPath", path); await luaRefresh(); window.cgsLocalCloud?.refresh(); }
       } catch (error) { toast(errorText(error), "error"); }
     });
     $("#lua-steam-path").addEventListener("change", (event) => {
@@ -3148,26 +3366,26 @@
       if (event.target === telegramModal) closeTelegramHub();
     });
     const appUpdateModal = $("#app-update-backdrop");
+    // Щелчок мимо окна закрывает его, но не отменяет идущую установку
     appUpdateModal?.addEventListener("click", (event) => {
-      if (event.target === appUpdateModal && !isUpdatingApp) {
-        appUpdateModal.classList.add("closing");
-        setTimeout(() => {
-          appUpdateModal.classList.add("hidden");
-          appUpdateModal.classList.remove("closing");
-        }, 190);
-      }
+      if (event.target === appUpdateModal && !state.updates.installing) hideUpdateDialog();
     });
 
     const loaderModalBackdrop = $("#loader-update-backdrop");
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Tab" && updateDialogOpen()) {
+        const controls = [...appUpdateModal.querySelectorAll("button:not(:disabled), summary, input:not(:disabled)")].filter((node) => node.getClientRects().length);
+        const first = controls[0];
+        const last = controls.at(-1);
+        if (event.shiftKey && (document.activeElement === first || !controls.includes(document.activeElement))) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || !controls.includes(document.activeElement))) { event.preventDefault(); first?.focus(); }
+        return;
+      }
       if (event.key === "Escape") {
-        if (appUpdateModal && !appUpdateModal.classList.contains("hidden") && !isUpdatingApp) {
-          appUpdateModal.classList.add("closing");
-          setTimeout(() => {
-            appUpdateModal.classList.add("hidden");
-            appUpdateModal.classList.remove("closing");
-          }, 190);
+        if (updateDialogOpen()) {
+          event.preventDefault();
+          closeUpdateDialog();
         } else if (loaderModalBackdrop && !loaderModalBackdrop.classList.contains("hidden")) {
           closeLoaderUpdateModal();
         } else if (telegramModal && !telegramModal.classList.contains("hidden")) {
@@ -3280,7 +3498,11 @@
         }
       } catch (_) {}
     });
-    let ryuuKeyTimer = null;
+    $$('input[name="ryuu-key-source"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.checked) applyRyuuKeySource(input.value);
+      });
+    });
     $("#ryuu-key")?.addEventListener("input", (event) => {
       state.lua.ryuuKey = event.currentTarget.value.trim();
       clearTimeout(secretSaveTimers.ryuu); secretSaveTimers.ryuu = setTimeout(() => saveApiSecret("ryuu", event.target).catch(() => {}), 500);
@@ -3305,11 +3527,11 @@
       } catch (_) {}
     });
     $("#check-update-button").addEventListener("click", () => checkForUpdates(true));
-    $("#update-install-button")?.addEventListener("click", () => {
-      if (state.updates.latest) {
-        startAppUpdate(state.updates.latest);
-      }
-    });
+    $("#update-install-button")?.addEventListener("click", () => showUpdateDialog());
+    $("#app-update-install").addEventListener("click", installAppUpdate);
+    $("#app-update-defer").addEventListener("click", deferUpdate);
+    $("#app-update-cancel").addEventListener("click", cancelAppUpdate);
+    $("#app-update-close").addEventListener("click", closeUpdateDialog);
     $("#download-portable-button").addEventListener("click", () => openUpdateDownload("portable").catch((error) => toast(errorText(error), "error")));
     $("#download-installer-button").addEventListener("click", () => openUpdateDownload("installer").catch((error) => toast(errorText(error), "error")));
 
@@ -3324,6 +3546,8 @@
     if (tauri?.event?.listen) {
       call("enable_file_drop").catch(() => {});
       const onDropPaths = (paths) => {
+        // Перетаскивание файлов не запускает операции во время обновления программы
+        if (state.updates.installing) return;
         const path = (paths || [])[0];
         if (!path) return;
         if ($("#view-lua").classList.contains("active")) {
@@ -3344,7 +3568,9 @@
 
   function boot() {
     bindEvents();
-    applyAccent(window.cgsStorage.getItem("accent") || "mint");
+    // Сигнал здоровья после обновления и счётчик откладываний — до фоновой проверки версий
+    state.updates.ready = initUpdates().catch(() => {});
+    applyAccent(window.cgsStorage.getItem("accent") || "white");
     // Раздел при запуске: ?view= в адресе важнее настройки «Открывать при запуске»
     const requestedView = new URLSearchParams(window.location.search).get("view");
     const start = requestedView && viewMeta[requestedView] ? { view: requestedView, tab: "" }
@@ -3357,6 +3583,10 @@
     state.lua.service = window.cgsStorage.getItem("manifestService") === "hubcap" ? "hubcap" : "ryuu";
     state.lua.hubcapKey = window.cgsStorage.isSecretConfigured("hubcap") ? "stored" : "";
     state.lua.ryuuKey = window.cgsStorage.isSecretConfigured("ryuu") ? "stored" : "";
+    const savedRyuuKeySource = window.cgsStorage.getItem("ryuuKeySource");
+    applyRyuuKeySource(["crocodile", "custom"].includes(savedRyuuKeySource)
+      ? savedRyuuKeySource
+      : state.lua.ryuuKey ? "custom" : "crocodile");
     applyManifestService(state.lua.service);
     $("#hubcap-key").value = ""; $("#hubcap-key").placeholder = state.lua.hubcapKey ? "Ключ сохранён в Windows. Введите новый для замены" : "API-ключ HubCap";
     if ($("#ryuu-key")) { $("#ryuu-key").value = ""; $("#ryuu-key").placeholder = state.lua.ryuuKey ? "Ключ сохранён в Windows. Введите новый для замены" : "API-ключ Ryuu"; }
@@ -3364,7 +3594,7 @@
     updateRyuuKeyStatus();
     renderLoaderInfo();
     updateAboutInfo();
-    log("Eclipse Studio 8.4.0 инициализирован", "system");
+    log("Eclipse Studio 9.0.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный вызов отображения окна, если заставка была отключена в параметрах
@@ -3390,7 +3620,7 @@
       }, 30_000);
       setInterval(() => {
         if ($("#view-lua")?.classList.contains("active")) refreshMillenniumStatus();
-        // Диагностика не изменяет папку Steam в фоне.
+        // Диагностика не изменяет папку Steam в фоне
       }, 4_000);
     }
 
@@ -3407,6 +3637,36 @@
   }
 
   window.cgsOpenGame = path => { switchView("fix"); $("#game-path").value = path; scanDirectory(path); };
+  // Тихо загружаем игры Manifest и Steam для быстрого поиска без обновления страниц и уведомлений
+  window.cgsLibrary = {
+    manifest: () => state.lua.loaded ? state.lua.games.map((game) => ({ appid: String(game.appid), name: state.lua.names[game.appid] || "" })) : null,
+    steam: () => state.dlc.libraryScanned ? state.dlc.games.map((game) => ({ ...game })) : null,
+    async loadManifest(known = {}) {
+      const status = await call("luatools_status", { steamPath: state.lua.steamPath || null });
+      const ids = (status?.games || []).map((game) => String(game.appid));
+      const missing = ids.filter((appid) => !state.lua.names[appid] && !known[appid]);
+      if (missing.length) {
+        const names = await call("luatools_names", { appids: missing.map(Number) }).catch(() => null);
+        if (names) Object.assign(state.lua.names, names);
+      }
+      return ids.map((appid) => ({ appid, name: state.lua.names[appid] || known[appid] || "" }));
+    },
+    async loadSteam() {
+      const result = await call("scan_installed_steam_games", { steamPath: state.lua.steamPath || null, libraryPath: state.dlc.extraLibrary || null });
+      return (result?.games || []).map((game) => ({ ...game }));
+    },
+    openManifest(appid) {
+      switchView("lua");
+      luaOpenDetail(String(appid));
+    },
+    // Как нажатие на карточку игры в библиотеке Steam раздела DLC
+    openSteam(game) {
+      if (!game?.gameDir || state.dlc.scanning || state.dlc.libraryScanning || state.dlc.operating) return false;
+      switchView("dlc");
+      scanDlcDirectory(game.gameDir, game);
+      return true;
+    },
+  };
   if (window.cgsModulesLoading) window.addEventListener("cgs:modules-loaded", boot, {once:true});
   else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true }); else boot();
 })();

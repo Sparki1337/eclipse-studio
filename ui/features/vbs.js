@@ -1,12 +1,11 @@
-// Модуль VBS 2.0: управление изоляцией ядра, защитой целостности памяти (HVCI),
-// безопасностью BitLocker, Meltdown mitigation (KVA Shadow), UEFI Lock и системным гипервизором Windows.
+// Управление VBS, HVCI, BitLocker, KVA Shadow, UEFI Lock и гипервизором Windows
 
 (() => {
   "use strict";
 
   const invoke = window.cgsApi?.invoke;
   const $ = (selector, root = document) => root.querySelector(selector);
-  const state = { report: null, scanning: false, changing: false, troubleshooting: false };
+  const state = { report: null, scanning: false, changing: false, troubleshooting: false, lastScanAt: 0, scanFailed: false };
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -18,25 +17,39 @@
   }
 
   function call(command, args = {}) {
-    if (!invoke) return Promise.reject(new Error("Системный модуль VBS 2.0 недоступен"));
+    if (!invoke) return Promise.reject(new Error("Системный модуль VBS 2.0.1 недоступен"));
     return invoke(command, args);
   }
 
   function isActive() {
-    return $('[data-hv-tab-panel="vbs"]')?.classList.contains("active") === true;
+    return $("#view-hypervisor")?.classList.contains("active") === true
+      && $('[data-hv-tab-panel="vbs"]')?.classList.contains("active") === true;
   }
 
   // Кнопки, меняющие параметры загрузки: блокируются, пока состояние BitLocker не подтверждено
-  const BOOT_BUTTONS = ["#vbs-enable-all-btn", "#vbs-enable-button", "#vbs-disable-button", "#vbs-test-button"];
+  const BOOT_BUTTONS = ["#vbs-enable-all-btn", "#vbs-enable-button", "#vbs-disable-button", "#vbs-test-button", "#vbs-external-restore"];
   const BOOT_BUTTON_TITLES = { "#vbs-enable-all-btn": "Принудительно включить все механизмы защиты ядра Windows" };
   const BLOCKED_TITLE = "Заблокировано: состояние BitLocker не подтверждено";
   const BLOCKED_ADMIN_TITLE = "Заблокировано: запустите программу от имени администратора, чтобы проверить BitLocker";
 
+  // Источник отката и причина блокировки проверяются отдельно от текущего состояния DSE.
+  function bootBlockReason(selector) {
+    const report = state.report;
+    if (!report || state.scanFailed) return "Сначала выполните успешную проверку состояния Windows.";
+    if (report.bitlocker?.state === "unknown") return report.bitlocker?.needsAdmin ? BLOCKED_ADMIN_TITLE : BLOCKED_TITLE;
+    if (selector === "#vbs-external-restore") return report.external?.canRestore ? "" : report.external?.blockedReason || "Внешний журнал не прошёл проверку.";
+    if (selector === "#vbs-disable-button") return report.canRestore ? "" : "Нет проверенного снимка Eclipse для точного отката.";
+    if (selector === "#vbs-test-button" && testModeEnabled() && !report.external?.detected && !report.external?.pendingRestart) {
+      return report.canRestore ? "" : "Нет проверенного снимка Eclipse для точного отката.";
+    }
+    if (report.external?.detected || report.external?.pendingRestart) return report.external.blockedReason || "Сначала выключите внешний режим VBS.cmd по его журналу.";
+    if (selector === "#vbs-enable-all-btn") return "";
+    return report.enableBlockReason || "";
+  }
+
   // Подсказка на кнопке загрузки: причина блокировки или исходный текст
-  function updateBootButtonTitle(button, selector, blocked) {
-    const title = blocked
-      ? (state.report?.bitlocker?.needsAdmin ? BLOCKED_ADMIN_TITLE : BLOCKED_TITLE)
-      : BOOT_BUTTON_TITLES[selector] || "";
+  function updateBootButtonTitle(button, selector, reason) {
+    const title = reason || BOOT_BUTTON_TITLES[selector] || "";
     if ((button.dataset.titleSource || "") === title) return;
     if (title) button.setAttribute("title", title);
     else button.removeAttribute("title");
@@ -46,6 +59,8 @@
   // Установка состояния занятости интерфейса при длительных операциях
   function setBusy(busy, label = "") {
     state.scanning = busy;
+    // Обновление программы ждёт окончания проверки и изменения параметров Windows
+    window.cgsReportBusy?.("vbs", busy || state.changing);
     $("#vbs-loading")?.classList.toggle("hidden", !busy);
     $("#vbs-components")?.classList.toggle("hidden", busy);
 
@@ -55,6 +70,7 @@
       "#vbs-enable-button",
       "#vbs-disable-button",
       "#vbs-test-button",
+      "#vbs-external-restore",
       "#vbs-uefi-optout-btn",
       "#vbs-fix-wmi",
       "#vbs-fix-sfc",
@@ -64,9 +80,9 @@
     buttons.forEach((selector) => {
       const button = $(selector);
       if (button) {
-        const blocked = state.report?.bitlocker?.state === "unknown" && BOOT_BUTTONS.includes(selector);
-        button.disabled = busy || state.changing || state.troubleshooting || (selector === "#vbs-test-button" && !state.report) || blocked;
-        if (BOOT_BUTTONS.includes(selector)) updateBootButtonTitle(button, selector, blocked);
+        const reason = BOOT_BUTTONS.includes(selector) ? bootBlockReason(selector) : "";
+        button.disabled = busy || state.changing || state.troubleshooting || Boolean(reason);
+        if (BOOT_BUTTONS.includes(selector)) updateBootButtonTitle(button, selector, reason);
       }
     });
 
@@ -84,12 +100,12 @@
     return component.enabled ? "Включён" : "Выключен";
   }
 
-  // Отрисовка актуального состояния параметров VBS 2.0
+  // Отрисовка актуального состояния параметров VBS 2.0.1
   function render() {
     const report = state.report;
     if (!report) return;
 
-    // 1. Статус BitLocker Safe Guard
+    // Статус BitLocker Safe Guard
     const bitlocker = report.bitlocker;
     if (bitlocker) {
       const badge = $("#vbs-bitlocker-badge");
@@ -123,7 +139,7 @@
       $("#vbs-bitlocker-admin")?.classList.toggle("hidden", !(bitlocker.state === "unknown" && (bitlocker.needsAdmin === true || report.admin === false)));
     }
 
-    // 2. Статус Meltdown Mitigation (KVA Shadow)
+    // Статус Meltdown Mitigation (KVA Shadow)
     const kva = report.kvaShadow;
     if (kva) {
       const badge = $("#vbs-kva-badge");
@@ -145,7 +161,7 @@
       }
     }
 
-    // 3. Блокировка Device Guard в UEFI (UEFI Lock)
+    // Блокировка Device Guard в UEFI (UEFI Lock)
     const uefi = report.uefiLock;
     const uefiCard = $("#vbs-uefi-card");
     if (uefiCard) {
@@ -158,7 +174,7 @@
       }
     }
 
-    // 4. Список конфликтующего стороннего ПО
+    // Список конфликтующего стороннего ПО
     const conflicts = Array.isArray(report.conflicts) ? report.conflicts : [];
     const conflictsPanel = $("#vbs-conflicts-panel");
     const conflictsList = $("#vbs-conflicts-list");
@@ -184,7 +200,7 @@
       `).join("");
     }
 
-    // 5. Driver Signature Enforcement (DSE)
+    // Проверка подписи драйверов DSE
     const dse = report.dse || {};
     const dseCard = $("#vbs-dse-card");
     if (dseCard) dseCard.dataset.state = dse.state || "unknown";
@@ -203,7 +219,7 @@
           : "DSE TEST";
     }
 
-    // 6. Компоненты VBS (HVCI, Credential Guard, System Guard и др.)
+    // Компоненты VBS (HVCI, Credential Guard, System Guard и др.)
     const components = Array.isArray(report.components) ? report.components : [];
     $("#vbs-components").innerHTML = components.map((item) => `
       <article class="vbs-component ${item.enabled ? "enabled" : "disabled"} ${item.locked ? "locked" : ""}">
@@ -214,12 +230,12 @@
         <span>${escapeHtml(stateLabel(item))}</span>
       </article>`).join("");
 
-    // 7. Предупреждения и замечания
+    // Предупреждения и замечания
     const warnings = Array.isArray(report.warnings) ? report.warnings : [];
     $("#vbs-warning-panel").classList.toggle("hidden", warnings.length === 0);
     $("#vbs-warnings").innerHTML = warnings.map((warning) => `<p>${escapeHtml(warning)}</p>`).join("");
 
-    // 8. Кнопки переключения режимов
+    // Кнопки переключения режимов
     const dseIsOff = dse.state === "disabled";
     const rollbackMode = report.canRestore && dse.state === "enabled";
     const testEnabled = testModeEnabled(report);
@@ -232,22 +248,38 @@
       ? testEnabled ? "Тестовый режим включится после перезагрузки." : "Тестовый режим выключится после перезагрузки."
       : testActive ? "Тестовый режим активен." : "Тестовый режим выключен.";
 
-    $("#vbs-enable-button").classList.toggle("hidden", testEnabled || (report.canRestore && dseIsOff));
-    $("#vbs-disable-button").classList.toggle("hidden", testEnabled || !report.canRestore);
-    $("#vbs-disable-label").textContent = rollbackMode ? "Откатить визор" : "Выключить визор";
+    const external = report.external || {};
+    const externalVisible = external.detected === true || external.pendingRestart === true;
+    $("#vbs-external-card")?.classList.toggle("hidden", !externalVisible);
+    if (externalVisible) {
+      $("#vbs-external-detail").textContent = external.detail || "Найден журнал VBS.cmd / ARTIFACT.";
+      $("#vbs-external-count").textContent = String(external.trackedChanges || 0);
+      $("#vbs-external-badge").textContent = external.pendingRestart ? "ПЕРЕЗАГРУЗКА" : external.canRestore ? "ВНЕШНИЙ" : "ПРОВЕРЬТЕ";
+      $("#vbs-external-reason").textContent = external.blockedReason || "";
+      $("#vbs-external-reason").classList.toggle("hidden", !external.blockedReason);
+      $("#vbs-external-restore").classList.toggle("hidden", external.pendingRestart && !external.detected);
+    }
+    $("#vbs-enable-button").classList.toggle("hidden", externalVisible || testEnabled || (report.canRestore && dseIsOff));
+    $("#vbs-disable-button").classList.toggle("hidden", !report.canRestore || (testEnabled && !externalVisible));
+    $("#vbs-disable-label").textContent = external.detected ? "Откатить изменения Eclipse" : rollbackMode ? "Откатить визор" : "Выключить визор";
+    setBusy(state.scanning);
   }
 
   // Запуск глубокого сканирования подсистем Windows
-  async function scan() {
+  async function scan(options = {}) {
+    if (options.automatic && (!isActive() || document.hidden || Date.now() - state.lastScanAt < 2000)) return;
     if (state.scanning || state.changing || state.troubleshooting) return;
-    setBusy(true, "Проверка VBS 2.0…");
+    setBusy(true, "Проверка VBS 2.0.1…");
     try {
       state.report = await call("vbs_scan");
+      state.scanFailed = false;
+      state.lastScanAt = Date.now();
       $("#vbs-scan-time").textContent = `Последняя проверка: ${new Date().toLocaleTimeString(window.cgsI18n?.locale?.() || "ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
     } catch (error) {
+      state.scanFailed = true;
       $("#vbs-scan-time").textContent = "Ошибка проверки";
-      if (typeof window.cgsShowModal === "function") {
-        await window.cgsShowModal("Не удалось проверить VBS 2.0", String(error), { symbol: "!" });
+      if (!options.automatic && typeof window.cgsShowModal === "function") {
+        await window.cgsShowModal("Не удалось проверить VBS 2.0.1", String(error), { symbol: "!" });
       }
     } finally {
       setBusy(false);
@@ -257,6 +289,13 @@
 
   // Диалог подтверждения изменений режимов защиты
   async function confirmChange(mode) {
+    if (mode === "external-restore") {
+      const title = "Выключить внешний режим VBS.cmd?";
+      const message = "Программа восстановит только настройки, отмеченные журналом VBS.cmd / ARTIFACT: защиты Windows, параметры BCD и учтённые службы. Это не принудительное включение всех защит. Перед изменениями создаётся проверяемый DPAPI-снимок. Для завершения потребуется перезагрузка Windows.";
+      return typeof window.cgsShowModal === "function"
+        ? window.cgsShowModal(title, message, { confirm: true, confirmText: "Восстановить по журналу", cancelText: "Отмена", symbol: "↶" })
+        : window.confirm(`${title}\n\n${message}`);
+    }
     if (mode === "test-enable" || mode === "test-disable") {
       const enabling = mode === "test-enable";
       const title = enabling ? "Включить тестовый режим?" : "Выключить тестовый режим?";
@@ -272,7 +311,9 @@
     const rollbackMode = !enabling && state.report?.canRestore && state.report?.dse?.state === "enabled";
     const title = enabling ? "Включить визор?" : rollbackMode ? "Откатить визор?" : "Выключить визор?";
     const message = enabling
-      ? "Программа отключит VBS, HVCI, Credential Guard и системный гипервизор, оптимизирует KVA Shadow и подготовит одноразовое меню загрузки Windows. Если BitLocker активен, защита автоматически временно приостановится на 1 цикл перезагрузки. После перезапуска выберите «Отключить обязательную проверку подписи драйверов»."
+      ? (state.report?.preferredBootMode === "testsigning"
+        ? "Secure Boot отключён: как в VBS.cmd 2.0.1, программа подготовит Test Signing вместо одноразового меню. Сначала создаётся проверенный снимок и проверяется BitLocker. Для применения потребуется обычная перезагрузка Windows."
+        : "Программа отключит VBS, HVCI, Credential Guard и системный гипервизор, оптимизирует KVA Shadow и подготовит одноразовое меню загрузки Windows. Если BitLocker активен, защита автоматически временно приостановится на 1 цикл перезагрузки. После перезапуска выберите «Отключить обязательную проверку подписи драйверов».")
       : "Программа вернёт системные защиты и параметры загрузчика, сохранённые до включения визора. Для применения потребуется перезапуск Windows.";
 
     if (typeof window.cgsShowModal === "function") {
@@ -283,7 +324,9 @@
 
   // Запрос перезапуска системы после применения изменений
   async function askRestart(mode) {
-    const message = mode === "test-enable"
+    const message = mode === "external-restore"
+      ? "Внешние настройки восстановлены по журналу VBS.cmd. Сохраните файлы и перезагрузите Windows. После этого режим можно снова включить из Eclipse с собственным снимком восстановления."
+      : mode === "test-enable" || (mode === "enable" && state.report?.preferredBootMode === "testsigning")
       ? "Сохраните открытые файлы. После обычной перезагрузки Windows включится тестовый режим. Secure Boot должен быть отключён в BIOS/UEFI."
       : mode === "test-disable"
       ? "Сохраните открытые файлы. После перезагрузки вступят в силу исходные значения из снимка, включая исходное состояние тестового режима."
@@ -334,6 +377,8 @@
     if (!(await ensureAdmin())) return;
     state.changing = true;
     const enabling = mode === "enable";
+    const preparing = enabling || mode === "test-enable";
+    const externalRestore = mode === "external-restore";
     const testMode = mode === "test-enable" || mode === "test-disable";
     const rollbackMode = !enabling && state.report?.canRestore && state.report?.dse?.state === "enabled";
     setBusy(false);
@@ -343,10 +388,17 @@
 
     try {
       if (!(await confirmChange(mode))) return;
-      setBusy(false, testMode ? (mode === "test-enable" ? "Включение тестового режима…" : "Выключение тестового режима…") : (enabling ? "Включение визора…" : (rollbackMode ? "Откат визора…" : "Выключение визора…")));
+      setBusy(false, externalRestore ? "Восстановление внешнего режима…" : testMode ? (mode === "test-enable" ? "Включение тестового режима…" : "Выключение тестового режима…") : (enabling ? "Включение визора…" : (rollbackMode ? "Откат визора…" : "Выключение визора…")));
 
       let allowUefi = false;
-      if (enabling && state.report?.uefiLock?.isLocked) {
+      if (externalRestore && state.report?.external?.requiresUefiConsent) {
+        const consent = typeof window.cgsShowModal === "function"
+          ? await window.cgsShowModal("Восстановить UEFI Lock?", "Журнал VBS.cmd содержит восстановление блокировок VBS/HVCI/Credential Guard в UEFI. Это может потребовать физического подтверждения для последующего отключения. Применять только на личном, не управляемом организацией устройстве.", { confirm: true, confirmText: "Восстановить блокировки", cancelText: "Отмена", symbol: "!" })
+          : false;
+        if (!consent) return;
+        allowUefi = true;
+      }
+      if (preparing && state.report?.uefiLock?.isLocked) {
         const uefiConsent = typeof window.cgsShowModal === "function"
           ? await window.cgsShowModal(
               "Обнаружена аппаратная блокировка UEFI",
@@ -357,7 +409,9 @@
         allowUefi = Boolean(uefiConsent);
       }
 
-      const result = testMode
+      const result = externalRestore
+        ? await call("vbs_restore_external", { allowUefi })
+        : testMode
         ? await call("vbs_set_test_mode", { enabled: mode === "test-enable", allowUefi })
         : (enabling ? await call("vbs_disable", { allowUefi }) : await call("vbs_restore"));
 
@@ -383,7 +437,7 @@
         log.textContent = String(error);
       }
       if (typeof window.cgsShowModal === "function") {
-        await window.cgsShowModal("Ошибка VBS 2.0", String(error), { symbol: "!" });
+        await window.cgsShowModal("Ошибка VBS 2.0.1", String(error), { symbol: "!" });
       }
     } finally {
       state.changing = false;
@@ -653,6 +707,7 @@
   $("#vbs-enable-all-btn")?.addEventListener("click", enableAll);
   $("#vbs-enable-button")?.addEventListener("click", () => change("enable"));
   $("#vbs-disable-button")?.addEventListener("click", () => change("disable"));
+  $("#vbs-external-restore")?.addEventListener("click", () => change("external-restore"));
   $("#vbs-test-button")?.addEventListener("click", () => change(testModeEnabled() ? "test-disable" : "test-enable"));
   $("#vbs-uefi-optout-btn")?.addEventListener("click", prepareUefiOptOut);
   $("#vbs-bitlocker-admin")?.addEventListener("click", async () => {
@@ -697,7 +752,7 @@
   $("#vbs-fix-dism")?.addEventListener("click", () => runRepair("dism"));
 
 
-  // ==================== Управление отдельными защитами ====================
+  // Управление отдельными защитами
   const pState = { items: [], loading: false, changing: false };
 
   function renderProtections() {
@@ -822,9 +877,14 @@
   });
 
   document.addEventListener("cgs:hv-tab-changed", (event) => {
-    if (event.detail === "vbs" && !state.report && !state.scanning) scan();
+    if (event.detail === "vbs") scan();
     if (event.detail === "protections" && !pState.items.length && !pState.loading) scanProtections();
   });
+
+  // Внешний CMD может изменить систему, пока Eclipse свёрнут. Только чтение, без таймера и записей.
+  window.addEventListener("cgs:view-changed", (event) => { if (event.detail === "hypervisor" && isActive()) scan({ automatic: true }); });
+  window.addEventListener("focus", () => scan({ automatic: true }));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) scan({ automatic: true }); });
 
   if (isActive()) scan();
 })();

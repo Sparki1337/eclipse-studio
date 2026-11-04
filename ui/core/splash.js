@@ -4,7 +4,8 @@
 
   const STORAGE_KEY = "cgs-splash";
   const SPEED_STORAGE_KEY = "cgs-splash-speed";
-  const BASE_DURATION = 3200;
+  // Длительность сцены «затмения» при скорости 1× (как в дизайне: диск, наезд тени, кольцо, подпись)
+  const BASE_DURATION = 1400;
   const MIN_SPEED = 0.5;
   const MAX_SPEED = 3.0;
   const DEFAULT_SPEED = 1.0;
@@ -255,6 +256,12 @@
 
     isRunning = true;
     splash.classList.remove("hidden", "splash-dismissed", "splash-dismissing", "done");
+    // Сцена затмения анимируется стилями: передаём длительность и перезапускаем анимацию (повтор из настроек)
+    const sceneDuration = options.duration || Math.round(BASE_DURATION / getSpeed());
+    splash.style.setProperty("--k-splash-dur", `${sceneDuration}ms`);
+    splash.classList.remove("k-play");
+    void splash.offsetWidth;
+    splash.classList.add("k-play");
 
     const box = splash.querySelector(".s4-box");
     const canvas = splash.querySelector("canvas");
@@ -291,8 +298,11 @@
       dismiss(splash);
     };
 
+    // Частицы логотипа нужны, только если холст показан оформлением (в новом дизайне он скрыт)
+    const particles = getComputedStyle(canvas).display !== "none";
+
     // Ожидаем готовности картинки (при наличии preload она уже в кэше)
-    await ensureLogoReady();
+    if (particles) await ensureLogoReady();
     if (!isRunning) return;
 
     const AR = (logoImg.naturalWidth && logoImg.naturalHeight)
@@ -307,7 +317,9 @@
     const currentKey = `${lw}x${lh}_${st}_${ar},${ag},${ab}_${isLight ? "l" : "d"}`;
 
     // Быстрое извлечение или переиспользование структуры частиц
-    if (cachedPixelMap && cachedKey === currentKey) {
+    if (!particles) {
+      P.st = st;
+    } else if (cachedPixelMap && cachedKey === currentKey) {
       P = cachedPixelMap.map((pt) => {
         const a = Math.random() * 6.283;
         const R = Math.max(W, H) * (0.45 + Math.random() * 0.6);

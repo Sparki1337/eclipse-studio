@@ -20,6 +20,22 @@ const html=fs.readFileSync(path.join(root,'ui/index.html'),'utf8');const ids=[..
 const registeredBodies=files(path.join(root,'src-tauri/src'),'.rs').map(f=>fs.readFileSync(f,'utf8')).join('\n');
 for(const name of commands)assert(new RegExp(`(?:async\\s+)?fn\\s+${name}\\s*\\(`).test(registeredBodies),`${name}: нет функции Rust`);
 assert(!html.includes('app_check_update'));assert(html.includes('aria-describedby="modal-message"'));
+// В исходниках нет сборочного ключа; значение готовится приватно в OUT_DIR.
+const ryuuAuth=fs.readFileSync(path.join(root,'src-tauri/src/ryuu_auth.rs'),'utf8');
+const ryuuBuild=fs.readFileSync(path.join(root,'src-tauri/build.rs'),'utf8');
+assert(ryuuAuth.includes('include_str!(concat!(env!("OUT_DIR"), "/ryuu-builtin-key.txt"))'),'Ключ должен подключаться из приватного сборочного файла');
+assert(!/const CROCODILE_GENA_STUDIO_KEY:\s*&str\s*=\s*"[^"]+";/.test(ryuuAuth.split('#[cfg(test)]')[0]),'Ключ нельзя хранить строковым литералом в исходниках');
+assert(ryuuBuild.includes('ECLIPSE_RYUU_BUILTIN_KEY') && ryuuBuild.includes('../.secrets/ryuu-key.txt'),'Не заданы приватные источники сборочного ключа');
+assert(!/println!\([^;]*cargo:rustc-env/.test(ryuuBuild),'Нельзя выводить ключ через cargo:rustc-env');
+const prepareCall=ryuuBuild.indexOf('if let Err(message) = prepare_ryuu_key()');
+assert(prepareCall>=0 && prepareCall<ryuuBuild.indexOf('if std::env::var("PROFILE")'),'Ключ должен подготавливаться во всех профилях');
+const ignore=fs.readFileSync(path.join(root,'.gitignore'),'utf8');
+assert(ignore.includes('/.secrets/') && ignore.includes('ryuu-builtin-key.txt'),'Приватные файлы должны игнорироваться Git');
+const secureState=fs.readFileSync(path.join(root,'src-tauri/src/secure_state.rs'),'utf8');
+const ryuuBackend=fs.readFileSync(path.join(root,'src-tauri/src/ryuu.rs'),'utf8');
+assert(secureState.includes('crate::ryuu_auth::resolve_key('),'Ryuu обходит выбор источника ключа');
+assert.equal([...ryuuBackend.matchAll(/crate::secure_state::secret\(&app, "ryuu"\)/g)].length,3,'Поиск, скачивание и квота Ryuu должны использовать общий источник ключа');
+assert(ryuuBackend.includes('request.header("X-Auth-Key", key)'),'Изменился заголовок авторизации Ryuu');
 // Пути: вшитые файлы, ресурсы Tauri, подключения UI и команды сборки должны существовать
 const rel=p=>path.relative(root,p).split(path.sep).join('/');
 let pathCount=0;const need=(target,where)=>{assert(fs.existsSync(target),`${where}: не найден ${rel(target)}`);pathCount++;};

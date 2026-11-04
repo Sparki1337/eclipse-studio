@@ -120,7 +120,7 @@ html[data-theme="light"] .modal p { color: #475569; }
 html[data-theme="light"] .app-update-changelog { border-color: rgba(0, 0, 0, 0.1); background: rgba(0, 0, 0, 0.02); }
 html[data-theme="light"] .app-update-changelog-summary { background: rgba(0, 0, 0, 0.03); color: #0f172a; }
 html[data-theme="light"] .app-update-changelog-body { border-top-color: rgba(0, 0, 0, 0.08); color: #475569; }
-html[data-theme="light"] .app-update-footnote { color: #64748b; }
+html[data-theme="light"] .app-update-progress-wrap[data-state="error"] { border-color: rgba(225, 29, 72, .3); }
 html[data-theme="light"] .app-update-progress-bar { background: rgba(0, 0, 0, 0.08); border-color: rgba(0, 0, 0, 0.08); }
 html[data-theme="light"] .telegram-hub-modal { background: #ffffff; box-shadow: 0 25px 70px rgba(0,0,0,.2); border-color: rgba(0,0,0,.12); }
 html[data-theme="light"] .telegram-hub-header h3 { color: #0f172a; }
@@ -1204,6 +1204,157 @@ html.no-motion .settings-tab-panel {
   transform: translate(1px, -1px);
 }
 
+/* Источник ключа Ryuu: выбор не изменяет сохранённый личный ключ. */
+#ryuu-key-block {
+  --ryuu-control-weight: 650;
+  margin-top: calc(18px * var(--sp-k, 1));
+  gap: calc(12px * var(--sp-k, 1));
+}
+:root[data-weight="light"] #ryuu-key-block { --ryuu-control-weight: 500; }
+:root[data-weight="bold"] #ryuu-key-block { --ryuu-control-weight: 750; }
+:root[data-font="minecraft"][data-weight="light"] #ryuu-key-block { --ryuu-control-weight: 400; }
+:root[data-font="minecraft"][data-weight="bold"] #ryuu-key-block { --ryuu-control-weight: 700; }
+.ryuu-key-sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 216px), 1fr));
+  gap: calc(8px * var(--sp-k, 1));
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ryuu-key-sources legend {
+  margin-bottom: calc(8px * var(--sp-k, 1));
+  padding: 0;
+  color: var(--k-muted);
+  font-size: calc(var(--ku) * 14);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ryuu-key-source-option {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(10px * var(--sp-k, 1));
+  min-width: 0;
+  min-height: max(44px, calc(44px * var(--hs-k, 1)));
+  padding: calc(10px * var(--sp-k, 1)) calc(12px * var(--sp-k, 1));
+  box-sizing: border-box;
+  border: 1px solid var(--k-border-2);
+  border-radius: var(--k-r-ctl);
+  background: var(--k-panel);
+  color: var(--k-text);
+  cursor: pointer;
+}
+.ryuu-key-source-option.active {
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb), .08);
+}
+.ryuu-key-source-option:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ryuu-key-source-option input[type="radio"] {
+  appearance: auto;
+  flex: 0 0 auto;
+  width: max(14px, calc(var(--ku) * 16));
+  height: max(14px, calc(var(--ku) * 16));
+  min-height: 0;
+  margin: calc(var(--ku) * 2) 0 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.ryuu-key-source-option span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ryuu-key-source-option strong,
+.ryuu-key-source-option small {
+  display: block;
+  font-size: calc(var(--ku) * 14);
+  line-height: 1.5;
+}
+.ryuu-key-source-option small,
+.ryuu-key-help {
+  color: var(--k-muted);
+}
+.ryuu-key-help {
+  margin: 0;
+  font-size: calc(var(--ku) * 14);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+#ryuu-custom-key-fields {
+  display: grid;
+  gap: calc(8px * var(--sp-k, 1));
+}
+#ryuu-custom-key-fields.hidden {
+  display: none;
+}
+#ryuu-key-block .svc-key-label,
+#ryuu-key-block .hubcap-status-badge,
+#ryuu-key-block .svc-key-link,
+#korona #ryuu-key-block .svc-key-label,
+#korona #ryuu-key-block .hubcap-status-badge,
+#korona #ryuu-key-block .svc-key-link {
+  font-size: calc(var(--ku) * 14) !important;
+}
+#ryuu-key-block .svc-key-label {
+  color: var(--k-muted);
+}
+#ryuu-key-block .svc-key-header {
+  gap: calc(8px * var(--sp-k, 1));
+}
+#ryuu-key-block .svc-key-meta {
+  flex-wrap: wrap;
+  gap: calc(12px * var(--sp-k, 1));
+  min-width: 0;
+  max-width: 100%;
+}
+#korona #ryuu-key-block .hubcap-status-badge,
+#korona #ryuu-key-block .svc-key-link {
+  font-weight: var(--ryuu-control-weight) !important;
+}
+#ryuu-key-block .hubcap-status-badge {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+#ryuu-key-block .svc-key-link,
+#korona #ryuu-key-block .svc-key-link {
+  min-height: max(44px, calc(44px * var(--hs-k, 1)));
+  max-width: 100%;
+  height: auto;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+}
+#korona #ryuu-key-block .svc-key-link {
+  border-radius: var(--k-r-ctl) !important;
+}
+#ryuu-key-block .svc-input-box,
+#korona #ryuu-key-block .svc-input-box {
+  min-height: 48px;
+  height: max(48px, calc(48px * var(--hs-k, 1)));
+}
+#ryuu-key-block .svc-input-box input,
+#korona #ryuu-key {
+  font-size: calc(var(--ku) * 14) !important;
+  text-overflow: ellipsis;
+}
+#ryuu-key::placeholder,
+#korona #ryuu-key::placeholder {
+  color: var(--k-muted) !important;
+  opacity: 1;
+}
+#ryuu-key-block .svc-tool-btn,
+#korona #ryuu-key-block .svc-tool-btn {
+  width: max(44px, calc(44px * var(--hs-k, 1)));
+  min-height: 44px;
+  height: max(44px, calc(44px * var(--hs-k, 1)));
+  padding: 0 !important;
+}
+
 /* Компактный инпут HubCap со встроенными кнопками */
 .svc-input-box {
   position: relative;
@@ -1484,12 +1635,7 @@ html[data-theme="light"] .personalization-segment button.active {
 }
 
 
-
-/* ===== Светлая тема: контраст акцента и статусов =====
-   Акцент для светлой темы затемняется в bootstrap.js (window.cgsAccent): белый становится графитовым,
-   мятный, жёлтый, лаймовый и другие — более тёмными оттенками того же цвета (контраст с белым ≥ 4.5:1).
-   --accent-contrast — цвет текста на заливке акцентом (в светлой теме белый).
-   Ниже — статусные цвета и элементы, цвета которых были подобраны только для тёмного фона. */
+/* Светлая тема: акценты затемняются в bootstrap.js до контраста ≥ 4,5:1 */
 html[data-theme="light"] {
   --tone-ok: #047857;
   --tone-warn: #b45309;

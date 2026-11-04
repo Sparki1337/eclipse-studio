@@ -1,4 +1,4 @@
-//! Проверяемые диапазоны HTTP и докачка только при неизменном валидаторе сервера.
+//! Проверяемые диапазоны HTTP и докачка только при неизменном валидаторе сервера
 use crate::{durable, safe_path};
 use reqwest::{blocking::Client, header};
 use serde::{Deserialize, Serialize};
@@ -166,7 +166,7 @@ pub fn fetch(
     fs::create_dir_all(directory).map_err(|e| e.to_string())?;
     let directory = safe_path::root(directory)?;
     let work = safe_path::join(&directory, &work_name(url, name))?;
-    // files_download держит блокировку work на всё время задания, включая сборку.
+    // files_download держит блокировку work на всё время задания, включая сборку
 
     fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     let client = Client::builder()
@@ -293,7 +293,7 @@ fn ranged(
             metadata = previous;
         }
     }
-    // После аварийного завершения используем только подтверждённый и повторно хешированный префикс.
+    // После аварийного завершения используем только подтверждённый и повторно хешированный префикс
     for (index, part) in metadata.parts.iter_mut().enumerate() {
         let path = safe_path::join(work, &format!("segment-{index}"))?;
         let file = fs::OpenOptions::new()

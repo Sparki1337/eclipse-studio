@@ -1,6 +1,6 @@
 (() => {
   "use strict";
-  // Только миграция читает старое хранилище. После подтверждения данные живут в Windows.
+  // Только миграция читает старое хранилище. После подтверждения данные живут в Windows
   const rawInvoke = window.__TAURI__?.core?.invoke;
   const values = new Map();
   const configured = new Map();
@@ -44,7 +44,7 @@
       const key = localStorage.key(i); legacy[key] = localStorage.getItem(key);
     }
     if (!rawInvoke) {
-      // Предпросмотр не пишет ни настройки, ни секреты на диск браузера.
+      // Предпросмотр не пишет ни настройки, ни секреты на диск браузера
       for (const [key, value] of Object.entries(legacy)) if (!secrets.has(key)) values.set(key, value);
       return;
     }
@@ -52,10 +52,10 @@
     if (!result?.migrationVerified || !result.values || !result.secretConfigured) throw new Error("Миграция не подтверждена. Старые данные сохранены; приложение не запущено.");
     for (const [key, value] of Object.entries(result.values)) if (!secrets.has(key)) values.set(key, String(value));
     for (const [key, value] of Object.entries(result.secretConfigured)) configured.set(key, value === true);
-    // Не удаляем значение, изменённое другим окном за время миграции.
+    // Не удаляем значение, изменённое другим окном за время миграции
     for (const [key, value] of Object.entries(legacy)) if (localStorage.getItem(key) === value) localStorage.removeItem(key);
   })();
-  // Ошибка доступна загрузчику и не теряется в необработанном Promise.
+  // Ошибка доступна загрузчику и не теряется в необработанном Promise
   storage.ready.catch(report);
   window.cgsStorage = storage;
 })();

@@ -1,6 +1,4 @@
-// Eclipse-HV: автономный высокопроизводительный лаунчер игр с обходом Driver Signature Enforcement (DSE)
-// и поддержкой Secure Boot на базе встроенного модуля drvloader.
-// Разработано для экосистемы Eclipse Studio.
+// Автономный лаунчер Eclipse-HV с модулем drvloader
 
 #![windows_subsystem = "windows"]
 
@@ -129,8 +127,7 @@ fn main() {
         lower == "--debug" || lower == "-debug" || lower == "/debug" || lower == "-d" || lower == "/d"
     });
 
-    // Проверка прав администратора: при их отсутствии сразу запрашиваем UAC
-    // без инициализации консоли в не-админском процессе (чтобы не двоились окна)
+    // Запрашиваем UAC до создания консоли, чтобы не открывать два окна
     if !is_admin() {
         if let Err(err) = elevate_self(&args) {
             let details = DiagnosticDetails {
@@ -181,7 +178,7 @@ fn main() {
         .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
     let _ = env::set_current_dir(&base_dir);
 
-    // 1. Проверка изоляции ядра (HVCI), строго по логике эталонного HV-PlugNPlay.bat
+    // Проверка изоляции ядра (HVCI), строго по логике эталонного HV-PlugNPlay.bat
     if check_core_isolation() {
         let ask_msg = "В вашей системе Windows включена изоляция ядра (Memory Integrity / HVCI).\n\n\
             Для работы гипервизора и запуска игр с обходом проверки цифровой подписи (DSE) эту защиту необходимо выключить.\n\n\
@@ -234,7 +231,7 @@ fn main() {
         println!("[OK] Изоляция ядра (HVCI) отключена. Система готова.");
     }
 
-    // 2. Проверка совместимости XSAVE/XCR0 для современных процессоров (AVX-512 / Zen 4 / Intel 12+)
+    // Проверка совместимости XSAVE/XCR0 для современных процессоров (AVX-512 / Zen 4 / Intel 12+)
     let xcr0 = read_xcr0();
     if xcr0 > 7 {
         if debug_mode {
@@ -275,10 +272,10 @@ fn main() {
         println!("[OK] Процессор совместим с гипервизором (XCR0 = {xcr0} <= 7).");
     }
 
-    // 3. Временная нейтрализация конфликтующих процессов (MSI Afterburner, RTSS, Vanguard) и очистка служб
+    // Временная нейтрализация конфликтующих процессов (MSI Afterburner, RTSS, Vanguard) и очистка служб
     let conflict_state = stop_conflicts(debug_mode);
 
-    // 4. Извлечение встроенного drvloader.exe во временный каталог
+    // Извлечение встроенного drvloader.exe во временный каталог
     let temp_dir = env::temp_dir().join(format!("Eclipse-HV-{}", std::process::id()));
     if let Err(err) = fs::create_dir_all(&temp_dir) {
         let details = DiagnosticDetails {
@@ -325,7 +322,7 @@ fn main() {
         println!("[1/3] Driver Signature Enforcement: Временный BYPASS...");
     }
 
-    // 4. Выполнение обхода проверки цифровой подписи (drvloader bypass)
+    // Выполнение обхода проверки цифровой подписи (drvloader bypass)
     let bypass_output = run_command(&drvloader_path, &["bypass"]);
     let bypass_code = bypass_output.as_ref().map(|o| o.status.code().unwrap_or(-1)).ok();
 
@@ -385,7 +382,7 @@ fn main() {
         println!("[2/3] Поиск целевого исполняемого файла игры...");
     }
 
-    // 5. Интеллектуальный поиск исполняемого файла игры
+    // Интеллектуальный поиск исполняемого файла игры
     let (target_game, candidate_count) = find_game_executable(&base_dir, explicit_target.as_ref(), debug_mode);
     let (game_exe, game_dir) = match target_game {
         Some(path) => {
@@ -429,7 +426,7 @@ fn main() {
         println!("[INFO] Запуск игрового процесса...");
     }
 
-    // 6. Запуск целевой игры в её рабочей директории
+    // Запуск целевой игры в её рабочей директории
     let launch_result = Command::new(&game_exe).current_dir(&game_dir).spawn();
 
     if let Err(err) = launch_result {
@@ -461,14 +458,14 @@ fn main() {
         println!("[OK] Процесс игры запущен. Ожидание 5 сек для загрузки гипервизорного хука...");
     }
 
-    // 7. Ожидание инициализации гипервизорного драйвера игры
+    // Ожидание инициализации гипервизорного драйвера игры
     thread::sleep(Duration::from_secs(5));
 
     if debug_mode {
         println!("[3/3] Driver Signature Enforcement: Восстановление защиты (RESTORE)...");
     }
 
-    // 8. Восстановление исходного состояния проверки цифровых подписей (DSE Restore)
+    // Восстановление исходного состояния проверки цифровых подписей (DSE Restore)
     let restore_output = run_command(&drvloader_path, &["restore"]);
     let restore_code = restore_output.as_ref().map(|o| o.status.code().unwrap_or(-1)).ok();
 
@@ -480,10 +477,10 @@ fn main() {
         }
     }
 
-    // 9. Очистка временных служб драйвера RTCore64
+    // Очистка временных служб драйвера RTCore64
     cleanup_driver_services();
 
-    // 10. Перезапуск MSI Afterburner, если он был предварительно закрыт
+    // Перезапуск MSI Afterburner, если он был предварительно закрыт
     if let Some(path) = conflict_state.msi_path {
         if debug_mode {
             println!("[INFO] Перезапуск MSI Afterburner: {}", path.display());
@@ -491,7 +488,7 @@ fn main() {
         let _ = Command::new(path).spawn();
     }
 
-    // 11. Очистка временных файлов
+    // Очистка временных файлов
     let _ = fs::remove_dir_all(&temp_dir);
 
     if debug_mode {
@@ -624,23 +621,23 @@ fn disable_hvci_and_reboot() -> Result<(), String> {
 
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
 
-    // 1. Отключение HVCI (HypervisorEnforcedCodeIntegrity)
+    // Отключение HVCI (HypervisorEnforcedCodeIntegrity)
     let hvci_path = r"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity";
     if let Ok((key, _)) = hklm.create_subkey(hvci_path) {
         let _ = key.set_value("Enabled", &0u32);
         let _ = key.set_value("WasEnabledBy", &0u32);
     }
 
-    // 2. Отключение базового VBS (DeviceGuard)
+    // Отключение базового VBS (DeviceGuard)
     let dg_path = r"SYSTEM\CurrentControlSet\Control\DeviceGuard";
     if let Ok((key, _)) = hklm.create_subkey(dg_path) {
         let _ = key.set_value("EnableVirtualizationBasedSecurity", &0u32);
     }
 
-    // 3. Отключение гипервизора в загрузчике Windows
+    // Отключение гипервизора в загрузчике Windows
     let _ = run_command("bcdedit.exe", &["/set", "hypervisorlaunchtype", "off"]);
 
-    // 4. Инициирование перезагрузки Windows через 5 секунд с системным уведомлением
+    // Инициирование перезагрузки Windows через 5 секунд с системным уведомлением
     run_command(
         "shutdown.exe",
         &[
@@ -655,10 +652,7 @@ fn disable_hvci_and_reboot() -> Result<(), String> {
     Ok(())
 }
 
-// Чтение младших 32 бит маски расширенных состояний процессора (XCR0)
-// из фиксированной системной структуры KUSER_SHARED_DATA (0x7FFE03D8).
-// Значение > 7 указывает на активность расширенных наборов инструкций (AVX-512, PKRU и др.),
-// требующих применения параметра xsaveremovefeature в BCD для исключения сбоев гипервизора Denuvo.
+// XCR0 > 7 требует xsaveremovefeature в BCD для совместимости с гипервизором
 #[cfg(all(windows, target_arch = "x86_64"))]
 fn read_xcr0() -> u32 {
     unsafe {
@@ -674,13 +668,13 @@ fn read_xcr0() -> u32 {
 
 // Применение параметра xsaveremovefeature в BCD и перезагрузка для защиты от сбоев Denuvo
 fn configure_xsave_and_reboot() -> Result<(), String> {
-    // 1. Установка BCD-параметра xsaveremovefeature
+    // Установка BCD-параметра xsaveremovefeature
     run_command(
         "bcdedit.exe",
         &["/set", "{current}", "xsaveremovefeature", "0xFFFFFFFFFFFFFFF8"],
     )?;
 
-    // 2. Инициирование перезагрузки Windows через 5 секунд с системным уведомлением
+    // Инициирование перезагрузки Windows через 5 секунд с системным уведомлением
     run_command(
         "shutdown.exe",
         &[
@@ -706,7 +700,7 @@ fn cleanup_driver_services() {
 fn stop_conflicts(debug_mode: bool) -> ConflictState {
     let mut state = ConflictState::default();
 
-    // 1. Остановка Vanguard во избежание BSOD
+    // Остановка Vanguard во избежание BSOD
     let _ = run_command("net.exe", &["stop", "vgc", "/y"]);
     let _ = run_command("net.exe", &["stop", "vgk", "/y"]);
     let kill_vg = run_command("taskkill.exe", &["/IM", "vgtray.exe", "/F"]);
@@ -717,7 +711,7 @@ fn stop_conflicts(debug_mode: bool) -> ConflictState {
         }
     }
 
-    // 2. Проверка и завершение MSI Afterburner
+    // Проверка и завершение MSI Afterburner
     let msi_running = process_is_running("MSIAfterburner.exe");
     if msi_running {
         state.msi_detected = true;
@@ -740,15 +734,15 @@ fn stop_conflicts(debug_mode: bool) -> ConflictState {
         }
     }
 
-    // 3. Завершение RivaTuner Statistics Server (RTSS) и связанных перехватчиков
+    // Завершение RivaTuner Statistics Server (RTSS) и связанных перехватчиков
     terminate_process_and_wait("RTSS.exe", 2000);
     terminate_process_and_wait("EncoderServer.exe", 1000);
     terminate_process_and_wait("RTSSHooksLoader64.exe", 1000);
 
-    // 4. Очистка служб драйверов для предотвращения конфликта блокировки RTCore64
+    // Очистка служб драйверов для предотвращения конфликта блокировки RTCore64
     cleanup_driver_services();
 
-    // 5. Небольшая задержка, позволяющая ядру Windows окончательно освободить дескрипторы драйверов
+    // Небольшая задержка, позволяющая ядру Windows окончательно освободить дескрипторы драйверов
     thread::sleep(Duration::from_millis(500));
 
     state
@@ -756,7 +750,7 @@ fn stop_conflicts(debug_mode: bool) -> ConflictState {
 
 // Поиск пути к исполняемому файлу MSI Afterburner через процесс, реестр или стандартные пути
 fn detect_msi_afterburner_path() -> Option<PathBuf> {
-    // 1. Попытка получить путь из активного процесса через PowerShell
+    // Попытка получить путь из активного процесса через PowerShell
     let ps_cmd = "(Get-Process -Name 'MSIAfterburner' -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path)";
     if let Ok(out) = run_command("powershell.exe", &["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd]) {
         let path_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -768,7 +762,7 @@ fn detect_msi_afterburner_path() -> Option<PathBuf> {
         }
     }
 
-    // 2. Попытка прочесть путь установки из реестра Windows
+    // Попытка прочесть путь установки из реестра Windows
     use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let reg_paths = [
@@ -795,7 +789,7 @@ fn detect_msi_afterburner_path() -> Option<PathBuf> {
         }
     }
 
-    // 3. Стандартные пути установки на дисках C:, D:, E:
+    // Стандартные пути установки на дисках C:, D:, E:
     let candidates = [
         r"C:\Program Files (x86)\MSI Afterburner\MSIAfterburner.exe",
         r"C:\Program Files\MSI Afterburner\MSIAfterburner.exe",
@@ -846,7 +840,7 @@ fn find_game_executable(
     explicit_target: Option<&PathBuf>,
     debug_mode: bool,
 ) -> (Option<PathBuf>, usize) {
-    // 0. Если передан прямой путь (через аргументы или перетаскивание на файл)
+    // Если передан прямой путь (через аргументы или перетаскивание на файл)
     if let Some(target) = explicit_target {
         if target.is_file() {
             if debug_mode {
@@ -856,7 +850,7 @@ fn find_game_executable(
         }
     }
 
-    // 1. Поиск приоритетных названий в корневом каталоге игры
+    // Поиск приоритетных названий в корневом каталоге игры
     for name in PRIORITY_LAUNCHER_NAMES {
         let candidate = root.join(name);
         if candidate.is_file() && !is_excluded_exe(&candidate) {
@@ -867,11 +861,11 @@ fn find_game_executable(
         }
     }
 
-    // 2. Сканирование корневой папки и подпапок на глубину до 4 уровней
+    // Сканирование корневой папки и подпапок на глубину до 4 уровней
     let mut all_exes = Vec::new();
     scan_directory_recursive(root, 0, 4, &mut all_exes);
 
-    // 3. Поиск приоритетных названий в подпапках
+    // Поиск приоритетных названий в подпапках
     for path in &all_exes {
         if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
             let lower = file_name.to_lowercase();
@@ -884,7 +878,7 @@ fn find_game_executable(
         }
     }
 
-    // 4. Фильтрация валидных файлов игр
+    // Фильтрация валидных файлов игр
     let mut valid_candidates: Vec<(PathBuf, u64)> = Vec::new();
 
     for path in all_exes {

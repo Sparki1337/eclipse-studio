@@ -274,7 +274,8 @@ fn status_for(steam_path: Option<String>) -> MillenniumPluginStatus {
     }
 }
 
-#[tauri::command]
+// Блокирующая системная проверка выполняется вне главного потока
+#[tauri::command(async)]
 pub fn millennium_plugin_status(steam_path: Option<String>) -> MillenniumPluginStatus {
     status_for(steam_path)
 }
@@ -310,7 +311,7 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
     let mut logs = Vec::new();
     let mut changed = 0_u32;
 
-    // Старый плагин не удаляется автоматически: удаление требует отдельного подтверждения и бэкапа.
+    // Старый плагин не удаляется автоматически: удаление требует отдельного подтверждения и бэкапа
     for (relative, contents) in EMBEDDED_PLUGIN_FILES {
         let target = relative
             .split('/')

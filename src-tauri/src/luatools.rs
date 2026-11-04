@@ -115,7 +115,7 @@ impl Serialize for LuaInstallResult {
     }
 }
 
-fn hidden_command(program: &str) -> Command {
+pub(crate) fn hidden_command(program: &str) -> Command {
     let mut command = Command::new(program);
     #[cfg(target_os = "windows")]
     command.creation_flags(NO_WINDOW);
@@ -838,7 +838,8 @@ fn registry_games(
     games
 }
 
-#[tauri::command]
+// Блокирующая системная проверка выполняется вне главного потока
+#[tauri::command(async)]
 pub fn luatools_status(app: AppHandle, steam_path: Option<String>) -> LuaStatus {
     let Some(steam) = resolve_steam_path(steam_path) else {
         return LuaStatus {
@@ -854,7 +855,7 @@ pub fn luatools_status(app: AppHandle, steam_path: Option<String>) -> LuaStatus 
             games: Vec::new(),
         };
     };
-    // Просмотр состояния не изменяет Steam. Миграция выполняется при явной установке.
+    // Просмотр состояния не изменяет Steam. Миграция выполняется при явной установке
     let stplugin = stplugin_dir(&steam);
     let cache = manifest_cache_dir(&app);
     let games = registry_games(
@@ -922,7 +923,8 @@ pub fn luatools_restore_manifests(app: AppHandle, steam_path: Option<String>) ->
     )
 }
 
-#[tauri::command]
+// Блокирующая системная проверка выполняется вне главного потока
+#[tauri::command(async)]
 pub fn luatools_detect_steam() -> Option<String> {
     detect_steam_path().map(|path| path.display().to_string())
 }
@@ -1556,8 +1558,8 @@ pub fn close_steam_process(steam_exe: Option<&Path>) -> bool {
     !process_is_running("steam.exe")
 }
 
-// Проверка, запущен ли клиент Steam в данный момент
-#[tauri::command]
+// Проверка процесса Steam вне главного потока
+#[tauri::command(async)]
 pub fn luatools_is_steam_running() -> bool {
     process_is_running("steam.exe")
 }
@@ -1578,7 +1580,7 @@ pub async fn luatools_close_steam(steam_path: Option<String>) -> OperationResult
     .unwrap_or_else(|err| err)
 }
 
-fn process_is_running(image_name: &str) -> bool {
+pub(crate) fn process_is_running(image_name: &str) -> bool {
     let Ok(output) = hidden_command("tasklist.exe")
         .args(["/FI", &format!("IMAGENAME eq {image_name}"), "/NH"])
         .output()
@@ -1816,8 +1818,8 @@ pub struct ManifestLoaderInfo {
     pub steam_detected: bool,
 }
 
-// Получение информации о текущем и доступных загрузчиках OpenSteamTool
-#[tauri::command]
+// Чтение версий загрузчиков OpenSteamTool вне главного потока
+#[tauri::command(async)]
 pub fn luatools_get_loader_info(app: AppHandle, steam_path: Option<String>) -> ManifestLoaderInfo {
     let settings = load_settings(&app);
 
