@@ -648,6 +648,48 @@ pub fn backup(steam: &Path, snap: &Snapshot, now_unix: u64) -> Result<PathBuf, S
 
 /// Изменения применяются по очереди; при ошибке уже записанные файлы возвращаются из снимка
 pub fn apply(steam: &Path, snap: &Snapshot, changes: &[Change]) -> Result<(), String> {
+    apply_with_operations(
+        steam,
+        snap,
+        changes,
+        None,
+        crate::durable::write,
+        remove_cloud_file,
+    )
+}
+
+pub(crate) fn apply_with_backup(
+    steam: &Path,
+    snap: &Snapshot,
+    changes: &[Change],
+    backup_path: &Path,
+) -> Result<(), String> {
+    apply_with_operations(
+        steam,
+        snap,
+        changes,
+        Some(backup_path),
+        crate::durable::write,
+        remove_cloud_file,
+    )
+}
+
+fn remove_cloud_file(path: &Path) -> Result<(), String> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("Не удалось удалить {}: {error}", path.display())),
+    }
+}
+
+fn apply_with_operations(
+    steam: &Path,
+    snap: &Snapshot,
+    changes: &[Change],
+    backup_path: Option<&Path>,
+    mut write: impl FnMut(&Path, &[u8]) -> Result<(), String>,
+    mut remove: impl FnMut(&Path) -> Result<(), String>,
+) -> Result<(), String> {
     let original = |name: &str| -> Option<Option<Vec<u8>>> {
         match name {
             LOADER_CONFIG => Some(snap.config.clone()),
@@ -661,26 +703,37 @@ pub fn apply(steam: &Path, snap: &Snapshot, changes: &[Change]) -> Result<(), St
     for (name, bytes) in changes {
         let target = steam_file(steam, name);
         let result = match bytes {
-            Some(bytes) => crate::durable::write(&target, bytes),
-            None => match fs::remove_file(&target) {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(format!("Не удалось удалить {}: {error}", target.display())),
-            },
+            Some(bytes) => write(&target, bytes),
+            None => remove(&target),
         };
         if let Err(error) = result {
+            let mut rollback_failures = Vec::new();
             for (written, previous) in done.into_iter().rev() {
                 let path = steam_file(steam, written);
                 let previous = original(written).flatten().or(previous);
-                let _ = match previous {
-                    Some(bytes) => crate::durable::write(&path, &bytes),
-                    None => fs::remove_file(&path).map_err(|e| e.to_string()),
+                let rollback = match previous {
+                    Some(bytes) => write(&path, &bytes),
+                    None => remove(&path),
                 };
+                if let Err(rollback_error) = rollback {
+                    rollback_failures.push(format!("{}: {rollback_error}", path.display()));
+                }
             }
-            return Err(format!(
-                "{}. Изменения отменены.",
-                error.trim_end_matches('.')
-            ));
+            let cause = error.trim_end_matches('.');
+            if rollback_failures.is_empty() {
+                return Err(format!("{cause}. Изменения отменены."));
+            }
+            let mut message = format!(
+                "{cause}. Не удалось полностью восстановить исходное состояние: {}.",
+                rollback_failures.join("; ")
+            );
+            if let Some(backup_path) = backup_path {
+                message.push_str(&format!(
+                    " Резервная копия исходных файлов: {}.",
+                    backup_path.display()
+                ));
+            }
+            return Err(message);
         }
         done.push((name, None));
     }
@@ -789,23 +842,96 @@ pub fn ensure_writable(folder: &Path) -> Result<(), String> {
         })
 }
 
+fn path_is_present(path: &Path) -> Result<bool, String> {
+    match fs::metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!(
+            "Не удалось проверить доступность {}: {error}",
+            path.display()
+        )),
+    }
+}
+
+fn migration_path(root: &Path, relative: &Path) -> Result<PathBuf, String> {
+    let relative = relative.to_str().ok_or_else(|| {
+        format!(
+            "Некорректная кодировка пути сохранения: {}",
+            relative.display()
+        )
+    })?;
+    crate::safe_path::join(root, relative)
+}
+
+fn migration_destination_matches(
+    source: &Path,
+    destination: &Path,
+    relative: &Path,
+) -> Result<bool, String> {
+    match fs::symlink_metadata(destination) {
+        Ok(metadata) if crate::safe_path::is_link(&metadata) => Err(format!(
+            "Ссылка или junction запрещена: {}",
+            destination.display()
+        )),
+        Ok(metadata) if !metadata.is_file() => Err(format!(
+            "Путь назначения не является файлом: {}",
+            destination.display()
+        )),
+        Ok(_) => {
+            let same =
+                crate::durable::hash_file(destination)? == crate::durable::hash_file(source)?;
+            if same {
+                Ok(true)
+            } else {
+                Err(format!(
+                    "В новой папке уже есть другое сохранение: {}. Выберите пустую папку.",
+                    relative.display()
+                ))
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!(
+            "Не удалось проверить файл назначения {}: {error}",
+            destination.display()
+        )),
+    }
+}
+
 /// Данные провайдера folder: каталоги с числовыми именами (ID аккаунтов Steam)
-fn provider_entries(folder: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = fs::read_dir(folder) else {
-        return Vec::new();
-    };
-    let mut result: Vec<PathBuf> = entries
-        .flatten()
-        .filter(|entry| {
-            entry.file_type().is_ok_and(|kind| kind.is_dir())
-                && entry.file_name().to_str().is_some_and(|name| {
-                    !name.is_empty() && name.bytes().all(|b| b.is_ascii_digit())
-                })
-        })
-        .map(|entry| entry.path())
-        .collect();
+fn provider_entries(folder: &Path) -> Result<Vec<PathBuf>, String> {
+    let entries = fs::read_dir(folder).map_err(|error| {
+        format!(
+            "Не удалось прочитать прежнюю папку облака {}: {error}",
+            folder.display()
+        )
+    })?;
+    let mut result = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| {
+            format!(
+                "Не удалось перечислить прежнюю папку облака {}: {error}",
+                folder.display()
+            )
+        })?;
+        let kind = entry.file_type().map_err(|error| {
+            format!(
+                "Не удалось определить тип элемента {}: {error}",
+                entry.path().display()
+            )
+        })?;
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if !name.is_empty() && name.bytes().all(|byte| byte.is_ascii_digit()) {
+            let path = crate::safe_path::join(folder, name)?;
+            if kind.is_dir() {
+                result.push(path);
+            }
+        }
+    }
     result.sort();
-    result
+    Ok(result)
 }
 
 /// Перенос сохранений в новую папку: копирование с проверкой, оригиналы остаются на месте
@@ -816,55 +942,65 @@ pub fn migrate_folder(old: &Path, new: &Path) -> Result<usize, String> {
     if nested(old, new) {
         return Err("Папки хранения не должны быть вложены друг в друга.".into());
     }
-    if !old.exists() {
-        // Диск отключён — перенос невозможен; сама папка могла быть ещё не создана
-        let drive_present = old
-            .ancestors()
-            .last()
-            .map(|root| root.as_os_str().is_empty() || root.exists())
-            .unwrap_or(true);
-        let root_present = old.components().take(2).collect::<PathBuf>().exists();
-        if !drive_present || !root_present {
-            return Err("Прежняя папка облака недоступна. Подключите диск перед переносом.".into());
+    let old_root = match fs::symlink_metadata(old) {
+        Ok(_) => crate::safe_path::resolve_root(old)
+            .map_err(|error| format!("Прежняя папка облака недоступна: {error}"))?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Диск отключён — перенос невозможен; сама папка могла быть ещё не создана
+            let drive_present = old
+                .ancestors()
+                .last()
+                .map(path_is_present)
+                .transpose()?
+                .unwrap_or(true);
+            let volume_root = old.components().take(2).collect::<PathBuf>();
+            let root_present = volume_root.as_os_str().is_empty() || path_is_present(&volume_root)?;
+            if !drive_present || !root_present {
+                return Err(
+                    "Прежняя папка облака недоступна. Подключите диск перед переносом.".into(),
+                );
+            }
+            return Ok(0);
         }
-        return Ok(0);
-    }
+        Err(error) => {
+            return Err(format!(
+                "Не удалось проверить прежнюю папку облака {}: {error}",
+                old.display()
+            ))
+        }
+    };
+    let new_root = crate::safe_path::resolve_root(new)
+        .map_err(|error| format!("Новая папка облака недоступна: {error}"))?;
     let mut files = Vec::new();
-    for account in provider_entries(old) {
+    for account in provider_entries(&old_root)? {
         for entry in walkdir::WalkDir::new(&account).follow_links(false) {
             let entry = entry
                 .map_err(|error| format!("Не удалось прочитать прежнюю папку облака: {error}"))?;
+            let relative = entry
+                .path()
+                .strip_prefix(&old_root)
+                .map_err(|_| "Неверный путь в папке облака".to_string())?
+                .to_path_buf();
+            migration_path(&old_root, &relative)?;
             if entry.file_type().is_file() {
-                let relative = entry
-                    .path()
-                    .strip_prefix(old)
-                    .map_err(|_| "Неверный путь в папке облака".to_string())?
-                    .to_path_buf();
                 files.push(relative);
             }
         }
     }
     // Сначала проверяем конфликты, чтобы не оставить частичную копию
     for relative in &files {
-        let destination = new.join(relative);
-        if destination.exists() {
-            let same = crate::durable::hash_file(&destination)?
-                == crate::durable::hash_file(&old.join(relative))?;
-            if !same {
-                return Err(format!(
-                    "В новой папке уже есть другое сохранение: {}. Выберите пустую папку.",
-                    relative.display()
-                ));
-            }
-        }
+        let source = migration_path(&old_root, relative)?;
+        let destination = migration_path(&new_root, relative)?;
+        migration_destination_matches(&source, &destination, relative)?;
     }
     let mut copied = 0;
     for relative in &files {
-        let destination = new.join(relative);
-        if destination.exists() {
+        let source = migration_path(&old_root, relative)?;
+        let destination = migration_path(&new_root, relative)?;
+        if migration_destination_matches(&source, &destination, relative)? {
             continue;
         }
-        crate::durable::copy(&old.join(relative), &destination)?;
+        crate::durable::copy(&source, &destination)?;
         copied += 1;
     }
     Ok(copied)
