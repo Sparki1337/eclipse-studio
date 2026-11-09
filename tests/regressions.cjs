@@ -95,6 +95,15 @@ test('startup: UAC проверяется до UI, с защитой обнов�
   assert(fs.readFileSync(path.join(root, 'src-tauri/build.rs'), 'utf8').includes('level="asInvoker"'));
 });
 
+test('startup: вторая копия блокируется до состояния и фоновых заданий', () => {
+  const lib = fs.readFileSync(path.join(root, 'src-tauri/src/lib.rs'), 'utf8');
+  const run = lib.slice(lib.indexOf('pub fn run()'));
+  assert(run.indexOf('instance_lock::Guard::for_launch()') < run.indexOf('updates::init_launch_context()'));
+  assert(run.indexOf('instance_lock::Guard::for_launch()') < run.indexOf('tauri::Builder::default()'));
+  const main = fs.readFileSync(path.join(root, 'src-tauri/src/main.rs'), 'utf8');
+  assert(main.indexOf('run_update_helper()') < main.indexOf('eclipse_studio_lib::run()'));
+});
+
 const { verifyInstalled, patchedSource } = require('../scripts/check-deepmerge.cjs');
 verifyInstalled();
 const merge = require('../eclipse-manifest/node_modules/deepmerge');
