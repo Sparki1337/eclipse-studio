@@ -541,6 +541,32 @@ async function run() {
     await context.close();
   });
 
+  await test("Регрессия интерфейса: переход в каталог показывает уже начатую фоновую загрузку", async () => {
+    const { page, errors } = await open({ mock: { deferFilesCatalog: true } });
+    await page.evaluate(() => { void window.cgsFiles.load(); });
+    await page.waitForFunction(() => Boolean(window.__pendingFilesCatalog));
+    const silentState = await page.evaluate(() => ({
+      spinnerHidden: document.querySelector("#files-loading").classList.contains("hidden"),
+      loaded: window.cgsFiles.isLoaded(),
+    }));
+    assert(silentState.spinnerHidden && !silentState.loaded, "тихая загрузка стала видимой до перехода в каталог");
+
+    await page.click('.nav-item[data-view="files"]');
+    await page.waitForFunction(() => !document.querySelector("#files-loading").classList.contains("hidden"));
+    assert((await page.textContent("#files-status")).includes("Загрузка списка"), "переход не показал ход загрузки");
+
+    await page.evaluate(() => window.__pendingFilesCatalog.reject("fixture catalog failure"));
+    await page.waitForFunction(() => document.querySelector("#files-status").textContent.includes("Не удалось получить каталог"));
+    const failedState = await page.evaluate(() => ({
+      status: document.querySelector("#files-status").textContent,
+      loaded: window.cgsFiles.isLoaded(),
+    }));
+    assert(!failedState.status.includes("0 файлов"), "ошибка скрыта статусом пустого каталога");
+    assert(!failedState.loaded, "отклонённый запрос помечен как успешно загруженный");
+    assert((await calls(page, "files_catalog")).length === 1, "переход запустил второй запрос каталога");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+
   await test("Фоновое обновление каталога не перезапускает анимацию карточек", async () => {
     const { page, context } = await open({ view: "files" });
     await page.waitForTimeout(1200);
@@ -2310,6 +2336,49 @@ async function run() {
     await page.click("#titlebar-search");
     assert(await page.evaluate(() => window.cgsSearch.isOpen), "щелчок по строке после перетаскивания не открывает поиск");
     await page.keyboard.press("Escape");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+
+  await test("Регрессия интерфейса: pointercancel очищает drag без перестановки разделов", async () => {
+    const { page, errors } = await open({ view: "settings" });
+    await page.click('[data-settings-tab="sidebar"]');
+    const rowsSelector = "#sidebar-modules-list .sidebar-module-row";
+    await page.locator(rowsSelector).first().waitFor({ state: "visible" });
+    const before = await page.locator(rowsSelector).evaluateAll((rows) => rows.map((row) => row.dataset.moduleId));
+    assert(before.length > 1, "нет разделов для проверки сортировки");
+
+    await page.evaluate(() => {
+      const rows = document.querySelectorAll("#sidebar-modules-list .sidebar-module-row");
+      const handle = rows[0].querySelector(".sidebar-module-drag-handle");
+      const start = handle.getBoundingClientRect();
+      const target = rows[1].getBoundingClientRect();
+      handle.dispatchEvent(new PointerEvent("pointerdown", {
+        bubbles: true, cancelable: true, button: 0, pointerId: 1, clientY: start.top + start.height / 2,
+      }));
+      window.dispatchEvent(new PointerEvent("pointermove", {
+        bubbles: true, cancelable: true, pointerId: 1, clientY: target.top + target.height / 2,
+      }));
+    });
+    const dragging = await page.evaluate(() => ({
+      active: Boolean(document.querySelector(".sidebar-module-row.dragging")),
+      target: Boolean(document.querySelector(".sidebar-module-row.drop-target-before, .sidebar-module-row.drop-target-after")),
+    }));
+    assert(dragging.active && dragging.target, "перетаскивание не достигло целевой строки");
+
+    await page.evaluate(() => {
+      const target = document.querySelectorAll("#sidebar-modules-list .sidebar-module-row")[1].getBoundingClientRect();
+      window.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, cancelable: true, pointerId: 1 }));
+      window.dispatchEvent(new PointerEvent("pointermove", {
+        bubbles: true, cancelable: true, pointerId: 1, clientY: target.top + target.height / 2,
+      }));
+    });
+    const after = await page.locator(rowsSelector).evaluateAll((rows) => rows.map((row) => row.dataset.moduleId));
+    const cleanup = await page.evaluate(() => ({
+      active: Boolean(document.querySelector(".sidebar-module-row.dragging")),
+      target: Boolean(document.querySelector(".sidebar-module-row.drop-target-before, .sidebar-module-row.drop-target-after")),
+    }));
+    assert(JSON.stringify(after) === JSON.stringify(before), "pointercancel изменил порядок разделов");
+    assert(!cleanup.active && !cleanup.target, "pointercancel не очистил состояние или обработчик pointermove");
     assert(errors.length === 0, errors.join("\n"));
   });
 
