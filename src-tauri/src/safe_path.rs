@@ -185,8 +185,10 @@ pub fn within(path: &Path, base: &Path) -> bool {
 }
 
 pub fn child(base: &Path, path: &Path) -> Result<PathBuf, String> {
-    let rel = path
-        .strip_prefix(base)
+    let normalized_base = strip_verbatim(base.to_path_buf());
+    let normalized_path = strip_verbatim(path.to_path_buf());
+    let rel = normalized_path
+        .strip_prefix(&normalized_base)
         .map_err(|_| "Путь находится вне разрешённой папки")?;
     join(base, &rel.to_string_lossy())
 }
@@ -256,6 +258,35 @@ mod tests {
             &temp.path().join("Documents/My Games-other/slot.sav"),
             &base
         ));
+    }
+    #[cfg(not(windows))]
+    #[test]
+    fn child_accepts_ordinary_paths_and_rejects_traversal() {
+        let temp = tempfile::tempdir().unwrap();
+        let base = temp.path().join("allowed");
+        fs::create_dir(&base).unwrap();
+
+        assert!(child(&base, &base.join("slot/save.dat")).is_ok());
+        assert!(child(&base, &base.join("../outside")).is_err());
+    }
+    #[cfg(windows)]
+    #[test]
+    fn child_accepts_ordinary_and_verbatim_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let ordinary = strip_verbatim(fs::canonicalize(temp.path()).unwrap());
+        let value = ordinary.to_string_lossy();
+        let verbatim = if let Some(unc) = value.strip_prefix(r"\\") {
+            PathBuf::from(format!(r"\\?\UNC\{unc}"))
+        } else {
+            PathBuf::from(format!(r"\\?\{value}"))
+        };
+        let verbatim_target = join(&ordinary, "slot/save.dat").unwrap();
+        let ordinary_target = ordinary.join("slot/save.dat");
+
+        assert_eq!(strip_verbatim(verbatim.clone()), ordinary);
+        assert!(child(&ordinary, &verbatim_target).is_ok());
+        assert!(child(&verbatim, &ordinary_target).is_ok());
+        assert!(child(&verbatim, &ordinary.join("../outside")).is_err());
     }
     #[cfg(unix)]
     #[test]
