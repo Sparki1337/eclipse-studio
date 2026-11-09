@@ -788,6 +788,49 @@ fn allowed_with_options(path: &Path, options: &SaveOptions) -> bool {
             .iter()
             .any(|root| path_is_within(path, Path::new(root)))
 }
+fn paths_overlap(left: &Path, right: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        let left = normalized_path(&crate::safe_path::strip_verbatim(left.to_path_buf()));
+        let right = normalized_path(&crate::safe_path::strip_verbatim(right.to_path_buf()));
+        left == right
+            || left
+                .strip_prefix(&right)
+                .is_some_and(|suffix| suffix.starts_with('/'))
+            || right
+                .strip_prefix(&left)
+                .is_some_and(|suffix| suffix.starts_with('/'))
+    }
+    #[cfg(not(windows))]
+    {
+        left == right || left.starts_with(right) || right.starts_with(left)
+    }
+}
+fn validate_archive_sources(paths: &[String], options: &SaveOptions) -> Result<(), String> {
+    let mut roots = Vec::<(PathBuf, PathBuf)>::with_capacity(paths.len());
+    for raw in paths {
+        let source = PathBuf::from(raw);
+        if !allowed_with_options(&source, options) {
+            return Err(format!(
+                "Папка не разрешена. Добавьте её вручную: {}",
+                source.display()
+            ));
+        }
+        let resolved = crate::safe_path::root(&source)?;
+        if let Some((_, previous)) = roots
+            .iter()
+            .find(|(existing, _)| paths_overlap(&resolved, existing))
+        {
+            return Err(format!(
+                "Выбраны пересекающиеся папки сохранений: {} и {}. Уберите родительскую или вложенную папку — такой архив нельзя будет безопасно восстановить.",
+                previous.display(),
+                source.display()
+            ));
+        }
+        roots.push((resolved, source));
+    }
+    Ok(())
+}
 fn scan_save_locations_with_options(app: &tauri::AppHandle) -> Result<Vec<SaveLocation>, String> {
     let options = save_options(app)?;
     let mut candidates = collect_candidates();
@@ -981,6 +1024,7 @@ fn create_save_archive_blocking(
         destination.set_extension(format);
         crate::safe_path::validate_absolute(&destination)?;
         let parent = destination.parent().ok_or("Некорректный путь архива")?;
+        validate_archive_sources(&paths, &options)?;
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
         let destination = crate::safe_path::child(parent, &destination)?;
         let stage = tempfile::tempdir().map_err(|e| e.to_string())?;
@@ -1613,6 +1657,38 @@ mod tests {
         create_zip(&stage, &archive).unwrap();
         assert!(archive.is_file());
         assert!(fs::metadata(&archive).unwrap().len() > 0);
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn rejects_overlapping_sources_and_allows_disjoint_retry() {
+        let directory = test_directory("source-overlap");
+        let parent = directory.join("Game");
+        let nested = parent.join("Saves");
+        let sibling = directory.join("OtherGame");
+        fs::create_dir_all(&nested).unwrap();
+        fs::create_dir_all(&sibling).unwrap();
+        let options = SaveOptions {
+            manual: vec![directory.display().to_string()],
+            excluded: vec![],
+        };
+        let overlapping = vec![parent.display().to_string(), nested.display().to_string()];
+        let error = validate_archive_sources(&overlapping, &options).unwrap_err();
+        assert!(error.contains("пересекающиеся"));
+        assert!(error.contains("безопасно восстановить"));
+
+        let disjoint = vec![parent.display().to_string(), sibling.display().to_string()];
+        assert!(validate_archive_sources(&disjoint, &options).is_ok());
+        #[cfg(target_os = "linux")]
+        {
+            let case_distinct = directory.join("game");
+            fs::create_dir_all(&case_distinct).unwrap();
+            let case_paths = vec![
+                parent.display().to_string(),
+                case_distinct.display().to_string(),
+            ];
+            assert!(validate_archive_sources(&case_paths, &options).is_ok());
+        }
         fs::remove_dir_all(directory).unwrap();
     }
 
