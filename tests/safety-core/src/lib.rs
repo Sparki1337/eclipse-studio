@@ -13,6 +13,9 @@ mod safe_path;
 #[path = "../../../src-tauri/src/resource_lock.rs"]
 mod resource_lock;
 
+#[path = "../../../src-tauri/src/instance_lock.rs"]
+mod instance_lock;
+
 #[path = "../../../src-tauri/src/download.rs"]
 mod download;
 

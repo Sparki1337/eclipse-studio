@@ -610,13 +610,14 @@
             }
           };
 
-          const stop = () => {
+          const finish = (commit) => {
             window.removeEventListener("pointermove", move);
             window.removeEventListener("pointerup", stop);
+            window.removeEventListener("pointercancel", cancel);
             row.classList.remove("dragging");
             clearRowDrop();
 
-            if (isDragging && dropRow && dropRow !== row) {
+            if (commit && isDragging && dropRow && dropRow !== row) {
               const targetId = dropRow.dataset.moduleId;
               if (targetId && targetId !== id) {
                 const currentOrder = config.order.filter((x) => x !== id);
@@ -628,9 +629,12 @@
               }
             }
           };
+          const stop = () => finish(true);
+          const cancel = () => finish(false);
 
           window.addEventListener("pointermove", move, { passive: false });
           window.addEventListener("pointerup", stop);
+          window.addEventListener("pointercancel", cancel);
         });
       }
 

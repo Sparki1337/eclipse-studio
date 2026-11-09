@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "component": "CloudRedirect 2.6.6-cgs-local.2 + Eclipse safety changes",
   "upstreamCommit": "4e81e492e4678c1d907fbeaef2625846f6afaad8",
   "builtAtUtc": "2026-11-08T13:30:02.3629897Z",
@@ -16,6 +16,8 @@
   ],
   "sha256": "ac42fe727b6e644bb0a0ebd625f3614a3d17d31062c51d45599d9fbde8c29193",
   "runtimeValidated": false,
+  "sourceHashing": "SHA-256 (CRLF and CR normalized to LF)",
+  "binaryHashing": "SHA-256 (exact file bytes)",
   "sources": {
     "CMakeLists.txt": "cd90bb24739d45d732205b89636fbb105a99017d09b3580417a8b455149aee24",
     "LICENSE": "e5d6554459e7f15943217b05aa33c2fddd6c8f9bbd1704d772b29963a1ddc951",
@@ -29,7 +31,7 @@
     "src/common/batch_tracker.cpp": "98219c3ffdb08a3289f2913e0eec0229bf379874cdd06c6e11caf9ff80c41085",
     "src/common/batch_tracker.h": "377b5ac55a345d47e255c49d7476932f3bff4d0801dc3569cc0644055b3ad208",
     "src/common/cgs_scope.h": "5c65f39852829396708becb1a9d431bf7d8d381dbf53a632e6f3d2b9a60da3f6",
-    "src/common/cgs_version.h": "e9be67fc1babec226695629c5c5e9bde35dea6c2cbbcba035079c98d5184198f",
+    "src/common/cgs_version.h": "bda0d926cd7eb4b73844d7f6634ce9e4b34713da043a5622db37f67a12f12d4a",
     "src/common/cli.cpp": "4980be254f1eb9e29824ac6b43b8cc1f67a9ce5f1a43ecdaafc6c3d33076d521",
     "src/common/cli.h": "d09ad9e136b6073cff4bcd109baf7edc2feed80048e697d51450af81e2f6b8a3",
     "src/common/cloud_metadata_paths.h": "8b29f5d99775ea8b76e164c9a37cee0207920c901e83de6deee1d6cd6b84a863",
@@ -127,7 +129,7 @@
     "src/platform/linux/yaml_parser.h": "f5ad50223e501c453e5fba7ab04711cceeac5f9226c4059e87db06ac1795c5b5",
     "src/platform/win/blob_path_policy.h": "442d8aa31d7f12aff1a70643412dae7b6dc8009a5285f31d80afb0dd1a5296af",
     "src/platform/win/cli_main.cpp": "01ff97f4a9eb26f1ec958b4afb16fe794b04e20273f2e00e6aaaa3478dcb12d4",
-    "src/platform/win/cloud_intercept.cpp": "0b9e55c168b4e814384e218109392adcb50d83e2cee3c9b66c8b0482b32fa423",
+    "src/platform/win/cloud_intercept.cpp": "c0e5934f3cde0ef91917380a1fa0090e6764686deb2035cc1084477a74aa6b76",
     "src/platform/win/cloud_intercept.h": "e369f0efa8f131b891e2ac4f4035dd010f9b4298e93dbc878efe4dba041f9175",
     "src/platform/win/cloud760_tool.cpp": "b224ac7cd5f6eace10d48bff144735e0f62ae3c7fdd422302eeb27812539b120",
     "src/platform/win/common.h": "b4b7c74ecf3c3426725ab8a788716f12f5f5e0a5311595199dc0201f1eef9098",
