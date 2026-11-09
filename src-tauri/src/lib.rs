@@ -16,6 +16,8 @@ mod files;
 mod game_artwork;
 mod hubcap;
 mod hypervisor;
+#[cfg(windows)]
+mod instance_lock;
 mod jobs;
 mod key_menu;
 mod loader_github;
@@ -342,6 +344,27 @@ pub fn run_update_helper() -> Option<i32> {
 }
 
 pub fn run() {
+    #[cfg(windows)]
+    let _instance = match instance_lock::Guard::for_launch() {
+        Ok(guard) => guard,
+        Err(error) => {
+            use windows::{
+                core::PCWSTR,
+                Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK},
+            };
+            let message: Vec<u16> = error.encode_utf16().chain(Some(0)).collect();
+            let title: Vec<u16> = "Eclipse Studio".encode_utf16().chain(Some(0)).collect();
+            unsafe {
+                MessageBoxW(
+                    None,
+                    PCWSTR(message.as_ptr()),
+                    PCWSTR(title.as_ptr()),
+                    MB_OK | MB_ICONINFORMATION,
+                );
+            }
+            return;
+        }
+    };
     updates::init_launch_context();
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
