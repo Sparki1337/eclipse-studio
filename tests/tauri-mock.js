@@ -72,7 +72,14 @@
     files_pick_download_dir: () => config.pickResult ?? "D:\\Cracks",
     files_default_download_dir: () => "C:\\Users\\Test\\Downloads",
     files_open_download_dir: () => null,
-    files_catalog: () => catalog,
+    files_catalog: () => {
+      if (config.deferFilesCatalog) {
+        return new Promise((resolve, reject) => {
+          window.__pendingFilesCatalog = { resolve, reject };
+        });
+      }
+      return catalog;
+    },
     files_download: (args) => {
       const dir = args.targetDir || "C:\\Users\\Test\\Downloads";
       const name = args.suggestedName || "file.zip";
