@@ -1,10 +1,12 @@
 {
-  "schema": 1,
+  "schema": 2,
   "algorithm": "SHA-256",
+  "sourceHashing": "SHA-256 (CRLF and CR normalized to LF)",
+  "outputHashing": "SHA-256 (exact file bytes)",
   "sources": {
-    "frontend/index.tsx": "a3551b603df934da33979b6da28d4ddab4b23ac9cf5936b6b5abd04b65e48e48",
+    "frontend/index.tsx": "2c081d3c8e367bda0097e4fc58b8649e15275ed1a8b18f978af0a6b59b3bc6ef",
     "webkit/index.tsx": "219a186d2caf97a5dfbc9ffcacfab1a2272fd5d9d79f4ce80331dc3d36bb95a7",
-    "backend/main.lua": "842dbfa5f7b8f3c42a5d135b1f361f83f2bd681a0bbf08bbe20716a8240c761d",
+    "backend/main.lua": "3f48dabbb642ef4fb9b0a63a54c6c27b359b0578ec09590c82342297e0741704",
     "backend/safe-io.ps1": "61a658312f07b91ecb3890848bbcc631ee7073402192f55d9970f25e244bc23d",
     "backend/state-store.ps1": "7c85390ebea83d3cd446237f92b6f65d2be9ed0def70148d3c0db96b507889e7",
     "backend/file-transaction.ps1": "e6b20768b1a04f1933e909225125feff3fb9cd7ac8957e8962229276b5225c28",
@@ -15,7 +17,7 @@
     "webkit/tsconfig.json": "a367eb0bfd575494d157c3f7515ebee79c5a94ad59c20e3858a469591630e923",
     "package.json": "a648e73f4f72355106aff98e7fe91181e2fef1b963bfcaafd423955f96846f27",
     ".npmrc": "6d55db7155e0291a54a482e15c9c1d44fd63c8aacb58536629ebe74f068ae9d6",
-    "package-lock.json": "e8e549525153826b0b51bda23b2f53d7d306625af2aa6e9f790f01cf4483b5ed",
+    "package-lock.json": "94aa93213bbaee7aab1281c2e1d7ded8535581439ae771a00612e48d7839b027",
     "plugin.json": "acfe694a0c4c1216fa053223e8d5002ea86a505a98eaaad54cf8daa2b251561c",
     "../scripts/check-deepmerge.cjs": "61397c8bf59e45229375610f2e271030a4c82854742a7f0486d08f88dd6cb16a"
   },
