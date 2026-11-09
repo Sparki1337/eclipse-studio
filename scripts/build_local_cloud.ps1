@@ -11,6 +11,27 @@ $taskBuild = Join-Path $SourceRoot 'build/local-cloud'
 $taskOutput = if ($OutputDirectory) { $OutputDirectory } else { Join-Path $SourceRoot 'src-tauri/resources/local-cloud' }
 New-Item -ItemType Directory -Force -Path $taskBuild, $taskOutput | Out-Null
 
+# Хэш исходников не зависит от CRLF/LF; DLL остаётся побайтовым хэшем.
+function Get-CanonicalTextSha256([string]$Path) {
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $normalized = [System.Collections.Generic.List[byte]]::new()
+    for ($index = 0; $index -lt $bytes.Length; $index++) {
+        if ($bytes[$index] -eq 13) {
+            $normalized.Add([byte]10)
+            if (($index + 1) -lt $bytes.Length -and $bytes[$index + 1] -eq 10) { $index++ }
+        } else {
+            $normalized.Add($bytes[$index])
+        }
+    }
+    $algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $digest = $algorithm.ComputeHash($normalized.ToArray())
+    } finally {
+        $algorithm.Dispose()
+    }
+    return [BitConverter]::ToString($digest).Replace('-', '').ToLowerInvariant()
+}
+
 # Список исходников берём из CMakeLists.txt, чтобы не расходиться с оригинальным проектом.
 # Первая секция PLATFORM_SOURCES — ветка if(WIN32).
 $taskCmake = [IO.File]::ReadAllText((Join-Path $taskSource 'CMakeLists.txt'))
@@ -55,10 +76,10 @@ $taskHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $taskDll).Hash.ToLowerI
 $taskInputs = [ordered]@{}
 Get-ChildItem -LiteralPath $taskSource -Recurse -File | Where-Object { $_.Extension -in @('.c', '.cpp', '.h', '.hpp') -or $_.Name -in @('CMakeLists.txt', 'LICENSE') } | Sort-Object FullName | ForEach-Object {
     $relative = $_.FullName.Substring($taskSource.Length + 1).Replace('\', '/')
-    $taskInputs[$relative] = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+    $taskInputs[$relative] = Get-CanonicalTextSha256 $_.FullName
 }
 $taskProvenance = [ordered]@{
-    schema = 1
+    schema = 2
     component = 'CloudRedirect 2.6.6-cgs-local.2 + Eclipse safety changes'
     upstreamCommit = '4e81e492e4678c1d907fbeaef2625846f6afaad8'
     builtAtUtc = [DateTime]::UtcNow.ToString('o')
@@ -66,7 +87,9 @@ $taskProvenance = [ordered]@{
     architecture = 'x64'
     options = @('/LD', '/O2', '/MP4', '/MT', '/EHsc', '/std:c++20', '/utf-8')
     sha256 = $taskHash
+    binaryHashing = 'SHA-256 (exact file bytes)'
     runtimeValidated = $false
+    sourceHashing = 'SHA-256 (CRLF and CR normalized to LF)'
     sources = $taskInputs
 }
 [IO.File]::WriteAllText((Join-Path $taskOutput 'build-provenance.json'), ($taskProvenance | ConvertTo-Json -Depth 8) + "`n", [Text.UTF8Encoding]::new($false))
