@@ -228,8 +228,8 @@ fn apply_stopped(
     if let (Some(old), Some(new)) = (previous_folder, target) {
         core::migrate_folder(Path::new(old), new)?;
     }
-    core::backup(steam, snap, now)?;
-    core::apply(steam, snap, &plan.changes)
+    let backup = core::backup(steam, snap, now)?;
+    core::apply_with_backup(steam, snap, &plan.changes, &backup)
 }
 
 /// Облако принимает только локальные и съёмные диски: сетевые папки и RAM-диски не подходят
