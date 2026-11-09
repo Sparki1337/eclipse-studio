@@ -147,12 +147,25 @@ async function main() {
   // Тот же мок и те же IPC-контракты, что в npm test
   await page.evaluateOnNewDocument(require("./dev-mock.cjs")(fullCatalogFiles));
 
+  // Первый запуск имитируем уже выбранным русским языком:
+  await page.evaluateOnNewDocument(() => {
+    try {
+      if (!sessionStorage.getItem("__native_state")) localStorage.setItem("cgs-language", "ru");
+    } catch (_) {}
+  });
+
   const baseUrl = `http://127.0.0.1:${port}/index.html`;
 
   // Главная
   console.log("Снятие скриншота: Главная.png");
   await page.goto(`${baseUrl}?view=home`);
   await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
+  // Диалог выбора языка не должен открываться: язык задан заранее.
+  // Если защита сломается — скрипт упадёт с таймаутом, а не снимет скриншот с оверлеем.
+  await page.waitForFunction(() => {
+    const dialog = document.getElementById("first-language-dialog");
+    return !dialog || !dialog.open;
+  });
   await sleep(800);
   const homePath = path.join(SCREENSHOTS_DIR, "Главная.png");
   await page.screenshot({ path: homePath });
