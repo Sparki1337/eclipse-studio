@@ -1,4 +1,6 @@
-/* Гипервизор: элементы управления */
+/* modules.css — стили модулей: гипервизор, кряки, главная, VBS, античиты */
+
+/* ── Гипервизор: элементы управления */
 #view-hypervisor {
   --hv-line: var(--line);
 }
@@ -7,7 +9,7 @@
   font-family: var(--font);
 }
 
-/* Вкладки разделов (Гипервизор / Античиты / VBS) */
+/* ── Вкладки разделов (Гипервизор / Античиты / VBS) */
 .hv-module-tabs {
   display: flex;
   margin: 0 36px 16px;
@@ -52,14 +54,14 @@
   box-shadow: 0 4px 14px rgba(var(--accent-rgb), .1);
 }
 
-/* Главный контейнер гипервизора */
+/* ── Главный контейнер гипервизора */
 .hv-layout {
   display: grid;
   gap: 16px;
   padding: 0 36px 42px;
 }
 
-/* Баннер Hero */
+/* ── Баннер Hero */
 .hv-hero {
   display: flex;
   align-items: center;
@@ -194,7 +196,7 @@
   transform: translateY(0);
 }
 
-/* Двухколоночный воркспейс */
+/* ── Двухколоночный воркспейс */
 .hv-workspace {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(360px, 1fr);
@@ -214,7 +216,7 @@
   min-width: 0;
 }
 
-/* Левая колонка: Библиотека */
+/* ── Левая колонка: Библиотека */
 .hv-library-panel {
   border: 1px solid var(--line) !important;
   border-radius: 16px !important;
@@ -351,7 +353,7 @@
   font-size: 11px;
 }
 
-/* Карточки игр в библиотеке */
+/* ── Карточки игр в библиотеке */
 .hv-game-list {
   display: grid;
   gap: 10px;
@@ -521,7 +523,7 @@
   box-shadow: 0 0 6px var(--accent);
 }
 
-/* Карточка выбранной игры */
+/* ── Карточка выбранной игры */
 .hv-selected-panel {
   border: 1px solid var(--line) !important;
   border-radius: 16px !important;
@@ -572,7 +574,7 @@
   white-space: nowrap;
 }
 
-/* Мета-информация и переключение профилей */
+/* ── Мета-информация и переключение профилей */
 .hv-selected-meta-row {
   display: flex;
   flex-direction: column;
@@ -644,7 +646,7 @@
   color: var(--tone-ok, #55d69e);
 }
 
-/* Кнопки запуска */
+/* ── Кнопки запуска */
 .hv-selected-actions {
   display: flex;
   align-items: center;
@@ -721,7 +723,7 @@
   background: rgba(255, 255, 255, .05) !important;
 }
 
-/* Панель шагов сценария */
+/* ── Панель шагов сценария */
 .hv-steps-panel {
   border: 1px solid var(--line) !important;
   border-radius: 16px !important;
@@ -803,7 +805,7 @@
   background: rgba(255, 85, 120, .12);
 }
 
-/* Панель лога */
+/* ── Панель лога */
 .hv-log-panel {
   border: 1px solid var(--line) !important;
   border-radius: 16px !important;
@@ -869,7 +871,7 @@
 }
 .modal.hv-help-modal{width:min(520px,calc(100vw - 40px));padding:30px 34px}.modal.hv-help-modal p{padding:2px 8px;color:#919aa7;text-align:left;font-size:11px;line-height:1.75}.modal.hv-help-modal .modal-actions{margin-top:4px}
 
-/* Релизы и кряки */
+/* ── Релизы и кряки */
 .files-layout{display:grid;gap:18px;padding:0 36px 44px}
 .files-hero{display:flex;align-items:center;gap:18px;min-height:0;padding:18px 24px;overflow:hidden;background:linear-gradient(135deg,var(--panel-a),var(--panel-b))}
 .files-hero-icon{display:grid;place-items:center;flex:0 0 52px;width:52px;height:52px;border:1px solid rgba(var(--accent-rgb),.2);border-radius:15px;background:rgba(var(--accent-rgb),.075);font-size:24px;box-shadow:inset 0 1px rgba(255,255,255,.045)}
@@ -887,7 +889,7 @@
 @media(max-width:1420px){.files-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.files-hero-stats{grid-template-columns:115px 155px}.files-toolbar{align-items:flex-start}.files-toolbar-actions{flex-wrap:wrap;justify-content:flex-end}}
 @media(max-width:1050px){.files-hero{align-items:flex-start;flex-wrap:wrap}.files-hero-stats{width:100%;grid-template-columns:1fr 1fr}.files-toolbar{flex-direction:column}.files-toolbar-actions{width:100%;justify-content:flex-start}.files-search{flex:1}.files-grid{grid-template-columns:1fr}}
 
-/* Кряки: компактные элементы управления */
+/* ── Кряки: компактные элементы управления */
 .files-layout{gap:18px;padding:0 34px 44px}
 .files-hero{min-height:0;padding:18px 24px;gap:20px}
 .files-hero-icon{flex-basis:52px;width:52px;height:52px;border-radius:15px;font-size:24px}
@@ -950,7 +952,7 @@ html[data-theme="light"] .toast-success-title{color:#14532d;text-shadow:none}
 @media(max-width:1420px){.files-hero-stats{grid-template-columns:150px}}
 @media(max-width:1050px){.files-hero-stats{grid-template-columns:1fr}}
 
-/* Переключатель режимов каталога: Сетка / Список */
+/* ── Переключатель режимов каталога: Сетка / Список */
 .files-view-toggle {
   display: inline-flex;
   align-items: center;
@@ -1015,7 +1017,7 @@ html[data-theme="oled"] .files-view-toggle {
   border-color: rgba(255, 255, 255, 0.14);
 }
 
-/* Компактный режим отображения кряков: Список */
+/* ── Компактный режим отображения кряков: Список */
 .files-catalog.view-list .files-grid {
   display: flex !important;
   flex-direction: column !important;
@@ -1227,7 +1229,7 @@ html[data-theme="oled"] :is(.file-card, .files-catalog.view-list .file-card).is-
   }
 }
 
-/* Утилиты */
+/* ── Утилиты */
 .utilities-layout{display:grid;gap:18px;padding:0 36px 44px}
 .utilities-hero{display:flex;min-height:0;padding:18px 24px;align-items:center;gap:18px;overflow:hidden;background:linear-gradient(135deg,var(--panel-a),var(--panel-b))}
 .utilities-hero-icon{display:grid;place-items:center;flex:0 0 52px;width:52px;height:52px;border:1px solid rgba(var(--accent-rgb),.2);border-radius:15px;background:rgba(var(--accent-rgb),.07);font-size:24px;box-shadow:inset 0 1px rgba(255,255,255,.045)}
@@ -1244,13 +1246,13 @@ html[data-theme="oled"] :is(.file-card, .files-catalog.view-list .file-card).is-
 @media(max-width:1250px){.utilities-grid{grid-template-columns:1fr}.utility-card{min-height:110px}}
 @media(max-width:900px){.utilities-layout{padding-inline:24px}.utility-card{flex-wrap:wrap}.utility-card-open{width:100%;padding-left:58px}}
 
-/* Сканер античитов */
+/* ── Сканер античитов */
 .hv-tab-panel{display:none}.hv-tab-panel.active{display:block}
 .ac-layout{display:grid;gap:18px;padding:0 36px 44px}
 .ac-hero{display:flex;min-height:0;padding:18px 24px;align-items:center;gap:18px;overflow:hidden;background:radial-gradient(circle at 86% 15%,rgba(var(--accent-rgb),.085),transparent 30%),linear-gradient(135deg,var(--panel-a),var(--panel-b))}
 .ac-hero-copy{min-width:0;flex:1}.ac-hero-copy h2{margin:0 0 4px;font-size:22px}.ac-hero-copy p{max-width:760px;margin:0;color:var(--muted);font-size:12px;line-height:1.55}.ac-hero-actions{display:flex;flex:0 0 auto;gap:10px}
 .ac-scan-button,.ac-remove-all,.ac-remove-button{display:flex;align-items:center;justify-content:center;gap:8px;border-radius:10px;cursor:pointer;font-weight:760;transition:.18s}.ac-scan-button,.ac-remove-all{height:42px;padding:0 15px;font-size:10.5px}.ac-scan-button svg{width:15px;height:15px;flex-shrink:0}.ac-scan-button{border:1px solid rgba(var(--accent-rgb),.27);color:rgba(var(--accent-rgb),.88);background:rgba(var(--accent-rgb),.075)}.ac-scan-button:hover:not(:disabled){border-color:rgba(var(--accent-rgb),.42);color:var(--accent);background:rgba(var(--accent-rgb),.12)}.ac-remove-all{border:1px solid rgba(255,101,130,.3);color:#e99bad;background:rgba(255,71,112,.07)}.ac-remove-all:hover:not(:disabled){border-color:rgba(255,101,130,.48);color:#ffadbf;background:rgba(255,71,112,.12)}.ac-remove-all b{display:grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:6px;background:rgba(255,255,255,.055);font-size:8px}.ac-scan-button:disabled,.ac-remove-all:disabled,.ac-remove-button:disabled{cursor:not-allowed;opacity:.45}
-/* «Вернуть как было»: геометрия как у «Сканировать», нейтральные цвета */
+/* ── «Вернуть как было»: геометрия как у «Сканировать», нейтральные цвета */
 .ac-restore-button{display:flex;height:42px;padding:0 15px;align-items:center;justify-content:center;gap:8px;border:1px solid var(--line-strong);border-radius:10px;color:var(--text);background:rgba(255,255,255,.035);cursor:pointer;font-size:10.5px;font-weight:760;white-space:nowrap;transition:.18s}.ac-restore-button svg{width:15px;height:15px;flex-shrink:0}.ac-restore-button:hover:not(:disabled){border-color:rgba(var(--accent-rgb),.42);color:var(--accent);background:rgba(var(--accent-rgb),.075)}.ac-restore-button:disabled{cursor:not-allowed;opacity:.45}
 .ac-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:hidden;border:1px solid var(--line);border-radius:17px;background:var(--panel-b)}.ac-stats article{display:flex;min-height:76px;padding:16px 20px;flex-direction:column;justify-content:center;border:0!important;border-radius:0!important;background:transparent!important}.ac-stats article+article{border-left:1px solid var(--line)!important}.ac-stats small{color:var(--muted-2);font-size:7.5px;font-weight:850;letter-spacing:.16em}.ac-stats strong{margin:4px 0 2px;color:var(--text);font-size:18px}.ac-stats article:nth-child(2) strong{color:rgba(var(--accent-rgb),.88)}.ac-stats span{color:var(--muted);font-size:9.5px}
 .ac-results-panel{overflow:hidden;border-radius:18px}.ac-results-header{display:flex;min-height:120px;padding:25px 27px;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--line)}.ac-results-header h3{margin:7px 0 5px;font-size:19px}.ac-results-header p{margin:0;color:var(--muted);font-size:10.5px}.ac-scan-time{color:var(--muted-2);font-size:8.5px}
@@ -1260,7 +1262,7 @@ html[data-theme="oled"] :is(.file-card, .files-catalog.view-list .file-card).is-
 @media(max-width:1250px){.ac-hero{align-items:flex-start;flex-wrap:wrap}.ac-hero-actions{width:100%;padding-left:70px}.ac-evidence span{max-width:360px}}
 @media(max-width:900px){.hv-module-tabs{margin-inline:24px}.ac-layout{padding-inline:24px}.ac-stats{grid-template-columns:1fr}.ac-stats article+article{border-left:0!important;border-top:1px solid var(--line)!important}.ac-item{align-items:flex-start;flex-wrap:wrap}.ac-item-state{width:100%;justify-content:flex-end}.ac-hero-actions{padding-left:0}.ac-evidence span{max-width:260px}}
 
-/* Центр управления VBS */
+/* ── Центр управления VBS */
 .vbs-layout{display:grid;gap:18px;padding:0 36px 44px}
 .vbs-test-button{display:flex;height:42px;padding:0 15px;align-items:center;justify-content:center;gap:8px;border:1px solid rgba(var(--accent-rgb),.27);border-radius:10px;color:rgba(var(--accent-rgb),.88);background:rgba(var(--accent-rgb),.075);cursor:pointer;font-size:10.5px;font-weight:760;transition:.18s}.vbs-test-button:hover:not(:disabled){border-color:rgba(var(--accent-rgb),.42);color:var(--accent);background:rgba(var(--accent-rgb),.12)}.vbs-test-button:disabled{cursor:not-allowed;opacity:.4}.vbs-test-notice{display:flex;align-items:flex-start;gap:15px;padding:21px 24px}.vbs-test-notice>span{font-size:24px}.vbs-test-notice h3{margin:0 0 7px;font-size:15px}.vbs-test-notice p{margin:5px 0;color:var(--muted);font-size:12px;line-height:1.6}.vbs-test-notice #vbs-test-status{color:rgba(var(--accent-rgb),.85)}
 .vbs-test-notice{display:grid;grid-template-columns:28px minmax(0,1fr) auto;align-items:center;gap:20px}.vbs-test-notice>div{min-width:0}.vbs-test-notice>.vbs-test-button{margin-left:12px;white-space:nowrap}@media(max-width:900px){.vbs-test-notice{grid-template-columns:28px minmax(0,1fr)}.vbs-test-notice>.vbs-test-button{grid-column:2;justify-self:end;margin-left:0}}
@@ -1271,9 +1273,9 @@ html[data-theme="oled"] :is(.file-card, .files-catalog.view-list .file-card).is-
 .vbs-components-panel{overflow:hidden;border-radius:18px}.vbs-components-header{display:flex;min-height:120px;padding:25px 27px;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--line)}.vbs-components-header h3{margin:7px 0 5px;font-size:19px}.vbs-components-header p{margin:0;color:var(--muted);font-size:10.5px}.vbs-scan-time{color:var(--muted-2);font-size:8.5px}.vbs-components{display:grid;padding:8px 18px 18px}.vbs-component{display:flex;min-height:66px;padding:14px 0;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line)}.vbs-component:last-child{border-bottom:0}.vbs-component h4{margin:0;color:var(--text);font-size:12px}.vbs-component p{margin:5px 0 0;color:var(--muted-2);font-size:9.5px}.vbs-component>span{flex:0 0 auto;padding:7px 10px;border:1px solid rgba(87,224,149,.2);border-radius:99px;color:var(--tone-ok, #60d995);background:rgba(38,184,105,.085);font-size:8px;font-weight:800}.vbs-component.enabled>span{border-color:rgba(255,91,123,.23);color:var(--tone-bad, #ff819d);background:rgba(255,66,105,.075)}.vbs-component.locked>span{border-color:rgba(223,163,48,.26);color:var(--tone-warn, #e1af45);background:rgba(175,111,16,.08)}
 .vbs-loading{display:grid;min-height:350px;padding:45px;place-items:center;text-align:center}.vbs-loading>span{width:36px;height:36px;border:2px solid rgba(255,255,255,.07);border-top-color:rgba(var(--accent-rgb),.75);border-radius:50%;animation:spin 1s linear infinite}.vbs-loading strong{margin-top:14px;font-size:14px}.vbs-loading p{margin:6px 0 0;color:var(--muted);font-size:10px}
 .vbs-warning-panel{display:flex;padding:21px 24px;align-items:flex-start;gap:15px;border-color:rgba(223,163,48,.14);background:rgba(97,61,13,.04)}.vbs-warning-icon{display:grid;flex:0 0 32px;width:32px;height:32px;place-items:center;border:1px solid rgba(223,163,48,.22);border-radius:10px;color:var(--tone-warn, #e1af45);background:rgba(175,111,16,.08);font-weight:850}.vbs-warning-panel h3{margin:7px 0 8px;font-size:15px}.vbs-warning-panel p{margin:5px 0;color:#9b8c75;font-size:10px;line-height:1.55}.vbs-log-panel{padding:24px 27px}.vbs-log-panel h3{margin:7px 0 13px;font-size:17px}.vbs-log-panel pre{max-height:220px;margin:0;padding:16px;overflow:auto;border:1px solid var(--line);border-radius:11px;color:var(--muted);background:rgba(0,0,0,.35);font:9px/1.65 Consolas,monospace;white-space:pre-wrap}.vbs-log-panel pre:empty{display:none!important}
-@media(max-width:1250px){.vbs-hero{align-items:flex-start;flex-wrap:wrap}.vbs-hero-actions{width:100%;padding-left:100px;justify-content:flex-start}}
+@media(max-width:1250px){.vbs-hero{align-items:flex-start;flex-wrap:wrap}.vbs-hero-actions{margin-left:auto;justify-content:flex-end}}
 @media(max-width:900px){.vbs-layout{padding-inline:24px}.vbs-hero-actions{padding-left:0}.vbs-components-header{align-items:flex-start;flex-direction:column}.vbs-component{align-items:flex-start}.vbs-component>span{margin-top:2px}}
-/* Стили VBS 2.0: карточки BitLocker, KVA Shadow, UEFI Lock, конфликты и средства диагностики */
+/* ── Стили VBS 2.0: карточки BitLocker, KVA Shadow, UEFI Lock, конфликты и средства диагностики */
 .vbs-grid-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
 .vbs-card{display:flex;min-height:86px;padding:18px 22px;align-items:center;justify-content:space-between;gap:16px;border-radius:14px}
 .vbs-card h3{margin:6px 0 4px;font-size:14.5px}
@@ -1283,7 +1285,7 @@ html[data-theme="oled"] :is(.file-card, .files-catalog.view-list .file-card).is-
 .vbs-badge[data-state="warning"],.vbs-badge[data-state="suspended"]{border-color:rgba(223,163,48,.28);color:var(--tone-warn, #e1af45);background:rgba(175,111,16,.09)}
 .vbs-badge[data-state="protected"],.vbs-badge[data-state="active"],.vbs-badge[data-state="on"]{border-color:rgba(255,94,126,.22);color:var(--tone-bad, #ff8fa7);background:rgba(255,65,104,.07)}
 .vbs-badge[data-state="neutral"]{border-color:rgba(255,255,255,.12);color:var(--muted);background:rgba(255,255,255,.04)}
-/* Карточки VBS: длинный текст переносится внутри карточки и не выталкивает бейдж */
+/* ── Карточки VBS: длинный текст переносится внутри карточки и не выталкивает бейдж */
 .vbs-card>div{min-width:0;flex:1 1 auto}.vbs-card p{overflow-wrap:anywhere}
 .vbs-card-diagnostics{display:-webkit-box;margin-top:6px;overflow:hidden;color:var(--muted);font-size:9px;line-height:1.45;opacity:.78;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:3}
 .vbs-card-action{display:inline-flex;max-width:100%;min-height:32px;margin-top:10px;padding:6px 12px;align-items:center;gap:7px;line-height:1.3;text-align:left;border:1px solid rgba(var(--accent-rgb),.3);border-radius:9px;color:rgba(var(--accent-rgb),.9);background:rgba(var(--accent-rgb),.08);cursor:pointer;font-size:10px;font-weight:760;transition:.18s}.vbs-card-action svg{width:15px;height:15px;flex-shrink:0}.vbs-card-action:hover:not(:disabled){border-color:rgba(var(--accent-rgb),.5);color:var(--accent);background:rgba(var(--accent-rgb),.14)}.vbs-card-action:disabled{cursor:not-allowed;opacity:.4}
@@ -1345,7 +1347,7 @@ html[data-theme="oled"] :is(.file-card, .files-catalog.view-list .file-card).is-
   .vbs-troubleshoot-grid{grid-template-columns:1fr}
   .vbs-uefi-card{flex-direction:column;align-items:flex-start}
 }
-/* Карточка универсального автономного лаунчера Eclipse-HV */
+/* ── Карточка универсального автономного лаунчера Eclipse-HV */
 .hv-eclipse-card{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:20px 24px;border-radius:16px;margin-bottom:20px;border:1px solid rgba(var(--accent-rgb),.22);background:radial-gradient(circle at 10% 20%,rgba(var(--accent-rgb),.08),transparent 40%),linear-gradient(135deg,var(--panel-a),var(--panel-b))}
 .hv-eclipse-main{display:flex;align-items:center;gap:18px;flex:1;min-width:0}
 .hv-eclipse-badge-icon{display:grid;place-items:center;flex:0 0 46px;width:46px;height:46px;border-radius:12px;border:1px solid rgba(var(--accent-rgb),.3);background:rgba(var(--accent-rgb),.1);color:var(--accent)}
@@ -1369,7 +1371,7 @@ html[data-theme="oled"] :is(.file-card, .files-catalog.view-list .file-card).is-
 @media(max-width:1050px){.hv-eclipse-card{flex-direction:column;align-items:flex-start}.hv-eclipse-actions{width:100%;justify-content:flex-end}}
 
 
-/* Модальное окно: Инструкция по Eclipse-HV */
+/* ── Модальное окно: Инструкция по Eclipse-HV */
 #eclipse-hv-instructions-backdrop {
   z-index: 250;
   display: grid;
@@ -1566,7 +1568,7 @@ html[data-theme="oled"] :is(.file-card, .files-catalog.view-list .file-card).is-
 .vbs-enable-all-button svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;fill:none}
 .vbs-enable-all-button:disabled{cursor:not-allowed;opacity:.4}
 
-/* Рабочая сводка использует реальные данные, а не демонстрационные карточки */
+/* ── Рабочая сводка использует реальные данные, а не демонстрационные карточки */
 .save-selection-actions, .save-archive-actions { flex-wrap: wrap; gap: 8px; }
 .save-location .save-exclude { min-height: 44px; flex-shrink: 0; }
 .startup-error { max-width: 760px; margin: 64px auto; padding: 24px; color: var(--text, #eee); font: 16px/1.5 system-ui, sans-serif; }
@@ -1574,7 +1576,7 @@ html[data-theme="oled"] :is(.file-card, .files-catalog.view-list .file-card).is-
 @media (max-width: 1100px) { .save-archive-dock { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { .modal-backdrop, .modal { transition: none !important; animation: none !important; } }
 
-/* Главная: --hu масштабирует размеры, --hd задаёт плотность; запросы в em учитывают ширину шрифта */
+/* ── Главная: --hu масштабирует размеры, --hd задаёт плотность; запросы в em учитывают ширину шрифта */
 .home-layout {
   --hu: calc(var(--fs, 1.2) / 1.2 * 1px);
   --hd: 1;
@@ -1595,7 +1597,7 @@ html:is([data-font="consolas"], [data-font="verdana"]) .home-layout { --home-fw:
 html.compact .home-layout { --hd: .72; --home-title: 32; }
 html[data-theme="light"] .home-layout { --home-warn: #b45309; --home-danger: #e11d48; }
 
-/* Приветственный блок */
+/* ── Приветственный блок */
 .home-layout .home-hero {
   display: flex;
   align-items: center;
@@ -1652,7 +1654,7 @@ html[data-theme="light"] .home-layout { --home-warn: #b45309; --home-danger: #e1
   filter: saturate(.95) contrast(1.02) drop-shadow(0 0 calc(var(--hu) * 35) rgba(var(--accent-rgb), .12));
 }
 
-/* Панели состояния */
+/* ── Панели состояния */
 .home-layout .home-status-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--home-gap); margin: 0; }
 .home-layout .home-status-panel {
   container: home-panel / inline-size;
@@ -1728,7 +1730,7 @@ html[data-theme="light"] .home-layout { --home-warn: #b45309; --home-danger: #e1
   background: color-mix(in srgb, var(--home-danger) 12%, transparent);
 }
 
-/* Строки списков */
+/* ── Строки списков */
 .home-list { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; margin: 0; padding: 0; list-style: none; }
 .home-item {
   display: flex;
@@ -1741,7 +1743,7 @@ html[data-theme="light"] .home-layout { --home-warn: #b45309; --home-danger: #e1
 .home-item:first-child { border-top: 0; }
 .home-item-copy { flex: 1; min-width: 0; display: grid; gap: calc(var(--hu) * 3); }
 .home-item-head { display: flex; align-items: flex-start; gap: calc(var(--hu) * 8); min-width: 0; }
-/* Название не обрезается до пары букв в узкой панели: переносится максимум на две строки */
+/* ── Название не обрезается до пары букв в узкой панели: переносится максимум на две строки */
 .home-item-head strong {
   display: -webkit-box;
   min-width: 0;
@@ -1795,7 +1797,7 @@ html[data-theme="light"] .home-layout { --home-warn: #b45309; --home-danger: #e1
   line-height: 1.45;
   color: var(--muted);
 }
-/* Текст ошибки важнее пути: в «Требует внимания» он занимает до двух строк */
+/* ── Текст ошибки важнее пути: в «Требует внимания» он занимает до двух строк */
 .home-status-panel[data-kind="attention"] .home-item-detail {
   display: -webkit-box;
   white-space: normal;
@@ -1861,7 +1863,7 @@ html[data-theme="light"] .home-layout { --home-warn: #b45309; --home-danger: #e1
 }
 .home-more button:hover { text-decoration: underline; text-underline-offset: .2em; }
 
-/* Карточки модулей: 12-колоночная сетка, последний ряд растягивается без «сирот» */
+/* ── Карточки модулей: 12-колоночная сетка, последний ряд растягивается без «сирот» */
 .home-layout .home-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: calc(var(--hu) * 14 * var(--hd)); margin: 0; }
 .home-layout .home-grid > .module-card { grid-column: span 12; }
 .home-layout .module-card {
@@ -1945,7 +1947,7 @@ html[data-theme="light"] .home-layout { --home-warn: #b45309; --home-danger: #e1
 html[data-theme="light"] .home-layout .module-card { background: var(--panel-solid, #fff); box-shadow: 0 2px 8px rgba(0, 0, 0, .04); }
 html[data-theme="light"] .home-layout .module-card:hover { background: rgba(var(--accent-rgb), .05); box-shadow: 0 calc(var(--hu) * 10) calc(var(--hu) * 26) rgba(0, 0, 0, .08); }
 
-/* Узкий контейнер: картинка уходит в фон, кнопки строк переносятся под текст */
+/* ── Узкий контейнер: картинка уходит в фон, кнопки строк переносятся под текст */
 @container home (width < 44em) {
   .home-layout .home-hero { --home-title: 30; min-height: 0; padding: calc(var(--hu) * 24 * var(--hd)) calc(var(--hu) * 24); }
   .home-layout .hero-copy { max-width: 100%; }
@@ -1963,7 +1965,7 @@ html[data-theme="light"] .home-layout .module-card:hover { background: rgba(var(
   .home-item { flex-wrap: wrap; }
   .home-item-actions { width: 100%; }
 }
-/* Сетка из 1, 2 или 4 колонок учитывает число видимых панелей data-count */
+/* ── Сетка из 1, 2 или 4 колонок учитывает число видимых панелей data-count */
 @container home (width >= 34em) {
   .home-layout .home-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home-layout .home-status-grid[data-count="1"] { grid-template-columns: minmax(0, 1fr); }
@@ -1976,12 +1978,12 @@ html[data-theme="light"] .home-layout .module-card:hover { background: rgba(var(
 @container home (width >= 84em) {
   .home-layout .home-status-grid:not([data-count="1"], [data-count="2"], [data-count="3"]) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
-/* Модули: 2 в ряд; нечётная последняя карточка — на всю ширину */
+/* ── Модули: 2 в ряд; нечётная последняя карточка — на всю ширину */
 @container home (30em <= width < 46em) {
   .home-layout .home-grid > .module-card { grid-column: span 6; }
   .home-layout .home-grid > .module-card:nth-child(odd):last-child { grid-column: span 12; }
 }
-/* 3 в ряд; остаток 1 → два ряда по 2, остаток 2 → последние две пополам */
+/* ── 3 в ряд; остаток 1 → два ряда по 2, остаток 2 → последние две пополам */
 @container home (46em <= width < 68em) {
   .home-layout .home-grid > .module-card { grid-column: span 4; }
   .home-layout .home-grid > .module-card:nth-child(3n+1):nth-last-child(4),
@@ -1989,7 +1991,7 @@ html[data-theme="light"] .home-layout .module-card:hover { background: rgba(var(
   .home-layout .home-grid > .module-card:nth-child(3n+1):nth-last-child(2),
   .home-layout .home-grid > .module-card:nth-child(3n+1):nth-last-child(2) ~ .module-card { grid-column: span 6; }
 }
-/* 4 в ряд; остаток 3 → по трети, 2 → пополам, 1 → ряды 3 + 2 */
+/* ── 4 в ряд; остаток 3 → по трети, 2 → пополам, 1 → ряды 3 + 2 */
 @container home (width >= 68em) {
   .home-layout .home-grid > .module-card { grid-column: span 3; }
   .home-layout .home-grid > .module-card:nth-child(4n+1):nth-last-child(3),
@@ -2000,13 +2002,13 @@ html[data-theme="light"] .home-layout .module-card:hover { background: rgba(var(
   .home-layout .home-grid > .module-card:nth-child(4n+1):nth-last-child(5) ~ .module-card { grid-column: span 4; }
   .home-layout .home-grid > .module-card:nth-child(4n+1):nth-last-child(5) ~ .module-card:nth-last-child(-n+2) { grid-column: span 6; }
 }
-/* Единственная включённая карточка модуля — на всю ширину в любой раскладке */
+/* ── Единственная включённая карточка модуля — на всю ширину в любой раскладке */
 .home-layout .home-grid > .module-card:only-child { grid-column: span 12; }
 
-/* Номера операций можно скрыть в настройках главной */
+/* ── Номера операций можно скрыть в настройках главной */
 .home-layout[data-ids="off"] .home-item-id { display: none; }
 
-/* Кнопка «Настроить главную» под блоками */
+/* ── Кнопка «Настроить главную» под блоками */
 .home-layout .home-footer { display: flex; justify-content: flex-end; }
 .home-customize {
   display: inline-flex;
@@ -2027,7 +2029,7 @@ html[data-theme="light"] .home-layout .module-card:hover { background: rgba(var(
 .home-customize:hover svg { color: var(--accent); }
 .home-customize:focus-visible { outline: 2px solid rgba(var(--accent-rgb), .55); outline-offset: 2px; }
 
-/* Все блоки скрыты */
+/* ── Все блоки скрыты */
 .home-layout .home-layout-empty {
   display: flex;
   flex-direction: column;
@@ -2041,7 +2043,7 @@ html[data-theme="light"] .home-layout .module-card:hover { background: rgba(var(
 .home-layout-empty p { margin: 0; max-width: 34em; font-size: calc(var(--hu) * 13); line-height: 1.5; color: var(--muted); }
 .home-layout-empty .secondary-button { margin: calc(var(--hu) * 8) 0 0; }
 
-/* Управление защитами */
+/* ── Управление защитами */
 .protections-panel{overflow:hidden;border-radius:18px}
 .protections-header{display:flex;min-height:110px;padding:22px 26px;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid var(--line)}
 .protections-header h3{margin:6px 0 4px;font-size:18px}
@@ -2063,7 +2065,7 @@ html[data-theme="light"] .home-layout .module-card:hover { background: rgba(var(
 .protection-toggle-btn:hover:not(:disabled){border-color:rgba(var(--accent-rgb),.35);color:var(--accent);background:rgba(var(--accent-rgb),.08)}
 .protection-toggle-btn.btn-disable:hover:not(:disabled){border-color:rgba(255,91,123,.35);color:#ff819d;background:rgba(255,66,105,.08)}
 .protection-toggle-btn:disabled{cursor:not-allowed;opacity:.45}
-/* Сортировка кряков: кнопка с текущим режимом и адаптивное выпадающее меню */
+/* ── Сортировка кряков: кнопка с текущим режимом и адаптивное выпадающее меню */
 .files-sort {
   position: relative;
 }
@@ -2307,7 +2309,7 @@ html[data-theme="oled"] .files-sort-item.active::before {
   box-shadow: inset 0 0 0 2.5px #000000;
 }
 
-/* Локальное облако (CloudRedirect): сохранения игр с манифестами хранятся в папке на диске */
+/* ── Локальное облако (CloudRedirect): сохранения игр с манифестами хранятся в папке на диске */
 .local-cloud-panel { display: flex; flex-direction: column; gap: 14px; padding: 20px 24px; }
 .local-cloud-panel[data-busy="true"] { cursor: progress; }
 .local-cloud-head { display: flex; align-items: center; gap: 17px; flex-wrap: wrap; }
@@ -2323,14 +2325,14 @@ html[data-theme="oled"] .files-sort-item.active::before {
 .local-cloud-info:focus-visible { outline: 2px solid rgba(var(--accent-rgb), .7); outline-offset: 3px; }
 .local-cloud-toggle { display: inline-flex; align-items: center; gap: 10px; color: var(--text); font-size: 11px; font-weight: 650; white-space: nowrap; cursor: pointer; user-select: none; }
 .local-cloud-toggle .switch { margin-left: 0; }
-/* Чекбокс прозрачен, но остаётся в потоке: переключатель доступен с клавиатуры */
+/* ── Чекбокс прозрачен, но остаётся в потоке: переключатель доступен с клавиатуры */
 .local-cloud-toggle .switch input { display: block; position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .local-cloud-toggle .switch input:focus-visible + i { outline: 2px solid rgba(var(--accent-rgb), .7); outline-offset: 2px; }
 .local-cloud-toggle:has(input:disabled) { color: var(--muted); cursor: not-allowed; }
 .local-cloud-toggle .switch input:disabled { cursor: not-allowed; }
 .local-cloud-path { display: flex; align-items: center; gap: 10px; }
 .local-cloud-path .local-cloud-entry { flex: 1; min-width: 0; margin-top: 0; }
-/* Путь только для чтения: меняется кнопкой «Выбрать папку» через системный диалог */
+/* ── Путь только для чтения: меняется кнопкой «Выбрать папку» через системный диалог */
 .local-cloud-entry input { text-overflow: ellipsis; cursor: default; }
 .local-cloud-path > button { flex-shrink: 0; }
 .local-cloud-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 30px; }
@@ -2349,3 +2351,17 @@ html[data-theme="oled"] .files-sort-item.active::before {
   .local-cloud-path .local-cloud-entry { flex-basis: 100%; }
   .local-cloud-path > button { width: 100%; }
 }
+
+/* ── Окно обновления DLL локального облака: текст слева, действия внизу */
+.modal.lc-update-modal { width: min(560px, calc(100vw - 40px)); padding: 30px; text-align: left; align-items: flex-start; overflow-y: auto; }
+.lc-update-modal .coming-label { margin-bottom: 6px; }
+.lc-update-modal h3 { font-size: 20px; line-height: 1.3; margin: 6px 0 14px; }
+.lc-update-modal p { max-height: none; margin: 0 0 12px; padding: 0; font-size: 11.5px; line-height: 1.7; text-align: left; }
+.lc-update-modal .lc-update-note { color: var(--muted); font-size: 10.5px; }
+.lc-update-status { min-height: 18px; margin: 4px 0 12px; color: var(--accent); font-size: 10.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.lc-update-status[data-kind="ok"] { color: var(--tone-ok, var(--k-ok, #4ade80)); }
+.lc-update-status[data-kind="error"] { color: var(--tone-bad, var(--k-bad, #fb5a72)); }
+.lc-update-modal progress { width: 100%; height: 8px; margin: 0 0 14px; accent-color: var(--accent); }
+.lc-update-modal [hidden] { display: none !important; }
+.lc-update-modal .modal-actions { width: 100%; justify-content: flex-end; margin-top: 4px; }
+

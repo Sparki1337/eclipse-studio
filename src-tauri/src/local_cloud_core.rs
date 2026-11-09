@@ -1,6 +1,4 @@
-//! Ядро локального облака Eclipse Manifest без зависимостей от Tauri.
-//! CloudRedirect перенаправляет Steam Cloud игр с Lua и манифестами в папку на диске;
-//! здесь собраны проверки Lua, правка секции [cloud], состояние и перенос данных папки.
+//! Ядро локального облака без Tauri: проверки Lua, секция [cloud], состояние и перенос данных.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -20,14 +18,12 @@ pub const PROVIDER_CONFIG: &str = "config/cgs-local-cloud.json";
 /// Состояние программы: признак управления, исходная секция [cloud] и хеш DLL
 pub const STATE_FILE: &str = "config/cgs-local-cloud-state.json";
 pub const BACKUPS_DIR: &str = "config/cgs-local-cloud-backups";
-/// Рабочие данные и кэш синхронизации движка внутри Steam.
-/// Программа их не трогает: каталог принадлежит CloudRedirect и
-/// сохраняется при выключении, чтобы не потерять несинхронизированные данные.
+/// Каталог принадлежит CloudRedirect: сохраняется при выключении, чтобы не потерять несинхронизированные данные.
 #[allow(dead_code)]
 pub const WORK_DIR: &str = "cgs-local-cloud";
 /// Экспорт, по которому OpenSteamTool инициализирует облачный модуль
 pub const CLOUD_EXPORT: &[u8] = b"CR_InitCloudSave";
-pub const COMPONENT_VERSION: &str = "2.6.6-cgs-local.1";
+pub const COMPONENT_VERSION: &str = "2.6.6-cgs-local.2";
 /// Количество хранимых резервных копий конфигурации
 pub const MAX_BACKUPS: usize = 10;
 const LUA_DIRS: [&str; 2] = ["config/lua", "config/stplug-in"];
@@ -49,9 +45,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-// ---------------------------------------------------------------------------
-// Область действия: порт CgsManifestGame из third_party/cloudredirect/src/common/cgs_scope.h
-// ---------------------------------------------------------------------------
+// ── Область действия: порт CgsManifestGame из third_party/cloudredirect/src/common/cgs_scope.h
 
 /// Пробельные символы C isspace() в локали "C"
 fn is_c_space(byte: u8) -> bool {
@@ -155,15 +149,12 @@ pub fn loader_supports_cloud(loader: &[u8]) -> bool {
     find(loader, CLOUD_EXPORT).is_some()
 }
 
-// ---------------------------------------------------------------------------
-// Секция [cloud] в opensteamtool.toml
-// ---------------------------------------------------------------------------
+// ── Секция [cloud] в opensteamtool.toml
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CloudSection {
     pub enabled: bool,
     pub library: Option<String>,
-    /// Исходный текст секции для точного восстановления при выключении
     pub text: String,
 }
 
@@ -252,9 +243,7 @@ pub fn restore_cloud(document: &mut DocumentMut, previous: Option<&str>) -> Resu
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Конфигурация провайдера и состояние
-// ---------------------------------------------------------------------------
+// ── Конфигурация провайдера и состояние
 
 /// Только провайдер "folder"; статистика, достижения, время и родительский контроль выключены
 pub fn provider_config(folder: &str) -> Vec<u8> {
@@ -293,7 +282,6 @@ pub struct State {
     pub managed: bool,
     pub folder: Option<String>,
     pub dll_sha256: Option<String>,
-    /// Текст секции [cloud] до первого включения; None — секции не было
     pub previous_cloud: Option<String>,
     pub updated_unix: u64,
 }
@@ -315,9 +303,7 @@ pub fn state_bytes(state: &State) -> Vec<u8> {
     bytes
 }
 
-// ---------------------------------------------------------------------------
-// Снимок файлов Steam
-// ---------------------------------------------------------------------------
+// ── Снимок файлов Steam
 
 /// Содержимое файлов, которые изменяет локальное облако (None — файла нет)
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -325,6 +311,7 @@ pub struct Snapshot {
     pub config: Option<Vec<u8>>,
     pub provider: Option<Vec<u8>>,
     pub state: Option<Vec<u8>>,
+    pub dll: Option<Vec<u8>>,
     pub dll_sha256: Option<String>,
     pub loader: Option<Vec<u8>>,
 }
@@ -345,11 +332,13 @@ fn read_optional(path: &Path) -> Result<Option<Vec<u8>>, String> {
 }
 
 pub fn snapshot(steam: &Path) -> Result<Snapshot, String> {
+    let dll = read_optional(&steam.join(DLL_NAME))?;
     Ok(Snapshot {
         config: read_optional(&steam.join(LOADER_CONFIG))?,
         provider: read_optional(&steam_file(steam, PROVIDER_CONFIG))?,
         state: read_optional(&steam_file(steam, STATE_FILE))?,
-        dll_sha256: read_optional(&steam.join(DLL_NAME))?.map(|bytes| sha256_hex(&bytes)),
+        dll_sha256: dll.as_deref().map(sha256_hex),
+        dll,
         loader: read_optional(&steam.join(LOADER_DLL))?,
     })
 }
@@ -366,8 +355,25 @@ pub struct Status {
     pub issue: Option<String>,
     pub steam_path: Option<String>,
     pub component_version: String,
-    /// Встроенная DLL новее установленной: обновится при следующем применении режима
     pub component_outdated: bool,
+}
+
+/// Внешне изменённая DLL и неподдерживаемый загрузчик обновлением не считаются.
+pub fn component_update_available(
+    state: &State,
+    snap: &Snapshot,
+    embedded_sha256: &str,
+    loader_supported: bool,
+) -> bool {
+    if !state.managed || !loader_supported {
+        return false;
+    }
+    match snap.dll_sha256.as_deref() {
+        Some(hash) if hash == embedded_sha256 => false,
+        Some(hash) => state.dll_sha256.as_deref() == Some(hash),
+        // Управляемую DLL удалили: её можно восстановить обновлением
+        None => true,
+    }
 }
 
 pub fn status(steam: &Path, snap: &Snapshot, embedded_sha256: &str) -> Status {
@@ -405,7 +411,8 @@ pub fn status(steam: &Path, snap: &Snapshot, embedded_sha256: &str) -> Status {
         issue = Some(FOREIGN_CLOUD.into());
     }
     if configured && issue.is_none() {
-        if snap.dll_sha256.is_none() || !dll_known {
+        // Изменённую извне DLL автозамена не трогает; отсутствующую восстановит обновление
+        if snap.dll_sha256.is_some() && !dll_known {
             issue = Some("Файл локального облака отсутствует или изменён. Включите режим заново, чтобы восстановить его.".into());
         } else if !loader_supported {
             issue = Some("Установленный OpenSteamTool не поддерживает CloudRedirect. Выберите совместимый комплект DLL в разделе загрузчика.".into());
@@ -421,6 +428,8 @@ pub fn status(steam: &Path, snap: &Snapshot, embedded_sha256: &str) -> Status {
         .folder
         .clone()
         .or_else(|| snap.provider.as_deref().and_then(provider_folder));
+    let component_outdated = issue.is_none()
+        && component_update_available(&state, snap, embedded_sha256, loader_supported);
     Status {
         enabled: configured,
         managed: state.managed || configured,
@@ -430,17 +439,11 @@ pub fn status(steam: &Path, snap: &Snapshot, embedded_sha256: &str) -> Status {
         issue,
         steam_path: Some(steam.display().to_string()),
         component_version: COMPONENT_VERSION.into(),
-        component_outdated: configured
-            && snap
-                .dll_sha256
-                .as_deref()
-                .is_some_and(|hash| hash != embedded_sha256),
+        component_outdated,
     }
 }
 
-// ---------------------------------------------------------------------------
-// План изменений
-// ---------------------------------------------------------------------------
+// ── План изменений
 
 /// Файл относительно папки Steam и новое содержимое (None — удалить)
 pub type Change = (&'static str, Option<Vec<u8>>);
@@ -512,6 +515,51 @@ pub fn plan_enable(
     Ok(EnablePlan { changes, state })
 }
 
+/// Обновление только встроенной DLL: режим, папка и конфигурация не меняются
+pub fn plan_component_update(
+    steam: &Path,
+    snap: &Snapshot,
+    embedded: &[u8],
+    now_unix: u64,
+) -> Result<EnablePlan, String> {
+    if !snap.loader.as_deref().is_some_and(loader_supports_cloud) {
+        return Err("Установленный OpenSteamTool не поддерживает CloudRedirect.".into());
+    }
+    let mut state = parse_state(snap.state.as_deref())?;
+    if !state.managed {
+        return Err("Локальное облако не настроено. Включите режим и выберите папку.".into());
+    }
+    // Секцию cloud могла забрать другая программа: тогда DLL не трогаем
+    let document = parse_loader_config(snap.config.as_deref().unwrap_or_default())?;
+    let ours = cloud_section(&document)?.is_some_and(|section| {
+        section.enabled && library_is_ours(section.library.as_deref(), steam)
+    });
+    if !ours {
+        return Err(
+            "Секция cloud больше не управляется Eclipse Studio. Включите режим заново.".into(),
+        );
+    }
+    let embedded_hash = sha256_hex(embedded);
+    if snap.dll_sha256.as_deref() == Some(embedded_hash.as_str()) {
+        return Err("Встроенная DLL уже установлена: обновление не требуется.".into());
+    }
+    // Заменяем только свою DLL: изменённый извне файл не трогаем
+    if let Some(hash) = snap.dll_sha256.as_deref() {
+        if state.dll_sha256.as_deref() != Some(hash) {
+            return Err(DLL_CHANGED.into());
+        }
+    }
+    state.schema = 1;
+    state.dll_sha256 = Some(embedded_hash);
+    state.updated_unix = now_unix;
+    // Конфигурация загрузчика и провайдера остаётся прежней: обновляется только компонент
+    let changes = vec![
+        (DLL_NAME, Some(embedded.to_vec())),
+        (STATE_FILE, Some(state_bytes(&state))),
+    ];
+    Ok(EnablePlan { changes, state })
+}
+
 /// Выключение: секция [cloud] возвращается, сохранения и рабочие данные остаются на месте
 pub fn plan_disable(
     steam: &Path,
@@ -557,9 +605,7 @@ pub fn plan_disable(
     Ok(EnablePlan { changes, state })
 }
 
-// ---------------------------------------------------------------------------
-// Применение с резервной копией и откатом
-// ---------------------------------------------------------------------------
+// ── Применение с резервной копией и откатом
 
 fn backup_stamp(now_unix: u64) -> String {
     format!(
@@ -568,7 +614,7 @@ fn backup_stamp(now_unix: u64) -> String {
     )
 }
 
-/// Резервная копия opensteamtool.toml, конфигурации провайдера и состояния перед изменением
+/// Резервная копия opensteamtool.toml, конфигурации провайдера, состояния и DLL
 pub fn backup(steam: &Path, snap: &Snapshot, now_unix: u64) -> Result<PathBuf, String> {
     let root = steam_file(steam, BACKUPS_DIR);
     let folder = root.join(backup_stamp(now_unix));
@@ -578,6 +624,7 @@ pub fn backup(steam: &Path, snap: &Snapshot, now_unix: u64) -> Result<PathBuf, S
         ("opensteamtool.toml", &snap.config),
         ("cgs-local-cloud.json", &snap.provider),
         ("cgs-local-cloud-state.json", &snap.state),
+        (DLL_NAME, &snap.dll),
     ] {
         if let Some(bytes) = bytes {
             crate::durable::write(&folder.join(name), bytes)?;
@@ -606,16 +653,13 @@ pub fn apply(steam: &Path, snap: &Snapshot, changes: &[Change]) -> Result<(), St
             LOADER_CONFIG => Some(snap.config.clone()),
             PROVIDER_CONFIG => Some(snap.provider.clone()),
             STATE_FILE => Some(snap.state.clone()),
+            DLL_NAME => Some(snap.dll.clone()),
             _ => None,
         }
     };
     let mut done: Vec<(&str, Option<Vec<u8>>)> = Vec::new();
-    let mut dll_backup: Option<Vec<u8>> = None;
     for (name, bytes) in changes {
         let target = steam_file(steam, name);
-        if *name == DLL_NAME {
-            dll_backup = read_optional(&target).ok().flatten();
-        }
         let result = match bytes {
             Some(bytes) => crate::durable::write(&target, bytes),
             None => match fs::remove_file(&target) {
@@ -627,11 +671,7 @@ pub fn apply(steam: &Path, snap: &Snapshot, changes: &[Change]) -> Result<(), St
         if let Err(error) = result {
             for (written, previous) in done.into_iter().rev() {
                 let path = steam_file(steam, written);
-                let previous = if written == DLL_NAME {
-                    dll_backup.clone()
-                } else {
-                    original(written).flatten().or(previous)
-                };
+                let previous = original(written).flatten().or(previous);
                 let _ = match previous {
                     Some(bytes) => crate::durable::write(&path, &bytes),
                     None => fs::remove_file(&path).map_err(|e| e.to_string()),
@@ -647,9 +687,7 @@ pub fn apply(steam: &Path, snap: &Snapshot, changes: &[Change]) -> Result<(), St
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Папка хранения
-// ---------------------------------------------------------------------------
+// ── Папка хранения
 
 /// Ключ пути для сравнения: существующая часть разрешается, регистр в Windows не важен
 pub fn path_key(path: &Path) -> PathBuf {
@@ -1133,6 +1171,69 @@ mod tests {
         assert_eq!(
             migrate_folder(&place.path().join("missing"), &new).unwrap(),
             0
+        );
+    }
+
+    #[test]
+    fn component_update_replaces_only_the_managed_dll() {
+        let steam = steam_with_loader();
+        let root = steam.path();
+        let snap = snapshot(root).unwrap();
+        let plan = plan_enable(root, &snap, "D:\\Game Saves", EMBEDDED, 1).unwrap();
+        apply(root, &snap, &plan.changes).unwrap();
+        // Имитируем управляемую DLL предыдущей версии и её хеш в состоянии
+        let old = b"MZ old managed cloud redirect";
+        fs::write(root.join(DLL_NAME), old).unwrap();
+        let mut state = parse_state(snapshot(root).unwrap().state.as_deref()).unwrap();
+        state.dll_sha256 = Some(sha256_hex(old));
+        fs::write(steam_file(root, STATE_FILE), state_bytes(&state)).unwrap();
+        let config_before = fs::read(root.join(LOADER_CONFIG)).unwrap();
+        let provider_before = fs::read(steam_file(root, PROVIDER_CONFIG)).unwrap();
+        let snap = snapshot(root).unwrap();
+        assert!(status(root, &snap, &sha256_hex(EMBEDDED)).component_outdated);
+        let update = plan_component_update(root, &snap, EMBEDDED, 2).unwrap();
+        assert!(update
+            .changes
+            .iter()
+            .all(|(name, _)| *name == DLL_NAME || *name == STATE_FILE));
+        backup(root, &snap, 2).unwrap();
+        apply(root, &snap, &update.changes).unwrap();
+        assert_eq!(fs::read(root.join(DLL_NAME)).unwrap(), EMBEDDED);
+        assert_eq!(fs::read(root.join(LOADER_CONFIG)).unwrap(), config_before);
+        assert_eq!(
+            fs::read(steam_file(root, PROVIDER_CONFIG)).unwrap(),
+            provider_before
+        );
+        let updated = status(root, &snapshot(root).unwrap(), &sha256_hex(EMBEDDED));
+        assert!(
+            updated.enabled && !updated.component_outdated,
+            "{updated:?}"
+        );
+        // Резервная копия компонентного обновления содержит прежнюю DLL
+        let latest = fs::read_dir(root.join(BACKUPS_DIR))
+            .unwrap()
+            .flatten()
+            .map(|entry| entry.path())
+            .max()
+            .unwrap();
+        assert_eq!(fs::read(latest.join(DLL_NAME)).unwrap(), old);
+        // Изменённую извне DLL не заменяем
+        fs::write(root.join(DLL_NAME), b"MZ external").unwrap();
+        let snap = snapshot(root).unwrap();
+        assert!(!status(root, &snap, &sha256_hex(EMBEDDED)).component_outdated);
+        assert!(plan_component_update(root, &snap, EMBEDDED, 3).is_err());
+        // Удалённую управляемую DLL можно восстановить обновлением
+        fs::remove_file(root.join(DLL_NAME)).unwrap();
+        let snap = snapshot(root).unwrap();
+        assert!(status(root, &snap, &sha256_hex(EMBEDDED)).component_outdated);
+        let restore = plan_component_update(root, &snap, EMBEDDED, 4).unwrap();
+        apply(root, &snap, &restore.changes).unwrap();
+        assert_eq!(fs::read(root.join(DLL_NAME)).unwrap(), EMBEDDED);
+        // Без настроенного режима обновлять нечего
+        let empty = tempfile::tempdir().unwrap();
+        assert!(
+            plan_component_update(empty.path(), &snapshot(empty.path()).unwrap(), EMBEDDED, 1)
+                .is_err()
         );
     }
 }

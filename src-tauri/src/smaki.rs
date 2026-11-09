@@ -1,3 +1,5 @@
+//! Установщик SmokeAPI: прокси-библиотеки рядом с exe, состояние в журнале для чистого отката.
+
 use crate::{engine, models::OperationResult};
 use serde::{Deserialize, Serialize};
 use std::{

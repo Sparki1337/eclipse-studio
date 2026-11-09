@@ -1,5 +1,7 @@
 (() => {
   "use strict";
+
+  // saves — раздел «Менеджер сохранений»: сканирование, архивация, восстановление
   window.cgsSaves = { create({ state, $, $$, call, setBusy, log, toast, errorText, consumeResult, showModal, formatBytes }) {
   function updateSaveSelection() {
     const checkboxes = $$("#save-list input[type='checkbox']");

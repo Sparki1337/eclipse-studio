@@ -1,6 +1,7 @@
 (() => {
   "use strict";
 
+  // utilities — раздел «Утилиты»: карточки-ссылки на внешние инструменты
   const invoke = window.cgsApi?.invoke;
 
   document.querySelectorAll("[data-utility-url]").forEach((card) => {

@@ -1,6 +1,5 @@
 //! Проверка релизов Eclipse Studio и обновление внутри программы.
-//! Новый EXE скачивается с докачкой и проверкой SHA-256, затем копия текущей программы
-//! в роли помощника заменяет файл на месте: путь, имя и ярлыки сохраняются.
+//! Помощник заменяет EXE на месте: путь, имя и ярлыки сохраняются.
 use crate::update_core as core;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
@@ -59,7 +58,6 @@ pub struct UpdateInfo {
     pub release_url: String,
     pub installer_url: Option<String>,
     pub portable_url: Option<String>,
-    /// В релизе есть портативный EXE с опубликованной SHA-256: можно обновиться внутри программы
     pub in_app_supported: bool,
     pub asset_name: Option<String>,
     pub asset_sha256: Option<String>,
@@ -174,7 +172,6 @@ fn check_for_update_blocking() -> Result<UpdateInfo, String> {
         .build()
         .map_err(|error| format!("Не удалось подготовить проверку обновлений: {error}"))?;
 
-    // Прямая проверка релизов через web и Atom-ленту без GitHub API (во избежание rate limit)
     let release = check_for_update_via_web(&client)?;
 
     let latest = release
@@ -278,7 +275,6 @@ fn fetch_release_notes_from_atom(client: &Client, tag: &str) -> Option<String> {
     None
 }
 
-// Базовое экранирование HTML-сущностей в описании
 fn unescape_html(input: &str) -> String {
     input
         .replace("&lt;", "<")
@@ -319,129 +315,17 @@ pub fn updates_page_url() -> String {
     RELEASES_PAGE.into()
 }
 
-/// Извлечение семантической версии из названия исполняемого файла приложения
-pub fn extract_version_from_filename(name: &str) -> Option<String> {
-    let lower = name.to_ascii_lowercase();
-    // Обрабатываем только файлы линейки приложения
-    if !lower.contains("eclipse") && !lower.contains("crocodile") {
-        return None;
-    }
-
-    // Отрезаем расширение файла
-    let stem = Path::new(name)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or(name);
-
-    // Разбиваем по разделителям дефис, подчеркивание, пробел
-    for segment in stem.split(['-', '_', ' ']) {
-        let trimmed = segment.trim();
-        let without_v = trimmed.strip_prefix(['v', 'V']).unwrap_or(trimmed);
-        if let Some(parts) = version_parts(without_v) {
-            if parts.len() >= 2 {
-                return Some(
-                    parts
-                        .iter()
-                        .map(|p| p.to_string())
-                        .collect::<Vec<_>>()
-                        .join("."),
-                );
-            }
-        }
-    }
-
-    None
-}
-
-/// Удаление файла с повторными попытками для предотвращения ошибок блокировки в Windows
-fn delete_file_with_retry(path: &Path, retries: usize, delay: Duration) -> bool {
-    for attempt in 0..retries {
-        match fs::remove_file(path) {
-            Ok(_) => return true,
-            Err(_) => {
-                if attempt + 1 < retries {
-                    std::thread::sleep(delay);
-                }
-            }
-        }
-    }
-    false
-}
-
-/// Внутренняя функция очистки устаревших версий в указанной директории
+/// Очищаем только подтверждённые этапы собственного обновления.
+/// Имя EXE или .part само по себе не даёт права удалять соседний файл.
 pub fn cleanup_old_versions_in_dir(
     dir: &Path,
     current_exe: Option<&Path>,
-    current_version: &str,
+    _current_version: &str,
 ) -> u32 {
-    let current_canonical = current_exe.and_then(|path| path.canonicalize().ok());
-    let mut deleted_count = 0;
-
-    let entries = match fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(_) => return 0,
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-
-        // Ни в коем случае не удаляем текущий запущенный бинарник
-        if let Some(exe) = current_exe {
-            if path == exe {
-                continue;
-            }
-        }
-        if let Some(ref canon) = current_canonical {
-            if path.canonicalize().ok().as_ref() == Some(canon) {
-                continue;
-            }
-        }
-
-        let file_name = match path.file_name().and_then(|s| s.to_str()) {
-            Some(name) => name,
-            None => continue,
-        };
-
-        let lower = file_name.to_ascii_lowercase();
-        // Этапы обновления внутри программы обрабатывает update_core::cleanup_stale
-        if lower.starts_with(core::STAGE_PREFIX) {
-            continue;
-        }
-
-        // Очистка временных файлов обновлений и загрузок (.download, .part, .tmp)
-        let is_temp_update_file = (lower.starts_with(".eclipse-studio")
-            || lower.starts_with("eclipse-studio"))
-            && (lower.ends_with(".download")
-                || lower.ends_with(".part")
-                || lower.ends_with(".tmp"));
-
-        if is_temp_update_file {
-            if delete_file_with_retry(&path, 5, Duration::from_millis(150)) {
-                deleted_count += 1;
-            }
-            continue;
-        }
-
-        // Очистка устаревших исполняемых файлов (.exe)
-        if lower.ends_with(".exe") && (lower.contains("eclipse") || lower.contains("crocodile")) {
-            if let Some(old_ver) = extract_version_from_filename(file_name) {
-                // Удаляем только если текущая версия строго новее найденной
-                if is_newer(current_version, &old_ver)
-                    && delete_file_with_retry(&path, 5, Duration::from_millis(150))
-                {
-                    deleted_count += 1;
-                }
-            }
-        }
-    }
-
-    deleted_count
+    let keep = active_nonce();
+    core::cleanup_stale(dir, keep.as_deref(), current_exe)
 }
 
-/// Удаление старых версий и временных загрузок рядом с текущим исполняемым файлом
 pub fn cleanup_old_versions() -> u32 {
     let current_exe = match std::env::current_exe() {
         Ok(path) => path,
@@ -454,12 +338,9 @@ pub fn cleanup_old_versions() -> u32 {
     };
 
     let current_version = env!("CARGO_PKG_VERSION");
-    let keep = active_nonce();
     cleanup_old_versions_in_dir(app_dir, Some(&current_exe), current_version)
-        + core::cleanup_stale(app_dir, keep.as_deref(), Some(&current_exe))
 }
 
-/// Команда Tauri: ручной запуск очистки старых версий приложения
 #[tauri::command]
 pub async fn cleanup_old_app_versions() -> Result<u32, String> {
     tauri::async_runtime::spawn_blocking(cleanup_old_versions)
@@ -467,13 +348,10 @@ pub async fn cleanup_old_app_versions() -> Result<u32, String> {
         .map_err(|error| format!("Ошибка выполнения очистки: {error}"))
 }
 
-// ---------------------------------------------------------------------------
-// Обновление внутри программы
-// ---------------------------------------------------------------------------
+// ── Обновление внутри программы
 
 struct Install {
     cancelled: AtomicBool,
-    /// После команды go помощнику отмена уже невозможна
     committed: AtomicBool,
     download: Arc<crate::download::Control>,
 }
@@ -703,11 +581,11 @@ fn download_payload(
             }
             *last = Instant::now();
         }
-        let percent = if total > 0 {
-            (downloaded.saturating_mul(100) / total).min(100) as u8
-        } else {
-            0
-        };
+        let percent = downloaded
+            .saturating_mul(100)
+            .checked_div(total)
+            .unwrap_or(0)
+            .min(100) as u8;
         let _ = app.emit(
             PROGRESS_EVENT,
             UpdateProgress {
@@ -726,7 +604,7 @@ fn download_payload(
             stage,
             Some(sha256),
             &install.download,
-            &progress,
+            progress,
         ) {
             Ok(done) => {
                 let path = PathBuf::from(done.path);
@@ -805,9 +683,7 @@ pub fn helper_main() -> Option<i32> {
 }
 
 enum LaunchContext {
-    /// Новая версия подтверждает запуск помощнику
     Probe(PathBuf, String),
-    /// Прежняя версия после отката показывает причину
     Failed(PathBuf, String),
 }
 
@@ -837,6 +713,11 @@ pub fn init_launch_context() {
 
 fn active_nonce() -> Option<String> {
     ACTIVE_NONCE.get().cloned().flatten()
+}
+
+/// Нельзя заменять процесс, чей PID сейчас проверяет помощник обновления.
+pub(crate) fn has_launch_context() -> bool {
+    active_nonce().is_some()
 }
 
 fn remove_stage_later(stage: PathBuf, nonce: String) {
@@ -1008,31 +889,7 @@ mod tests {
     }
 
     #[test]
-    fn extracts_version_from_various_executable_names() {
-        assert_eq!(
-            extract_version_from_filename("Eclipse-Studio-v6.6.6.exe").as_deref(),
-            Some("6.6.6")
-        );
-        assert_eq!(
-            extract_version_from_filename("Eclipse-Studio-6.6.5.exe").as_deref(),
-            Some("6.6.5")
-        );
-        assert_eq!(
-            extract_version_from_filename("Eclipse_Studio_v6.6.7-setup.exe").as_deref(),
-            Some("6.6.7")
-        );
-        assert_eq!(
-            extract_version_from_filename("crocodile-gena-studio-v4.0.0.exe").as_deref(),
-            Some("4.0.0")
-        );
-        assert_eq!(
-            extract_version_from_filename("RandomProgram-v1.2.3.exe"),
-            None
-        );
-    }
-
-    #[test]
-    fn cleans_up_older_versions_and_temp_files_safely() {
+    fn cleanup_preserves_unowned_executables_and_loose_downloads() {
         let temp_dir =
             std::env::temp_dir().join(format!("cgs_test_cleanup_{}", std::process::id()));
         let _ = fs::create_dir_all(&temp_dir);
@@ -1049,16 +906,31 @@ mod tests {
         fs::write(&temp_download, b"partial").unwrap();
         fs::write(&foreign_file, b"data").unwrap();
 
-        // Запускаем очистку для текущей версии 6.6.7
+        // Текущая версия в тесте — 6.6.7
         let deleted = cleanup_old_versions_in_dir(&temp_dir, Some(&current_exe), "6.6.7");
 
-        // Должны удалиться: старая версия (6.6.0) и временный файл (.download)
-        assert_eq!(deleted, 2);
-        assert!(!old_exe.exists(), "Старая версия должна быть удалена");
+        assert_eq!(deleted, 0);
         assert!(
-            !temp_download.exists(),
-            "Временный файл загрузки должен быть удален"
+            old_exe.exists(),
+            "Даже старый Studio без журнала не удаляется"
         );
+        assert!(
+            temp_download.exists(),
+            "Имя временного файла не доказывает владение"
+        );
+        for name in [
+            "Eclipse-HV-v1.1.0.exe",
+            "My-Eclipse-Tool-v1.0.exe",
+            "crocodile-v1.0.exe",
+        ] {
+            let path = temp_dir.join(name);
+            fs::write(&path, b"user file").unwrap();
+            assert_eq!(
+                cleanup_old_versions_in_dir(&temp_dir, Some(&current_exe), "9.0.0"),
+                0
+            );
+            assert!(path.exists());
+        }
         assert!(
             current_exe.exists(),
             "Текущая запущенная версия не должна удаляться"

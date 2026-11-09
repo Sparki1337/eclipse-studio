@@ -1,3 +1,5 @@
+//! Нативный drop-файлов: подкласс HWND верхнего окна и WebView2 для WM_DROPFILES.
+
 #[tauri::command]
 pub(crate) async fn enable_file_drop(window: tauri::WebviewWindow) -> Result<(), String> {
     #[cfg(windows)]

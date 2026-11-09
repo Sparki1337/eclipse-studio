@@ -1,3 +1,5 @@
+//! Universal Online Fix: сканирование игры, генерация конфигов, установка и откат.
+
 use crate::{
     core_engine_path,
     models::{InstallRequest, OperationResult, ScanResult},
@@ -151,10 +153,6 @@ pub(crate) fn make_writable(path: &Path) {
     }
 }
 
-fn backup_manifest_path(backup_dir: &Path) -> PathBuf {
-    backup_dir.join(BACKUP_MANIFEST_NAME)
-}
-
 fn load_backup_manifest(backup_dir: &Path) -> Result<BackupManifest, String> {
     crate::backup::load(backup_dir)
 }
@@ -233,7 +231,7 @@ fn safe_copy(source: &Path, target: &Path, logs: &mut Vec<String>) -> Result<(),
         logs.push(format!("⚠ {message}"));
         return Err(message);
     }
-    Ok(())
+    crate::backup::record_path(target)
 }
 
 fn safe_remove(path: &Path, logs: &mut Vec<String>) -> Result<(), String> {
@@ -246,7 +244,8 @@ fn safe_remove(path: &Path, logs: &mut Vec<String>) -> Result<(), String> {
         let message = format!("Не удалось удалить {}: {error}", path.display());
         logs.push(format!("⚠ {message}"));
         message
-    })
+    })?;
+    crate::backup::record_path(path)
 }
 
 pub(crate) fn write_with_backup(
@@ -259,7 +258,8 @@ pub(crate) fn write_with_backup(
         let message = format!("Не удалось записать {}: {error}", path.display());
         logs.push(format!("⚠ {message}"));
         message
-    })
+    })?;
+    crate::backup::record_path(path)
 }
 
 fn kill_game_processes(game_dir: &Path, logs: &mut Vec<String>) {
@@ -700,38 +700,6 @@ pub(crate) fn install_fix_blocking_unlocked(
     }
 }
 
-fn looks_like_generated_backup(backup: &Path, name: &str, core: &Path) -> bool {
-    match name.to_lowercase().as_str() {
-        "steamfix64.dll" => files_equal(backup, &core.join("SteamFix64.dll")),
-        "epicfix64.dll" => files_equal(backup, &core.join("EpicFix64.dll")),
-        "epicfix.ini" => files_equal(backup, &core.join("EpicFix.ini")),
-        "winmm.dll" => files_equal(backup, &core.join("winmm_unity.dll")),
-        "steamfix.ini" => fs::read_to_string(backup)
-            .map(|content| {
-                content.contains("[Main]")
-                    && content.contains("RealAppId=")
-                    && content.contains("FakeAppId=")
-                    && content.contains("[Interfaces]")
-            })
-            .unwrap_or(false),
-        "winmm.txt" => fs::read_to_string(backup)
-            .map(|content| {
-                let modules = content
-                    .lines()
-                    .map(str::trim)
-                    .filter(|line| !line.is_empty())
-                    .collect::<Vec<_>>();
-                !modules.is_empty()
-                    && modules.iter().all(|module| {
-                        module.eq_ignore_ascii_case("SteamFix64.dll")
-                            || module.eq_ignore_ascii_case("EpicFix64.dll")
-                    })
-            })
-            .unwrap_or(false),
-        _ => false,
-    }
-}
-
 fn restore_one_file(backup: &Path, target: &Path) -> Result<(), String> {
     crate::durable::copy(backup, target)?;
     if let Ok(metadata) = fs::metadata(backup) {
@@ -740,7 +708,7 @@ fn restore_one_file(backup: &Path, target: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> RestoreReport {
+fn restore_backups(directory: &Path, _core: &Path, logs: &mut Vec<String>) -> RestoreReport {
     let mut report = RestoreReport::default();
     let backup_dir = match crate::safe_path::join(directory, BACKUP_DIR_NAME) {
         Ok(path) => path,
@@ -753,9 +721,7 @@ fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> Res
         return report;
     }
 
-    let manifest_path = backup_manifest_path(&backup_dir);
-    let manifest_exists = manifest_path.is_file();
-    let mut manifest = match load_backup_manifest(&backup_dir) {
+    let manifest = match load_backup_manifest(&backup_dir) {
         Ok(manifest) => manifest,
         Err(error) => {
             report.errors.push(error);
@@ -780,27 +746,22 @@ fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> Res
             }
             let key = name.to_lowercase();
             if !manifest.originals.contains_key(&key) && !manifest.created.contains_key(&key) {
-                manifest.originals.insert(key, name);
-                manifest.legacy_import = true;
+                report.errors.push(format!(
+                    "Незарегистрированный старый бэкап {name}: автоматический откат запрещён"
+                ));
             }
         }
     }
 
-    if let Err(error) = crate::backup::validate(&manifest) {
+    if !report.errors.is_empty() {
+        return report;
+    }
+    if let Err(error) = crate::backup::preflight_restore(directory, &manifest) {
         report.errors.push(error);
         return report;
     }
-    for name in manifest.originals.values().chain(manifest.created.values()) {
-        if let Err(error) = crate::safe_path::join(directory, name)
-            .and_then(|_| crate::safe_path::join(&backup_dir, name))
-        {
-            report.errors.push(error);
-            return report;
-        }
-    }
-    let legacy_mode = !manifest_exists || manifest.legacy_import || manifest.version < 2;
     let originals = manifest.originals.clone();
-    let mut created = manifest.created.clone();
+    let created = manifest.created.clone();
 
     for (key, name) in originals {
         let backup = match crate::safe_path::join(&backup_dir, &name) {
@@ -810,10 +771,6 @@ fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> Res
                 continue;
             }
         };
-        if legacy_mode && backup.is_file() && looks_like_generated_backup(&backup, &name, core) {
-            created.insert(key, name);
-            continue;
-        }
         if !backup.is_file() {
             report
                 .errors
@@ -837,6 +794,10 @@ fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> Res
                 .push(format!("Контрольная сумма оригинала не совпадает: {name}"));
             continue;
         }
+        if let Err(error) = crate::backup::check_current(directory, &name, &manifest) {
+            report.errors.push(error);
+            continue;
+        }
         match restore_one_file(&backup, &target) {
             Ok(()) => {
                 report.restored.insert(key);
@@ -858,6 +819,10 @@ fn restore_backups(directory: &Path, core: &Path, logs: &mut Vec<String>) -> Res
                     continue;
                 }
             };
+            if let Err(error) = crate::backup::check_current(directory, &name, &manifest) {
+                report.errors.push(error);
+                continue;
+            }
             if target.exists() {
                 make_writable(&target);
                 if let Err(error) = fs::remove_file(&target) {
@@ -908,13 +873,35 @@ pub(crate) fn find_case_insensitive(directory: &Path, target: &str) -> Option<Pa
 }
 
 fn restore_sidecar(original: &Path, target: &Path, logs: &mut Vec<String>) -> Result<(), String> {
-    restore_one_file(original, target)?;
-    make_writable(original);
-    fs::remove_file(original).map_err(|error| {
-        format!("Оригинал восстановлен, но резервную копию удалить не удалось: {error}")
-    })?;
+    let root = target.parent().ok_or("Нет каталога EOS")?;
+    let target_name = target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Некорректный путь")?
+        .to_string();
+    let sidecar_name = original
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Некорректный sidecar")?
+        .to_string();
+    let manifest = crate::backup::load(&root.join(BACKUP_DIR_NAME))?;
+    if !manifest.originals.contains_key(&target_name.to_lowercase()) {
+        return Err(
+            "Старый sidecar не имеет подтверждённого оригинала и SHA-256; обе копии сохранены"
+                .into(),
+        );
+    }
+    let mut names = vec![target_name];
+    if manifest.created.contains_key(&sidecar_name.to_lowercase())
+        || manifest
+            .originals
+            .contains_key(&sidecar_name.to_lowercase())
+    {
+        names.push(sidecar_name);
+    }
+    crate::backup::restore_selected(root, &names)?;
     logs.push(format!(
-        "Восстановлен и проверен оригинал: {}",
+        "Оригинал восстановлен по проверенному журналу: {}",
         target.display()
     ));
     Ok(())
@@ -986,6 +973,9 @@ fn uninstall_fix_blocking_unlocked(app: AppHandle, game_dir: String) -> Operatio
         }
 
         for original_name in ["steam_api64_o.dll", "steam_api_o.dll"] {
+            if restored_files.contains(original_name) {
+                continue;
+            }
             if let Some(original) = find_case_insensitive(&directory, original_name) {
                 let target_name = original_name.replace("_o.dll", ".dll");
                 let target = directory.join(target_name);
@@ -1003,7 +993,10 @@ fn uninstall_fix_blocking_unlocked(app: AppHandle, game_dir: String) -> Operatio
         if let Ok(items) = fs::read_dir(&directory) {
             for item in items.flatten() {
                 let lower = item.file_name().to_string_lossy().to_lowercase();
-                if lower.starts_with("eossdk") && lower.ends_with("_o.dll") {
+                if lower.starts_with("eossdk")
+                    && lower.ends_with("_o.dll")
+                    && !restored_files.contains(&lower)
+                {
                     let file_name = item.file_name();
                     let base = file_name.to_string_lossy();
                     let target =
@@ -1019,10 +1012,10 @@ fn uninstall_fix_blocking_unlocked(app: AppHandle, game_dir: String) -> Operatio
                 continue;
             }
             if let Some(path) = find_case_insensitive(&directory, name) {
-                make_writable(&path);
-                if let Err(error) = fs::remove_file(&path) {
-                    errors.push(format!("Не удалось удалить {}: {error}", path.display()));
-                }
+                errors.push(format!(
+                    "Файл не принадлежит подтверждённому журналу и оставлен без изменений: {}",
+                    path.display()
+                ));
             }
         }
     }
@@ -1227,14 +1220,34 @@ mod tests {
 
         backup_file(&original, &mut logs).unwrap();
         fs::write(&original, b"installed replacement").unwrap();
+        crate::backup::record_path(&original).unwrap();
         backup_file(&created, &mut logs).unwrap();
         fs::write(&created, b"created by application").unwrap();
+        crate::backup::record_path(&created).unwrap();
 
         let report = restore_backups(&directory, &core, &mut logs);
         assert!(report.errors.is_empty(), "{:?}", report.errors);
         assert_eq!(fs::read(&original).unwrap(), b"original winmm content");
         assert!(!created.exists());
         assert!(!directory.join(BACKUP_DIR_NAME).exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn changed_file_blocks_entire_shared_rollback() {
+        let directory = test_directory("conflict");
+        let mut logs = Vec::new();
+        let original = directory.join("a.dll");
+        fs::write(&original, b"original").unwrap();
+        write_with_backup(&original, "installed", &mut logs).unwrap();
+        let created = directory.join("b.ini");
+        write_with_backup(&created, "installed", &mut logs).unwrap();
+        fs::write(&created, b"user edit").unwrap();
+        let report = restore_backups(&directory, &directory, &mut logs);
+        assert!(!report.errors.is_empty());
+        assert_eq!(fs::read(&original).unwrap(), b"installed");
+        assert_eq!(fs::read(&created).unwrap(), b"user edit");
+        assert!(directory.join(BACKUP_DIR_NAME).exists());
         fs::remove_dir_all(directory).unwrap();
     }
 
@@ -1258,7 +1271,7 @@ mod tests {
     }
 
     #[test]
-    fn cleans_generated_files_from_legacy_backup() {
+    fn preserves_unverified_generated_files_in_legacy_backup() {
         let directory = test_directory("legacy");
         let core = directory.join("core");
         let backup_dir = directory.join(BACKUP_DIR_NAME);
@@ -1270,9 +1283,9 @@ mod tests {
         let mut logs = Vec::new();
 
         let report = restore_backups(&directory, &core, &mut logs);
-        assert!(report.errors.is_empty(), "{:?}", report.errors);
-        assert!(!directory.join("SteamFix.ini").exists());
-        assert!(!backup_dir.exists());
+        assert!(!report.errors.is_empty());
+        assert!(directory.join("SteamFix.ini").exists());
+        assert!(backup_dir.exists());
         fs::remove_dir_all(directory).unwrap();
     }
 

@@ -1,4 +1,4 @@
-// Интеграция автономного лаунчера Eclipse-HV
+//! Рабочее пространство Hypervisor: профили игр, развёртывание Eclipse-HV, ярлыки и запуск.
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -33,7 +33,6 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const ECLIPSE_HV_LAUNCHER_ID: &str = "eclipse_hv";
 
-// Встроенный исполняемый файл автономного лаунчера Eclipse-HV
 const EMBEDDED_ECLIPSE_HV: &[u8] = include_bytes!("../resources/hypervisor/Eclipse-HV.exe");
 const HELPER_NAME: &str = "Eclipse-HV.exe";
 
@@ -45,19 +44,25 @@ pub(crate) fn require_steam_closed() -> Result<(), String> {
     Ok(())
 }
 
-// Определение папки Steam, AppID установленной игры и пути к лаунчеру Eclipse-HV
 fn steam_target(id: &str) -> Result<(PathBuf, u64, PathBuf), String> {
     let library = load_library()?;
-    let game = library.games.iter().find(|g| g.id == id).ok_or("Игра не найдена")?;
+    let game = library
+        .games
+        .iter()
+        .find(|g| g.id == id)
+        .ok_or("Игра не найдена")?;
     let exe = validate_exe_path(&game.exe_path)?;
     let installed = exe.parent().into_iter().flat_map(Path::ancestors)
         .find_map(crate::steam_library::installed_game_for_path)
         .ok_or("Игра не найдена среди установленных игр Steam. Установите её через Steam и выберите EXE из её папки.")?;
     let steam = crate::luatools::resolve_steam_path(None).ok_or("Папка Steam не найдена")?;
-    Ok((steam, installed.appid, exe.parent().unwrap().join(HELPER_NAME)))
+    Ok((
+        steam,
+        installed.appid,
+        exe.parent().unwrap().join(HELPER_NAME),
+    ))
 }
 
-// Развёртывание лаунчера Eclipse-HV в папке с игрой при его отсутствии
 fn ensure_helper(dir: &Path) -> Result<(), String> {
     let target = dir.join(HELPER_NAME);
     if target.is_file() {
@@ -77,48 +82,74 @@ pub(crate) fn steam_launch_accounts() -> Result<Vec<crate::steam_hv::Account>, S
 
 // Проверка интеграции выбранной игры вне главного потока
 #[tauri::command(async)]
-pub(crate) fn steam_launch_status(id: String, account: Option<String>) -> Result<crate::steam_hv::Status, String> {
+pub(crate) fn steam_launch_status(
+    id: String,
+    account: Option<String>,
+) -> Result<crate::steam_hv::Status, String> {
     let (steam, appid, helper) = steam_target(&id)?;
     crate::steam_hv::status_for(&steam, appid, &helper, account.as_deref())
 }
 
 // Включение или возврат запуска игры через гипервизор в Steam
 #[tauri::command]
-pub(crate) async fn set_steam_launch(id: String, enabled: bool, account: Option<String>) -> Result<crate::steam_hv::Status, String> {
+pub(crate) async fn set_steam_launch(
+    id: String,
+    enabled: bool,
+    account: Option<String>,
+) -> Result<crate::steam_hv::Status, String> {
     tauri::async_runtime::spawn_blocking(move || set_steam_launch_inner(id, enabled, account))
         .await
         .map_err(|error| format!("Настройка Steam прервана: {error}"))?
 }
 
-fn set_steam_launch_inner(id: String, enabled: bool, account: Option<String>) -> Result<crate::steam_hv::Status, String> {
+fn set_steam_launch_inner(
+    id: String,
+    enabled: bool,
+    account: Option<String>,
+) -> Result<crate::steam_hv::Status, String> {
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = LOCK.lock().map_err(|_| "Настройка Steam прервана")?;
     let (steam, appid, helper) = steam_target(&id)?;
     let before = crate::steam_hv::status_for(&steam, appid, &helper, account.as_deref())?;
-    if enabled { ensure_helper(helper.parent().unwrap())?; }
+    if enabled {
+        ensure_helper(helper.parent().unwrap())?;
+    }
     let client = steam.join("steam.exe");
-    if !client.is_file() { return Err("Не найден steam.exe".into()); }
+    if !client.is_file() {
+        return Err("Не найден steam.exe".into());
+    }
     let was_running = process_name_running("steam.exe")?;
-    crate::steam_hv::restart_around(was_running, || {
-        let mut cmd = Command::new(&client);
-        cmd.arg("-shutdown").current_dir(&steam);
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
-        cmd.spawn().map_err(|error| format!("Не удалось завершить Steam: {error}"))?;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
-        loop {
-            if !process_name_running("steam.exe")? { return Ok(()); }
-            if std::time::Instant::now() >= deadline {
-                return Err("Steam не завершился за 30 секунд. Параметры не изменены; проверьте, не ожидает ли Steam завершения игры.".into());
+    crate::steam_hv::restart_around(
+        was_running,
+        || {
+            let mut cmd = Command::new(&client);
+            cmd.arg("-shutdown").current_dir(&steam);
+            #[cfg(target_os = "windows")]
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            cmd.spawn()
+                .map_err(|error| format!("Не удалось завершить Steam: {error}"))?;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                if !process_name_running("steam.exe")? {
+                    return Ok(());
+                }
+                if std::time::Instant::now() >= deadline {
+                    return Err("Steam не завершился за 30 секунд. Параметры не изменены; проверьте, не ожидает ли Steam завершения игры.".into());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(400));
             }
-            std::thread::sleep(std::time::Duration::from_millis(400));
-        }
-    }, || crate::steam_hv::set(&steam, appid, &helper, enabled, Some(&before.account)), || {
-        Command::new(&client).current_dir(&steam).spawn().map(|_| ()).map_err(|error| error.to_string())
-    })
+        },
+        || crate::steam_hv::set(&steam, appid, &helper, enabled, Some(&before.account)),
+        || {
+            Command::new(&client)
+                .current_dir(&steam)
+                .spawn()
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        },
+    )
 }
 
-// Профиль гипервизорного лаунчера Eclipse-HV
 #[derive(Clone, Copy)]
 struct LauncherProfile {
     id: &'static str,
@@ -158,13 +189,10 @@ pub(crate) struct GameEntry {
     pub shortcut_path: String,
     #[serde(default)]
     pub batch_found: bool,
-    #[serde(default)]
-    pub kvc_found: bool,
     pub ready: bool,
     pub last_message: String,
 }
 
-// Преобразование пути в Windows UTF-16 с нулевым байтом в конце
 #[cfg(target_os = "windows")]
 fn wide(path: &Path) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt;
@@ -175,13 +203,11 @@ fn wide(path: &Path) -> Vec<u16> {
         .collect()
 }
 
-// Преобразование текстовой строки в Windows UTF-16 с нулевым байтом
 #[cfg(target_os = "windows")]
 fn wide_text(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(Some(0)).collect()
 }
 
-// Преобразование пути в кавычках для аргументов командной строки Windows
 #[cfg(target_os = "windows")]
 fn wide_quoted_path(path: &Path) -> Vec<u16> {
     use std::os::windows::ffi::OsStrExt;
@@ -202,7 +228,6 @@ fn shell_path(path: &Path) -> PathBuf {
     }
 }
 
-// Очистка недопустимых символов Windows для безопасного имени файла ярлыка
 #[cfg(target_os = "windows")]
 fn safe_shortcut_name(name: &str) -> String {
     let sanitized: String = name
@@ -293,7 +318,6 @@ fn write_shortcut_initialized(
     Ok(())
 }
 
-// Создание нативного ярлыка .lnk для Eclipse-HV на рабочем столе
 #[cfg(target_os = "windows")]
 pub(crate) fn create_desktop_shortcut(
     exe: &Path,
@@ -319,9 +343,13 @@ pub(crate) fn create_desktop_shortcut(
     let shortcut_clone = shortcut.clone();
 
     std::thread::spawn(move || {
-        unsafe { let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED); }
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+        }
         let res = write_shortcut_initialized(&exe_clone, &dir_clone, &name_clone, &shortcut_clone);
-        unsafe { CoUninitialize(); }
+        unsafe {
+            CoUninitialize();
+        }
         res
     })
     .join()
@@ -391,7 +419,6 @@ pub(crate) struct AppStatus {
     pub selected_game: Option<GameEntry>,
     pub selected_launcher: LauncherProfileView,
     pub root_batch_found: bool,
-    pub root_kvc_found: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -438,7 +465,6 @@ pub(crate) fn get_app_status() -> Result<AppStatus, String> {
         selected_game,
         selected_launcher,
         root_batch_found: true,
-        root_kvc_found: true,
     })
 }
 
@@ -452,7 +478,6 @@ pub(crate) fn is_selected_game_running() -> Result<bool, String> {
     process_name_running(&game.loader_name)
 }
 
-// Получение списка всех добавленных игр
 #[tauri::command]
 pub(crate) fn list_games() -> Result<LibraryView, String> {
     let library = refresh_library(load_library()?);
@@ -567,7 +592,6 @@ pub(crate) fn add_game(
         helper_label: "Eclipse-HV.exe".to_string(),
         shortcut_path,
         batch_found: true,
-        kvc_found: true,
         ready: true,
         last_message: "Игра добавлена и подготовлена с лаунчером Eclipse-HV.".to_string(),
     });
@@ -590,7 +614,6 @@ pub(crate) fn set_game_launcher(
     Ok(library_view(library))
 }
 
-// Выбор активной игры
 #[tauri::command]
 pub(crate) fn set_selected_game(id: String) -> Result<LibraryView, String> {
     let mut library = load_library()?;
@@ -602,12 +625,15 @@ pub(crate) fn set_selected_game(id: String) -> Result<LibraryView, String> {
     Ok(library_view(library))
 }
 
-// Удаление игры из библиотеки гипервизора
 #[tauri::command]
 pub(crate) fn remove_game(id: String) -> Result<LibraryView, String> {
-    if steam_launch_accounts().unwrap_or_default().into_iter().any(|account| {
-        steam_launch_status(id.clone(), Some(account.id)).is_ok_and(|status| status.managed)
-    }) {
+    if steam_launch_accounts()
+        .unwrap_or_default()
+        .into_iter()
+        .any(|account| {
+            steam_launch_status(id.clone(), Some(account.id)).is_ok_and(|status| status.managed)
+        })
+    {
         return Err("Сначала нажмите «Вернуть обычный запуск» для этой игры, затем удалите её из библиотеки.".into());
     }
     let mut library = load_library()?;
@@ -628,7 +654,6 @@ pub(crate) fn remove_game(id: String) -> Result<LibraryView, String> {
     Ok(library_view(library))
 }
 
-// Проверка и восстановление файлов Eclipse-HV в папке игры
 #[tauri::command]
 pub(crate) fn verify_game(
     app: tauri::AppHandle,
@@ -660,7 +685,6 @@ pub(crate) fn verify_game(
     Ok(library_view(library))
 }
 
-// Принудительное создание нативного ярлыка игры на рабочем столе
 #[tauri::command]
 pub(crate) fn create_game_shortcut(
     _app: tauri::AppHandle,
@@ -685,11 +709,8 @@ pub(crate) fn create_game_shortcut(
     Ok(library_view(library))
 }
 
-// Удаление нативного ярлыка игры с рабочего стола
 #[tauri::command]
-pub(crate) fn remove_game_shortcut(
-    id: String,
-) -> Result<LibraryView, String> {
+pub(crate) fn remove_game_shortcut(id: String) -> Result<LibraryView, String> {
     let mut library = load_library()?;
     let game = library
         .games
@@ -709,7 +730,6 @@ pub(crate) fn remove_game_shortcut(
     Ok(library_view(library))
 }
 
-// Запуск выбранной игры напрямую через автономный лаунчер Eclipse-HV
 #[tauri::command]
 pub(crate) async fn launch_selected_game(app: tauri::AppHandle) -> Result<RunReport, String> {
     tauri::async_runtime::spawn_blocking(move || launch_selected_game_inner(app))
@@ -748,7 +768,6 @@ fn launch_selected_game_inner(app: tauri::AppHandle) -> Result<RunReport, String
         Some(game.id.clone()),
     );
 
-    // Запуск автономного лаунчера с правами администратора (runas)
     match spawn_eclipse_hv(&target_hv, &game.exe_path, &dir) {
         Ok(_) => {
             emit(
@@ -771,7 +790,6 @@ fn launch_selected_game_inner(app: tauri::AppHandle) -> Result<RunReport, String
     }
 }
 
-// Запуск Eclipse-HV с гарантированным запросом прав администратора через ShellExecuteW (runas)
 #[cfg(target_os = "windows")]
 fn spawn_eclipse_hv(hv_exe: &Path, game_exe: &str, dir: &Path) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
@@ -857,13 +875,12 @@ fn prepare_game_files(app: &tauri::AppHandle, game_id: &str, dir: &Path) -> Resu
                     Some(game_id.into()),
                 );
             }
-            // Не удаляем kvc.exe, 7zr.exe и сторонние папки по одному лишь имени
+            // Не удаляем сторонние исполняемые файлы и папки по одному лишь имени
             Ok(())
         },
     )?
 }
 
-// Валидация пути к исполняемому файлу
 fn validate_exe_path(raw: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(raw.trim().trim_matches('"'));
     if !path.is_file() {
@@ -879,7 +896,6 @@ fn validate_exe_path(raw: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-// Генерация уникального ID для игры по её пути
 fn make_game_id(path: &Path) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -889,7 +905,6 @@ fn make_game_id(path: &Path) -> String {
     format!("game_{:016x}", hasher.finish())
 }
 
-// Путь к файлу базы данных библиотеки гипервизора
 fn library_path() -> Result<PathBuf, String> {
     let local = env::var("LOCALAPPDATA")
         .map(PathBuf::from)
@@ -935,7 +950,6 @@ fn refresh_library(mut library: Library) -> Library {
         game.batch_name = "Eclipse-HV.exe".to_string();
         game.helper_label = "Eclipse-HV.exe".to_string();
         game.batch_found = hv_present;
-        game.kvc_found = hv_present;
         game.ready = exe.exists();
 
         if !game.shortcut_path.is_empty() && !Path::new(&game.shortcut_path).is_file() {
@@ -944,7 +958,10 @@ fn refresh_library(mut library: Library) -> Library {
         #[cfg(target_os = "windows")]
         if game.shortcut_path.is_empty() {
             if let Ok(desktop) = desktop_dir() {
-                let candidate = desktop.join(format!("{} (Eclipse HV).lnk", safe_shortcut_name(&game.name)));
+                let candidate = desktop.join(format!(
+                    "{} (Eclipse HV).lnk",
+                    safe_shortcut_name(&game.name)
+                ));
                 if candidate.is_file() {
                     game.shortcut_path = candidate.display().to_string();
                 }
@@ -982,7 +999,6 @@ fn launcher_profile_view() -> LauncherProfileView {
     }
 }
 
-// Отправка сообщений и прогресса в графический интерфейс
 fn emit(
     app: &tauri::AppHandle,
     kind: &str,
@@ -1001,7 +1017,6 @@ fn emit(
     );
 }
 
-// Проверка наличия прав администратора
 fn is_admin() -> bool {
     let mut command = Command::new("net.exe");
     command.arg("session");
@@ -1015,7 +1030,6 @@ fn is_admin() -> bool {
         .unwrap_or(false)
 }
 
-// Проверка процесса в списке запущенных задач Windows
 fn process_name_running(name: &str) -> Result<bool, String> {
     let mut command = Command::new("tasklist.exe");
     command.arg("/FO").arg("CSV").arg("/NH");
@@ -1042,7 +1056,7 @@ pub(crate) fn tasklist_contains_process(output: &str, process_name: &str) -> boo
     })
 }
 
-// Интеграция автономного лаунчера Eclipse-HV
+// ── Интеграция автономного лаунчера Eclipse-HV
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1143,7 +1157,6 @@ pub(crate) async fn eclipse_hv_check_update(
             }
         }
 
-        // Обновление доступно, только если файл не установлен или его размер отличается от актуального
         let update_available = if !installed {
             true
         } else if let Some(local_size) = size_bytes {
@@ -1179,7 +1192,7 @@ pub(crate) async fn eclipse_hv_download(target_dir: Option<String>) -> Result<St
         }
         let target_exe = dest.join("Eclipse-HV.exe");
 
-        // Устанавливаем из встроенных ресурсов лаунчера (100% надёжность без внешних запросов)
+        // Встроенные ресурсы надёжнее сети: внешних запросов не требуется
         if !EMBEDDED_ECLIPSE_HV.is_empty() {
             fs::write(&target_exe, EMBEDDED_ECLIPSE_HV).map_err(|e| {
                 format!(

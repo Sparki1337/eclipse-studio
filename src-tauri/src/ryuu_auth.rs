@@ -109,9 +109,7 @@ mod tests {
             let error = resolve_key_with_builtin(source, None, "").unwrap_err();
             assert!(error.contains("не задан при сборке"));
         }
-        assert!(
-            resolve_key_with_builtin(Some("crocodile"), Some("personal-key"), "").is_err()
-        );
+        assert!(resolve_key_with_builtin(Some("crocodile"), Some("personal-key"), "").is_err());
     }
 
     #[test]

@@ -1,3 +1,5 @@
+//! Клиент Ryuu Generator: поиск, скачивание манифестов, обход блокировок и лимиты.
+
 use crate::luatools::{self, LuaInstallResult};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
@@ -13,13 +15,11 @@ use tauri::{AppHandle, Manager};
 
 const HOST: &str = "generator.ryuu.lol";
 const ORIGIN: &str = "https://generator.ryuu.lol";
-// Базовый адрес реверс-прокси
 const PROXY_BASE: &str = "";
 
 const CATALOG_URL: &str = "https://generator.ryuu.lol/api/games";
 const DOWNLOAD_BASE: &str = "https://generator.ryuu.lol/api/download/";
 const CATALOG_TTL: Duration = Duration::from_secs(24 * 3600);
-// User-Agent браузера Chrome
 const USER_AGENT: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
@@ -42,7 +42,6 @@ pub struct RyuuGame {
     pub kind: Option<String>,
 }
 
-// Статистика использования и суточный лимит загрузок Ryuu
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RyuuUsage {
@@ -54,7 +53,6 @@ pub struct RyuuUsage {
     pub remaining: u64,
 }
 
-// Локальная структура суточного счетчика в ryuu-usage.json
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct StoredUsage {
     day: u64,
@@ -62,7 +60,6 @@ struct StoredUsage {
     daily_limit: u64,
 }
 
-// Текущий день в секундах / 86400 (Unix-эпоха)
 fn current_epoch_day() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -71,14 +68,12 @@ fn current_epoch_day() -> u64 {
         / 86400
 }
 
-// Путь к файлу локального суточного счетчика
 fn usage_path(app: &AppHandle) -> Option<PathBuf> {
     let dir = app.path().app_local_data_dir().ok()?;
     let _ = fs::create_dir_all(&dir);
     Some(dir.join("ryuu-usage.json"))
 }
 
-// Чтение суточного счетчика с автосбросом в новый день
 fn read_stored_usage(app: &AppHandle) -> StoredUsage {
     let today = current_epoch_day();
     let default = StoredUsage {
@@ -99,7 +94,6 @@ fn read_stored_usage(app: &AppHandle) -> StoredUsage {
     default
 }
 
-// Сохранение суточного счетчика
 fn write_stored_usage(app: &AppHandle, usage: &StoredUsage) {
     if let Some(path) = usage_path(app) {
         if let Ok(json) = serde_json::to_vec_pretty(usage) {
@@ -108,7 +102,6 @@ fn write_stored_usage(app: &AppHandle, usage: &StoredUsage) {
     }
 }
 
-// Фиксация успешного скачивания через Ryuu
 pub fn record_ryuu_download(app: &AppHandle) {
     let mut stored = read_stored_usage(app);
     stored.day = current_epoch_day();
@@ -121,7 +114,6 @@ fn catalog_cache() -> &'static Mutex<Option<Vec<RyuuGame>>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
-// Блокировка параллельной загрузки каталога
 fn download_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
@@ -155,7 +147,6 @@ fn base_headers() -> reqwest::header::HeaderMap {
     headers
 }
 
-// Создание HTTP-клиента с поддержкой DoH
 fn build_client(resolve_to: Option<IpAddr>) -> Result<Client, String> {
     let mut builder = Client::builder()
         .user_agent(USER_AGENT)
@@ -178,7 +169,6 @@ fn doh_cache() -> &'static Mutex<Option<IpAddr>> {
     CACHE.get_or_init(|| Mutex::new(None))
 }
 
-// DoH-запрос адреса домена
 fn query_doh(url: &str) -> Option<IpAddr> {
     let response = Client::builder()
         .timeout(Duration::from_secs(8))
@@ -200,7 +190,6 @@ fn query_doh(url: &str) -> Option<IpAddr> {
         .and_then(|address| address.parse::<IpAddr>().ok())
 }
 
-// Резолв домена через DoH-серверы
 fn doh_resolve() -> Option<IpAddr> {
     if let Some(ip) = doh_cache().lock().ok().and_then(|cache| *cache) {
         return Some(ip);
@@ -222,9 +211,7 @@ fn doh_resolve() -> Option<IpAddr> {
 }
 
 enum GetError {
-    // Ошибка сети
     Network(String),
-    // Ошибка HTTP
     Http(String),
 }
 
@@ -263,7 +250,6 @@ fn http_get_once(
         .map_err(|error| GetError::Network(format!("Не удалось получить файл: {error}")))
 }
 
-// Подстановка адреса прокси
 fn proxy_url(url: &str) -> Option<String> {
     if PROXY_BASE.is_empty() {
         return None;
@@ -272,16 +258,13 @@ fn proxy_url(url: &str) -> Option<String> {
         .map(|path| format!("{PROXY_BASE}{path}"))
 }
 
-// HTTP-запрос с цепочкой обхода блокировок
 fn http_get(url: &str, auth: Option<&str>, identity: bool) -> Result<Vec<u8>, String> {
-    // Прямой запрос
     let network_error = match http_get_once(&client()?, url, auth, identity) {
         Ok(bytes) => return Ok(bytes),
         Err(GetError::Http(message)) => return Err(message),
         Err(GetError::Network(message)) => message,
     };
 
-    // Запрос через DoH
     if let Some(ip) = doh_resolve() {
         match http_get_once(&build_client(Some(ip))?, url, auth, identity) {
             Ok(bytes) => return Ok(bytes),
@@ -290,7 +273,6 @@ fn http_get(url: &str, auth: Option<&str>, identity: bool) -> Result<Vec<u8>, St
         }
     }
 
-    // Запрос через реверс-прокси
     if let Some(proxied) = proxy_url(url) {
         match http_get_once(&client()?, &proxied, auth, identity) {
             Ok(bytes) => return Ok(bytes),
@@ -344,19 +326,16 @@ fn parse_catalog(bytes: &[u8]) -> Vec<RyuuGame> {
         .unwrap_or_default()
 }
 
-// Чтение кэшированного каталога с диска
 fn fresh_disk_catalog(app: &AppHandle) -> Option<Vec<u8>> {
     let path = catalog_path(app)?;
     let age = fs::metadata(&path).ok()?.modified().ok()?.elapsed().ok()?;
     (age < CATALOG_TTL).then(|| fs::read(&path).ok()).flatten()
 }
 
-// Загрузка каталога в память с авторизацией по ключу
 fn ensure_catalog(app: &AppHandle, auth: Option<&str>) -> Result<(), String> {
     if catalog_loaded() {
         return Ok(());
     }
-    // Ожидание завершения текущей загрузки
     let _guard = download_lock()
         .lock()
         .map_err(|_| "Загрузка каталога занята".to_string())?;
@@ -384,7 +363,6 @@ fn ensure_catalog(app: &AppHandle, auth: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 
-// Поиск игр в каталоге
 #[tauri::command]
 pub async fn ryuu_search(app: AppHandle, query: String) -> Result<Vec<RyuuGame>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -409,7 +387,6 @@ fn ryuu_search_blocking(
         return Ok(Vec::new());
     }
     let numeric = query.chars().all(|c| c.is_ascii_digit());
-    // Поиск по числовому AppID при недоступности каталога
     if let Err(error) = ensure_catalog(&app, Some(key)) {
         if numeric {
             return Ok(vec![RyuuGame {
@@ -426,7 +403,6 @@ fn ryuu_search_blocking(
         .map_err(|_| "Каталог занят".to_string())?;
     let games = guard.as_ref().ok_or("Каталог не загружен")?;
 
-    // Сортировка по релевантности совпадения
     let mut scored: Vec<(u8, &RyuuGame)> = Vec::new();
     for game in games {
         let rank = if numeric {
@@ -468,7 +444,6 @@ fn ryuu_search_blocking(
         .collect())
 }
 
-// Загрузка и установка архива игры по AppID
 #[tauri::command]
 pub async fn ryuu_get(
     app: AppHandle,
@@ -525,7 +500,6 @@ fn ryuu_get_blocking(
         };
     }
 
-    // Загрузка zip-архива манифестов с авторизацией по ключу X-Auth-Key
     let bytes = http_get(&format!("{DOWNLOAD_BASE}{clean}"), Some(key), true);
 
     match bytes {
@@ -545,7 +519,6 @@ fn ryuu_get_blocking(
     }
 }
 
-// Запрос статистики использования и лимитов Ryuu
 #[tauri::command]
 pub async fn ryuu_usage(app: AppHandle) -> Result<RyuuUsage, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -560,7 +533,6 @@ fn ryuu_usage_blocking(app: AppHandle, api_key: String) -> Result<RyuuUsage, Str
     let key = api_key.trim();
     let mut stored = read_stored_usage(&app);
 
-    // Если указан API-ключ, пробуем запросить актуальные серверные квоты
     if !key.is_empty() {
         for endpoint in [
             "https://generator.ryuu.lol/api/user/stats",
@@ -615,7 +587,6 @@ fn ryuu_usage_blocking(app: AppHandle, api_key: String) -> Result<RyuuUsage, Str
         }
     }
 
-    // Возврат надежного локального суточного счетчика
     let remaining = stored.daily_limit.saturating_sub(stored.daily_usage);
     Ok(RyuuUsage {
         daily_usage: stored.daily_usage,

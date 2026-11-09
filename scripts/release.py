@@ -26,16 +26,14 @@ if sys.platform.startswith("win"):
 
 
 def get_version() -> str:
-    # Чтение текущей версии из tauri.conf.json
     if TAURI_CONF.exists():
         with open(TAURI_CONF, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data.get("version", "9.0.0")
-    return "9.0.0"
+            return data.get("version", "10.0.0")
+    return "10.0.0"
 
 
 def compute_sha256(file_path: Path) -> str:
-    # Расчёт SHA-256 контрольной суммы файла
     sha = hashlib.sha256()
     with open(file_path, "rb") as f:
         while chunk := f.read(1024 * 1024):
@@ -44,7 +42,7 @@ def compute_sha256(file_path: Path) -> str:
 
 
 def get_git_changes() -> list[str]:
-    # Получение списка последних коммитов с предыдущего тега
+    # Коммиты с предыдущего тега
     try:
         tag_proc = subprocess.run(
             ["git", "describe", "--tags", "--abbrev=0"],
@@ -68,7 +66,7 @@ def get_git_changes() -> list[str]:
     except Exception:
         pass
 
-    # Резервный вариант — последние 5 коммитов
+    # Нет тега — берём последние 5 коммитов
     try:
         log_proc = subprocess.run(
             ["git", "log", "-n", "5", "--oneline"],
@@ -88,7 +86,6 @@ def main():
     print(f"🌒 Подготовка и сборка релиза Eclipse Studio v{version}")
     print("=" * 64)
 
-    # Запуск scripts/build.py для создания портативного бинарника
     build_script = SCRIPTS_DIR / "build.py"
     cmd = [
         sys.executable,
@@ -106,7 +103,6 @@ def main():
         print("\n[-] Ошибка: сборка build.py завершилась с ошибкой.")
         sys.exit(res.returncode)
 
-    # Проверка и расчёт SHA-256
     expected_file = HYPERVISOR_DIR / f"Eclipse-Studio-v{version}.exe"
     if not expected_file.exists():
         print(f"\n[-] Ошибка: собранный файл не найден по пути {expected_file}")
@@ -123,7 +119,6 @@ def main():
     print(f"Размер:   {file_size_mb:.2f} МБ")
     print(f"SHA-256:  {sha256_hash}")
 
-    # Анализ коммитов
     commits = get_git_changes()
 
     print("\n" + "=" * 64)
@@ -140,8 +135,7 @@ def main():
 * **System & UI Updates**: Stability, styling enhancements, and core engine optimizations.
 
 ### Antivirus Verification
-* **VirusTotal Report**: [Analysis Result 7\\70](https://www.virustotal.com/)
-* **Status**: Clean.
+* **VirusTotal**: Not scanned. Publish a verified report for this exact SHA-256 before making a safety claim.
 * **SHA-256 (Portable)**: `{sha256_hash}`
 
 ---
@@ -152,8 +146,7 @@ def main():
 * **Обновления системы и интерфейса**: Улучшения стабильности, темы оформления и оптимизации движка.
 
 ### Проверка безопасности
-* **Отчёт VirusTotal**: [Результат проверки 7\\70](https://www.virustotal.com/)
-* **Статус**: Чистый файл.
+* **VirusTotal**: Не проверено. Публикуйте только подтверждённый отчёт для файла с этим SHA-256.
 * **SHA-256 (Portable)**: `{sha256_hash}`
 """
     print(release_template)

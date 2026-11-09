@@ -1,8 +1,7 @@
-// Управление VBS, HVCI, BitLocker, KVA Shadow, UEFI Lock и гипервизором Windows
-
 (() => {
   "use strict";
 
+  // vbs — защита ядра Windows: VBS, HVCI, BitLocker, UEFI Lock, диагностика
   const invoke = window.cgsApi?.invoke;
   const $ = (selector, root = document) => root.querySelector(selector);
   const state = { report: null, scanning: false, changing: false, troubleshooting: false, lastScanAt: 0, scanFailed: false };
@@ -27,7 +26,7 @@
   }
 
   // Кнопки, меняющие параметры загрузки: блокируются, пока состояние BitLocker не подтверждено
-  const BOOT_BUTTONS = ["#vbs-enable-all-btn", "#vbs-enable-button", "#vbs-disable-button", "#vbs-test-button", "#vbs-external-restore"];
+  const BOOT_BUTTONS = ["#vbs-enable-all-btn", "#vbs-enable-button", "#vbs-disable-button", "#vbs-test-button", "#vbs-external-restore", "#vbs-uefi-optout-btn"];
   const BOOT_BUTTON_TITLES = { "#vbs-enable-all-btn": "Принудительно включить все механизмы защиты ядра Windows" };
   const BLOCKED_TITLE = "Заблокировано: состояние BitLocker не подтверждено";
   const BLOCKED_ADMIN_TITLE = "Заблокировано: запустите программу от имени администратора, чтобы проверить BitLocker";
@@ -43,11 +42,17 @@
       return report.canRestore ? "" : "Нет проверенного снимка Eclipse для точного отката.";
     }
     if (report.external?.detected || report.external?.pendingRestart) return report.external.blockedReason || "Сначала выключите внешний режим VBS.cmd по его журналу.";
-    if (selector === "#vbs-enable-all-btn") return "";
+    if (selector !== "#vbs-uefi-optout-btn" && report.uefiOptout?.blockedReason) return report.uefiOptout.blockedReason;
+    if (selector === "#vbs-uefi-optout-btn") {
+      if (report.uefiOptout?.active) return "UEFI-сценарий уже записан: перезагрузите Windows либо выполните откат.";
+      if (report.uefiLock?.secConfigAvailable === false) return "Системный SecConfig.efi недоступен.";
+      return report.enableBlockReason || "";
+    }
+    if (selector === "#vbs-enable-all-btn") return report.uefiOptout?.active ? "Сначала выполните откат UEFI Opt-Out по снимку Eclipse." : "";
     return report.enableBlockReason || "";
   }
 
-  // Подсказка на кнопке загрузки: причина блокировки или исходный текст
+  // Подсказка на кнопке: причина блокировки или исходный текст
   function updateBootButtonTitle(button, selector, reason) {
     const title = reason || BOOT_BUTTON_TITLES[selector] || "";
     if ((button.dataset.titleSource || "") === title) return;
@@ -56,10 +61,9 @@
     button.dataset.titleSource = title;
   }
 
-  // Установка состояния занятости интерфейса при длительных операциях
   function setBusy(busy, label = "") {
     state.scanning = busy;
-    // Обновление программы ждёт окончания проверки и изменения параметров Windows
+    // Обновление программы ждёт окончания операций VBS
     window.cgsReportBusy?.("vbs", busy || state.changing);
     $("#vbs-loading")?.classList.toggle("hidden", !busy);
     $("#vbs-components")?.classList.toggle("hidden", busy);
@@ -100,7 +104,6 @@
     return component.enabled ? "Включён" : "Выключен";
   }
 
-  // Отрисовка актуального состояния параметров VBS 2.0.1
   function render() {
     const report = state.report;
     if (!report) return;
@@ -166,12 +169,12 @@
     const uefiCard = $("#vbs-uefi-card");
     if (uefiCard) {
       const isLocked = uefi && uefi.isLocked;
-      uefiCard.classList.toggle("hidden", !isLocked);
-      const optoutBtn = $("#vbs-uefi-optout-btn");
-      if (optoutBtn && isLocked) {
-        optoutBtn.disabled = false;
-        optoutBtn.title = "Изменение UEFI отключено: показать причину";
-      }
+      const active = report.uefiOptout?.active === true;
+      uefiCard.classList.toggle("hidden", !isLocked && !active);
+      const detail = $("#vbs-uefi-detail");
+      if (detail) detail.textContent = active ? report.uefiOptout.detail : "Параметры закреплены UEFI. Подготовка SecConfig требует отдельного согласия; исходные настройки и собственные EFI/BCD-объекты учитываются в журнале возврата.";
+      const badge = $("#vbs-uefi-label");
+      if (badge) badge.textContent = active ? "UEFI: СНИМОК СОХРАНЁН" : "UEFI LOCK ОБНАРУЖЕН";
     }
 
     // Список конфликтующего стороннего ПО
@@ -259,13 +262,13 @@
       $("#vbs-external-reason").classList.toggle("hidden", !external.blockedReason);
       $("#vbs-external-restore").classList.toggle("hidden", external.pendingRestart && !external.detected);
     }
-    $("#vbs-enable-button").classList.toggle("hidden", externalVisible || testEnabled || (report.canRestore && dseIsOff));
+    // Кнопка включения скрывается, когда уже есть снимок для отката или включён тестовый режим
+    $("#vbs-enable-button").classList.toggle("hidden", externalVisible || testEnabled || (report.canRestore && report.uefiOptout?.canContinue !== true));
     $("#vbs-disable-button").classList.toggle("hidden", !report.canRestore || (testEnabled && !externalVisible));
     $("#vbs-disable-label").textContent = external.detected ? "Откатить изменения Eclipse" : rollbackMode ? "Откатить визор" : "Выключить визор";
     setBusy(state.scanning);
   }
 
-  // Запуск глубокого сканирования подсистем Windows
   async function scan(options = {}) {
     if (options.automatic && (!isActive() || document.hidden || Date.now() - state.lastScanAt < 2000)) return;
     if (state.scanning || state.changing || state.troubleshooting) return;
@@ -287,7 +290,6 @@
     }
   }
 
-  // Диалог подтверждения изменений режимов защиты
   async function confirmChange(mode) {
     if (mode === "external-restore") {
       const title = "Выключить внешний режим VBS.cmd?";
@@ -322,7 +324,6 @@
     return window.confirm(`${title}\n\n${message}`);
   }
 
-  // Запрос перезапуска системы после применения изменений
   async function askRestart(mode) {
     const message = mode === "external-restore"
       ? "Внешние настройки восстановлены по журналу VBS.cmd. Сохраните файлы и перезагрузите Windows. После этого режим можно снова включить из Eclipse с собственным снимком восстановления."
@@ -342,16 +343,17 @@
     if (accepted) await call("vbs_restart");
   }
 
-  // Проверка прав администратора с предложением перезапуска программы с повышением UAC
   async function ensureAdmin(reason = "") {
+    let isElevated;
     try {
-      const isElevated = await call("process_is_elevated");
+      isElevated = await call("process_is_elevated");
       if (isElevated) return true;
     } catch {
-      // Игнорируем ошибку опроса
+      // Ошибка опроса не критична
     }
 
-    if (state.report && state.report.admin) return true;
+    // Свежий отрицательный ответ не перекрывается устаревшим сканом
+    if (isElevated !== false && state.report?.admin) return true;
 
     const title = "Требуются права администратора";
     const msg = `${reason || "Для изменения параметров изоляции ядра, тестового режима и загрузчика BCD требуются права администратора Windows."}\n\nПерезапустить Eclipse Studio от имени администратора прямо сейчас?`;
@@ -371,13 +373,13 @@
     return false;
   }
 
-  // Применение изменения состояния гипервизора или тестового режима
   async function change(mode) {
     if (state.scanning || state.changing || state.troubleshooting) return;
-    if (!(await ensureAdmin())) return;
-    state.changing = true;
     const enabling = mode === "enable";
     const preparing = enabling || mode === "test-enable";
+    if (preparing && state.report?.uefiLock?.isLocked) { await prepareUefiOptOut(); return; }
+    if (!(await ensureAdmin())) return;
+    state.changing = true;
     const externalRestore = mode === "external-restore";
     const testMode = mode === "test-enable" || mode === "test-disable";
     const rollbackMode = !enabling && state.report?.canRestore && state.report?.dse?.state === "enabled";
@@ -398,22 +400,19 @@
         if (!consent) return;
         allowUefi = true;
       }
-      if (preparing && state.report?.uefiLock?.isLocked) {
-        const uefiConsent = typeof window.cgsShowModal === "function"
-          ? await window.cgsShowModal(
-              "Обнаружена аппаратная блокировка UEFI",
-              "В системе активен UEFI Lock (VBS защищён прошивкой материнской платы).\n\nНастроить автоматический UEFI Opt-Out (SecConfig.efi) в EFI-раздел для отключения защиты при перезагрузке?",
-              { confirm: true, confirmText: "Настроить UEFI Opt-Out", cancelText: "Продолжить без UEFI", symbol: "⚠️" }
-            )
-          : false;
-        allowUefi = Boolean(uefiConsent);
+      if (!preparing && !externalRestore && state.report?.uefiOptout?.requiresRelock) {
+        const consent = typeof window.cgsShowModal === "function"
+          ? await window.cgsShowModal("Вернуть исходные UEFI Lock?", "Откат отменит одноразовую загрузку SecConfig, удалит только собственные EFI/BCD-объекты и вернёт исходные параметры защит и UEFI Lock из снимка. Применение блокировок требует перезагрузки; повторное отключение может потребовать физического подтверждения. Продолжить?", { confirm: true, confirmText: "Вернуть по снимку", cancelText: "Отмена", symbol: "!" })
+          : window.confirm("Вернуть исходные параметры защит и UEFI Lock из снимка? Потребуется перезагрузка; последующее отключение может потребовать физического подтверждения.");
+        if (!consent) return;
+        allowUefi = true;
       }
 
       const result = externalRestore
         ? await call("vbs_restore_external", { allowUefi })
         : testMode
         ? await call("vbs_set_test_mode", { enabled: mode === "test-enable", allowUefi })
-        : (enabling ? await call("vbs_disable", { allowUefi }) : await call("vbs_restore"));
+        : (enabling ? await call("vbs_disable", { allowUefi }) : await call("vbs_restore", { allowUefi }));
 
       const lines = [result.message, `Изменено параметров: ${result.changed || 0}`];
       if (result.restartRequired) lines.push("Для применения изменений требуется перезагрузка Windows.");
@@ -445,40 +444,35 @@
     }
   }
 
-  // Настройка UEFI Opt-Out (SecConfig.efi) с симметричным восстановлением
+  // Отдельное согласие; бэкенд повторяет все проверки до изменений
   async function prepareUefiOptOut() {
     if (state.scanning || state.changing || state.troubleshooting) return;
-    if (!(await ensureAdmin())) return;
-
-    const title = "Настроить UEFI Opt-Out (SecConfig.efi)?";
-    const message = "Программа смонтирует системный EFI-раздел, скопирует официальный инструмент Microsoft SecConfig.efi и зарегистрирует загрузочную запись DGOptOut в BCD.\n\n" +
-      "При следующей перезагрузке микрокод материнской платы покажет экран подтверждения отключения аппаратной защиты VBS.\n\n" +
-      "Защита BitLocker будет автоматически приостановлена на время перезагрузки, чтобы не требовался ключ восстановления.";
-
-    const confirmed = typeof window.cgsShowModal === "function"
-      ? await window.cgsShowModal(title, message, { confirm: true, confirmText: "Настроить", cancelText: "Отмена", symbol: "⚠️" })
-      : window.confirm(`${title}\n\n${message}`);
-    if (!confirmed) return;
-
+    const reason = bootBlockReason("#vbs-uefi-optout-btn");
+    if (reason) { await window.cgsShowModal?.("UEFI Opt-Out недоступен", reason, { symbol: "!" }); return; }
     state.changing = true;
-    setBusy(true, "Настройка SecConfig.efi…");
+    setBusy(false);
     try {
-      const result = await call("vbs_prepare_uefi_optout");
-      if (typeof window.cgsShowModal === "function") {
-        await window.cgsShowModal(result.success ? "SecConfig.efi настроен" : "Настройка не удалась", result.message, { symbol: result.success ? "✓" : "!" });
-      }
-    } catch (err) {
-      if (typeof window.cgsShowModal === "function") {
-        await window.cgsShowModal("Ошибка UEFI Opt-Out", String(err), { symbol: "!" });
-      }
+      const message = "Программа подготовит системный SecConfig.efi для снятия UEFI Lock. Перед изменениями сохраняется проверяемый DPAPI-журнал; создаются отдельные EFI-файлы и BCD-запись, существующие системные объекты не перезаписываются. BitLocker должен быть проверен; активная защита приостанавливается на одну перезагрузку — заранее обеспечьте доступ к ключу восстановления. При загрузке потребуется подтверждение на экране компьютера. Отмена и возврат исходных блокировок доступны через откат Eclipse. Только для личного, не управляемого организацией устройства.";
+      const accepted = typeof window.cgsShowModal === "function"
+        ? await window.cgsShowModal("Подготовить снятие UEFI Lock?", message, { confirm: true, confirmText: "Подготовить с журналом", cancelText: "Отмена", symbol: "!" })
+        : window.confirm(`Подготовить снятие UEFI Lock?\n\n${message}`);
+      if (!accepted) return;
+      if (!(await ensureAdmin())) return;
+      setBusy(false, "Подготовка UEFI Opt-Out…");
+      const result = await call("vbs_prepare_uefi_optout", { allowUefi: true });
+      $("#vbs-log-panel")?.classList.remove("hidden");
+      if ($("#vbs-log")) $("#vbs-log").textContent = String(result);
+      await askRestart("uefi");
+    } catch (error) {
+      $("#vbs-log-panel")?.classList.remove("hidden");
+      if ($("#vbs-log")) $("#vbs-log").textContent = String(error);
+      await window.cgsShowModal?.("Ошибка подготовки UEFI", String(error), { symbol: "!" });
     } finally {
       state.changing = false;
-      setBusy(false);
       await scan();
     }
   }
 
-  // Отключение службы FACEIT, вызывающей блокировку гипервизорного драйвера
   async function disableFaceit() {
     if (state.scanning || state.changing || state.troubleshooting) return;
     const title = "Отключить службу FACEIT?";
@@ -507,7 +501,7 @@
     }
   }
 
-  // Выполнение системной диагностики и восстановления (WMI, SFC, DISM)
+  // Диагностика без изменений: WMI /verify, SFC /verifyonly, DISM /scanhealth
   async function runTroubleshoot(action) {
     if (state.scanning || state.changing || state.troubleshooting) return;
 
@@ -570,7 +564,7 @@
     }
   }
 
-  // Выполнение активного восстановления компонентов Windows (WMI, SFC, DISM)
+  // Активное восстановление: WMI salvage/reset, SFC /scannow, DISM /restorehealth
   async function runRepair(kind) {
     if (state.scanning || state.changing || state.troubleshooting) return;
     if (!(await ensureAdmin())) return;
@@ -638,7 +632,6 @@
     }
   }
 
-  // Принудительное включение всех механизмов защиты системы Windows (VBS, HVCI, Blocklist, etc.)
   async function enableAll() {
     if (state.scanning || state.changing || state.troubleshooting) return;
     if (!(await ensureAdmin())) return;
@@ -702,7 +695,6 @@
     }
   }
 
-  // Привязка обработчиков событий
   $("#vbs-scan-button")?.addEventListener("click", scan);
   $("#vbs-enable-all-btn")?.addEventListener("click", enableAll);
   $("#vbs-enable-button")?.addEventListener("click", () => change("enable"));
@@ -714,7 +706,7 @@
     if (await ensureAdmin("Windows сообщает состояние BitLocker только программам с правами администратора. Без него изменения загрузки остаются заблокированными.")) scan();
   });
 
-  // Обработка клика по устранению конфликтов (делегирование)
+  // Устранение конфликтов — делегирование кликов
   $("#vbs-conflicts-list")?.addEventListener("click", (event) => {
     const btn = event.target.closest(".vbs-conflict-fix-btn");
     if (!btn) return;
@@ -724,7 +716,6 @@
     }
   });
 
-  // Потоковый вывод прогресса в реальном времени
   function appendProgress(line) {
     const logPanel = $("#vbs-log-panel");
     const log = $("#vbs-log");
@@ -746,13 +737,12 @@
     });
   }
 
-  // Инструменты системного восстановления и ремонта Windows
   $("#vbs-fix-wmi")?.addEventListener("click", () => runRepair("wmi"));
   $("#vbs-fix-sfc")?.addEventListener("click", () => runRepair("sfc"));
   $("#vbs-fix-dism")?.addEventListener("click", () => runRepair("dism"));
 
 
-  // Управление отдельными защитами
+  // ── Отдельные защиты
   const pState = { items: [], loading: false, changing: false };
 
   function renderProtections() {

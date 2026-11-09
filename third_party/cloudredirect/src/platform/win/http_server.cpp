@@ -1,4 +1,5 @@
 #include "http_server.h"
+#include "blob_path_policy.h"
 #include "http_util.h"
 #include "file_util.h"
 #include "cloud_storage.h"
@@ -149,30 +150,27 @@ static bool ParseBlobPath(const char* path, const char* prefix,
     size_t prefixLen = strlen(prefix);
     if (strncmp(path, prefix, prefixLen) != 0) return false;
 
-    const char* rest = path + prefixLen;
-    // parse accountId (digits until next '/')
-    char* slash = nullptr;
-    unsigned long id = strtoul(rest, &slash, 10);
-    if (!slash || *slash != '/' || id == 0) return false;
+    std::string_view rest(path + prefixLen);
+    auto slash = rest.find('/');
+    if (slash == std::string_view::npos || !BlobPathPolicy::ParseId(rest.substr(0, slash), accountId)) return false;
+    rest.remove_prefix(slash + 1);
+    slash = rest.find('/');
+    if (slash == std::string_view::npos || !BlobPathPolicy::ParseId(rest.substr(0, slash), appId)) return false;
+    // Область запроса обязана совпадать с активным аккаунтом Steam.
+    const uint32_t activeAccount = g_accountId.load();
+    if (activeAccount == 0 || accountId != activeAccount) return false;
 
-    accountId = (uint32_t)id;
-    rest = slash + 1;
-
-    // parse appId (digits until next '/')
-    id = strtoul(rest, &slash, 10);
-    if (!slash || *slash != '/' || id == 0) return false;
-    appId = (uint32_t)id;
-
-    std::string rawPath(slash + 1);
+    std::string rawPath(rest.substr(slash + 1));
     // Strip query string (e.g. ?raw=12345)
     auto qpos = rawPath.find('?');
     if (qpos != std::string::npos) rawPath.resize(qpos);
     filename = HttpUtil::UrlDecode(rawPath);
-    if (filename.empty()) return false;
+    if (!BlobPathPolicy::Filename(filename)) return false;
 
     // Validate: resolved blob path must stay within the blob root.
     std::string blobPath = BlobPath(accountId, appId, filename);
-    if (!FileUtil::IsPathWithin(g_blobRoot, blobPath)) {
+    const std::string namespaceRoot = BlobPath(accountId, appId, "");
+    if (!FileUtil::IsPathWithin(namespaceRoot, blobPath)) {
         LOG("[HTTP] BLOCKED path traversal: %s (root=%s)", path, g_blobRoot.c_str());
         return false;
     }
@@ -281,7 +279,7 @@ static void HandleClient(SOCKET client) {
             }
 
             // Reject partial body - recv returned 0/-1 before all bytes arrived
-            if (contentLength > 0 && (int64_t)bodyData.size() != contentLength) {
+            if ((int64_t)bodyData.size() != contentLength) {
                 LOG("[HTTP] PUT %s -> PARTIAL BODY (%zu of %lld bytes), rejecting",
                     path, bodyData.size(), (long long)contentLength);
                 const char* errResponse =
@@ -445,6 +443,12 @@ static bool IsConnectionFromSteam(SOCKET client) {
     sockaddr_in peer{};
     int peerLen = sizeof(peer);
     if (getpeername(client, (sockaddr*)&peer, &peerLen) != 0) return false;
+    sockaddr_in local{};
+    int localLen = sizeof(local);
+    if (getsockname(client, (sockaddr*)&local, &localLen) != 0 ||
+        peer.sin_family != AF_INET || local.sin_family != AF_INET ||
+        peer.sin_addr.s_addr != htonl(INADDR_LOOPBACK) ||
+        local.sin_addr.s_addr != htonl(INADDR_LOOPBACK)) return false;
     uint16_t peerPort = ntohs(peer.sin_port);
 
     DWORD myPid = GetCurrentProcessId();
@@ -465,6 +469,9 @@ static bool IsConnectionFromSteam(SOCKET client) {
         auto& row = table->table[i];
         // Match: local port (peer's source port) and established state
         if (ntohs((uint16_t)row.dwLocalPort) == peerPort &&
+            row.dwLocalAddr == peer.sin_addr.s_addr &&
+            row.dwRemoteAddr == local.sin_addr.s_addr &&
+            ntohs((uint16_t)row.dwRemotePort) == ntohs(local.sin_port) &&
             row.dwState == MIB_TCP_STATE_ESTAB) {
             if (row.dwOwningPid == myPid) return true;
             LOG("[HTTP] BLOCKED connection from PID %u (expected %u) on port %u",

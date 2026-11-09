@@ -1,3 +1,5 @@
+//! Общие структуры данных для обмена с фронтендом через IPC.
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

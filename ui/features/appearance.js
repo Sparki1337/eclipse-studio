@@ -1,7 +1,7 @@
-// Темы, компактный режим и масштаб шрифта
 (() => {
   "use strict";
 
+  // appearance — темы, акценты, компактность, масштаб шрифта и боковая панель
   const invoke = window.cgsApi?.invoke;
   const root = document.documentElement;
   const THEMES = new Set([
@@ -140,6 +140,14 @@
     write("cgs-glow", enabled ? "1" : "0");
   }
 
+  // Новогодние украшения включаются отдельным флагом, по умолчанию включены
+  function applyHoliday(enabled) {
+    root.dataset.holiday = enabled ? "on" : "off";
+    const input = document.getElementById("ui-holiday");
+    if (input) input.checked = enabled;
+    write("cgs-holiday", enabled ? "1" : "0");
+  }
+
   async function openExternal(url) {
     try {
       if (invoke) await invoke("open_external", { url });
@@ -172,6 +180,9 @@
     });
     document.getElementById("ui-glow")?.addEventListener("change", (event) => {
       applyGlow(event.currentTarget.checked);
+    });
+    document.getElementById("ui-holiday")?.addEventListener("change", (event) => {
+      applyHoliday(event.currentTarget.checked);
     });
     document.getElementById("font-scale")?.addEventListener("input", (event) => {
       applyFontScale(event.currentTarget.value);
@@ -342,7 +353,7 @@
     handle.tabIndex = 0;
   }
 
-  // Настройка боковой панели (порядок, видимость, режимы, drag-and-drop и контекстное меню)
+  // ── Боковая панель: порядок, видимость, drag-and-drop, контекстное меню
   const DEFAULT_MODULES = [
     { id: "home", title: "Главная", icon: '<svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>' },
     { id: "fix", title: "Online Fix", icon: '<svg viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>' },
@@ -848,7 +859,7 @@
     const mod = DEFAULT_MODULES.find((m) => m.id === activeContextViewId);
     if (!mod) return;
 
-    // Заполнение данных меню
+    // Данные меню о текущем пункте
     const iconContainer = document.getElementById("nav-context-icon");
     if (iconContainer) iconContainer.innerHTML = mod.icon;
     const titleContainer = document.getElementById("nav-context-title");
@@ -1117,6 +1128,7 @@
   applyTextWeight(read("cgs-text-weight", "regular"));
   applyContrast(read("cgs-contrast", "0") === "1");
   applyGlow(read("cgs-glow", "1") !== "0");
+  applyHoliday(read("cgs-holiday", "1") !== "0");
 
   window.cgsAppearance = {
     applyTheme,
@@ -1127,6 +1139,7 @@
     applyTextWeight,
     applyContrast,
     applyGlow,
+    applyHoliday,
     applySidebarWidth,
     applySidebarMode,
     applySettingsTab,

@@ -37,7 +37,6 @@ BUILD_TYPES = {
 
 
 def load_config() -> dict:
-    # Загрузка сохранённых настроек сборщика
     if CONFIG_FILE.exists():
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -48,7 +47,6 @@ def load_config() -> dict:
 
 
 def save_config(config: dict) -> None:
-    # Сохранение настроек в build_config.json
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
@@ -58,24 +56,21 @@ def save_config(config: dict) -> None:
 
 
 def get_project_version() -> str:
-    # Чтение версии приложения
     if TAURI_CONF.exists():
         try:
             with open(TAURI_CONF, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                return data.get("version", "9.0.0")
+                return data.get("version", "10.0.0")
         except Exception:
             pass
-    return "9.0.0"
+    return "10.0.0"
 
 
 def check_tool(name: str) -> bool:
-    # Проверка наличия утилиты в PATH
     return shutil.which(name) is not None
 
 
 def check_prerequisites(build_type: str) -> bool:
-    # Проверка окружения перед сборкой
     print("[*] Проверка системного окружения...")
     ok = True
 
@@ -107,7 +102,6 @@ def check_prerequisites(build_type: str) -> bool:
 
 
 def select_build_type(args_type: str | None, last_type: str | None) -> str:
-    # Выбор типа сборки (из аргументов или меню)
     if args_type:
         val = args_type.lower()
         valid = {"portable", "nsis", "all", "debug"}
@@ -141,7 +135,6 @@ def select_build_type(args_type: str | None, last_type: str | None) -> str:
 
 
 def select_output_dir(args_out: str | None, saved_dir: str | None) -> Path:
-    # Выбор директории для выгрузки готовых файлов
     if args_out:
         out_path = Path(args_out).resolve()
         out_path.mkdir(parents=True, exist_ok=True)
@@ -172,7 +165,7 @@ def select_output_dir(args_out: str | None, saved_dir: str | None) -> Path:
 
 
 def compute_sha256(file_path: Path) -> str:
-    # Расчет контрольной суммы SHA-256 с повторными попытками (на случай сканирования файла антивирусом)
+    # Повторные попытки: антивирус может держать файл открытым
     import time
     for attempt in range(10):
         try:
@@ -191,13 +184,11 @@ def compute_sha256(file_path: Path) -> str:
 
 
 def format_size(bytes_count: int) -> str:
-    # Человекочитаемый размер файла
     mb = bytes_count / (1024 * 1024)
     return f"{mb:.2f} МБ"
 
 
 def run_command(cmd: list[str], cwd: Path) -> bool:
-    # Запуск команды с прямым выводом в консоль
     cmd_str = " ".join(cmd)
     print(f"\n>> Запуск: {cmd_str}\n")
     try:
@@ -216,25 +207,21 @@ def run_command(cmd: list[str], cwd: Path) -> bool:
 
 
 def build_portable(manifest_path: Path) -> bool:
-    # Сборка портативного бинарника через Cargo release
     cmd = ["cargo", "build", "--release", "--manifest-path", str(manifest_path)]
     return run_command(cmd, ROOT_DIR)
 
 
 def build_debug(manifest_path: Path) -> bool:
-    # Сборка debug-бинарника через Cargo
     cmd = ["cargo", "build", "--manifest-path", str(manifest_path)]
     return run_command(cmd, ROOT_DIR)
 
 
 def build_nsis() -> bool:
-    # Сборка инсталлятора через Tauri CLI с запасным запуском через npm
     cmd = ["npm", "run", "build", "--", "--bundles", "nsis"]
     return run_command(cmd, ROOT_DIR)
 
 
 def collect_artifacts(build_type: str, version: str, out_dir: Path) -> list[dict]:
-    # Поиск и копирование собранных файлов в целевую папку
     collected = []
     target_rel = ROOT_DIR / "src-tauri" / "target" / "release"
     target_deb = ROOT_DIR / "src-tauri" / "target" / "debug"
@@ -350,11 +337,9 @@ def main() -> None:
     version = get_project_version()
     print(f"Версия проекта: {version}")
 
-    # Определение типа сборки и папки выгрузки
     build_type = select_build_type(args.type, config.get("last_build_type"))
     output_dir = select_output_dir(args.out, config.get("output_dir"))
 
-    # Сохранение выбора
     config["output_dir"] = str(output_dir)
     config["last_build_type"] = build_type
     save_config(config)
@@ -362,18 +347,20 @@ def main() -> None:
     print(f"\n[+] Тип сборки:   {build_type.upper()}")
     print(f"[+] Папка выгрузки: {output_dir}")
 
-    # Проверка инструментов
     if not check_prerequisites(build_type):
         print("\n[-] Сборка прервана из-за отсутствия обязательных компонентов.")
         sys.exit(1)
 
-    # Очистка при необходимости
+    # Quality gate обязателен для каждой сборки, обхода нет
+    if not run_command(["node", "scripts/quality.cjs"], ROOT_DIR):
+        print("[-] Quality gate не пройден. Сборка остановлена до компиляции.")
+        sys.exit(1)
+
     manifest = ROOT_DIR / "src-tauri" / "Cargo.toml"
     if args.clean:
         print("\n[*] Очистка предыдущих артефактов (cargo clean)...")
         run_command(["cargo", "clean", "--manifest-path", str(manifest)], ROOT_DIR)
 
-    # Запуск компиляции
     print(f"\n[*] Начало сборки ({build_type})... Это может занять некоторое время.")
     success = False
 
@@ -396,7 +383,6 @@ def main() -> None:
         print("!" * 64)
         sys.exit(1)
 
-    # Копирование артефактов
     artifacts = collect_artifacts(build_type, version, output_dir)
 
     if not artifacts:
@@ -404,7 +390,6 @@ def main() -> None:
         print("    Проверьте папку src-tauri/target/release/")
         sys.exit(1)
 
-    # Вывод результатов
     print("\n" + "=" * 64)
     print("  🎉 СБОРКА УСПЕШНО ЗАВЕРШЕНА!")
     print("=" * 64)
@@ -419,7 +404,6 @@ def main() -> None:
     print(f"Все файлы сохранены в: {output_dir}")
     print("-" * 64)
 
-    # Открытие папки в проводнике Windows
     if not args.no_open and sys.platform.startswith("win"):
         try:
             open_folder = input("Открыть папку с файлами в Проводнике? [Y/n]: ").strip().lower()

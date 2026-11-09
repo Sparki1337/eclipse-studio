@@ -1,4 +1,4 @@
-// Поиск обложек и распознавание игр по исполняемым файлам
+//! Поиск обложек и распознавание игр по исполняемым файлам.
 
 use serde::Serialize;
 use std::{
@@ -8,7 +8,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// Структура данных обложки игры для интерфейса
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct GameArtwork {
@@ -18,7 +17,6 @@ pub(crate) struct GameArtwork {
     pub urls: Vec<String>,
 }
 
-// Чтение числового AppID из текстового файла (steam_appid.txt)
 fn read_id(path: &Path) -> Option<u64> {
     if !fs::symlink_metadata(path).ok()?.is_file() {
         return None;
@@ -38,7 +36,6 @@ fn read_id(path: &Path) -> Option<u64> {
     (id > 0 && id <= u32::MAX as u64 && id != 480 && id != 228980).then_some(id)
 }
 
-// Извлечение AppID из installscript.vdf или runasadmin.vdf
 fn read_vdf_id(path: &Path) -> Option<u64> {
     if !fs::symlink_metadata(path).ok()?.is_file() {
         return None;
@@ -67,7 +64,6 @@ fn read_vdf_id(path: &Path) -> Option<u64> {
     None
 }
 
-// Извлечение AppID из файлов конфигурации эмуляторов (OnlineFix.ini, steam_emu.ini, cream_api.ini)
 fn read_ini_id(path: &Path) -> Option<u64> {
     if !fs::symlink_metadata(path).ok()?.is_file() {
         return None;
@@ -101,7 +97,6 @@ fn read_ini_id(path: &Path) -> Option<u64> {
     None
 }
 
-// Проверка, является ли каталог системным или временным каталогом ОС
 fn is_system_or_temp_dir(name: &str) -> bool {
     let lower = name.trim().to_lowercase();
     matches!(
@@ -124,7 +119,6 @@ fn is_system_or_temp_dir(name: &str) -> bool {
     )
 }
 
-// Определение корневой папки игры даже при глубоких вложенных путях
 fn game_root(exe: &Path) -> Option<PathBuf> {
     let parent = exe.parent()?;
 
@@ -213,7 +207,6 @@ fn game_root(exe: &Path) -> Option<PathBuf> {
     None
 }
 
-// Исключаем общие имена вроде Game и Launcher из поиска Steam
 fn is_generic_title(title: &str) -> bool {
     let lower = title.trim().to_lowercase();
     if lower.len() < 4 || lower.contains("test") || lower.contains("temp") {
@@ -242,7 +235,6 @@ fn is_generic_title(title: &str) -> bool {
     )
 }
 
-// Очистка названия игры от технических тегов репаков и версий для поиска в Steam
 fn clean_game_title(raw: &str) -> String {
     let mut cleaned = String::new();
     let mut in_bracket = false;
@@ -259,7 +251,6 @@ fn clean_game_title(raw: &str) -> String {
         }
     }
 
-    // Удаляем технические суффиксы движков
     let mut result = cleaned
         .replace("-Win64-Shipping", "")
         .replace("-Win32-Shipping", "")
@@ -269,7 +260,6 @@ fn clean_game_title(raw: &str) -> String {
         .trim()
         .to_string();
 
-    // Удаляем распространенные суффиксы версий вроде "v1.0"
     if let Some(pos) = result.to_lowercase().find(" v1.") {
         result.truncate(pos);
     } else if let Some(pos) = result.to_lowercase().find(" v2.") {
@@ -279,13 +269,11 @@ fn clean_game_title(raw: &str) -> String {
     result.trim().to_string()
 }
 
-// Идентификация AppID игры
 #[allow(dead_code)]
 pub(crate) fn identify(exe: &Path) -> Option<u64> {
     identify_with_name(exe).map(|(id, _)| id)
 }
 
-// Идентификация AppID и названия игры с поиском по дереву каталогов и Steam API
 fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
     if !exe.is_file() || !exe.extension()?.eq_ignore_ascii_case("exe") {
         return None;
@@ -431,7 +419,6 @@ fn identify_with_name(exe: &Path) -> Option<(u64, Option<String>)> {
     None
 }
 
-// Запрос обложки игры по пути к исполняемому файлу
 #[tauri::command]
 pub(crate) async fn game_artwork(exe_path: String) -> Result<Option<GameArtwork>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -472,7 +459,6 @@ pub(crate) async fn game_artwork(exe_path: String) -> Result<Option<GameArtwork>
     .map_err(|e| e.to_string())?
 }
 
-// Запрос обложки игры по AppID из магазина Steam
 #[tauri::command]
 pub(crate) async fn game_artwork_store_url(appid: u64) -> Result<Option<String>, String> {
     if appid == 0 || appid > u32::MAX as u64 {

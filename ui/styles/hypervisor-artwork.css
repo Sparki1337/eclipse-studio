@@ -1,6 +1,6 @@
-/* Стили полноразмерных обложек и карточек модуля Hypervisor (Eclipse-HV) */
+/* hypervisor-artwork.css — полноразмерные обложки и карточки Hypervisor */
 
-/* Панель выбранной игры: обложка слева на всю высоту без обрезки, текст сразу после нее */
+/* ── Панель выбранной игры: обложка слева на всю высоту без обрезки, текст сразу после неё */
 :is(html, html.compact) .hv-selected-panel,
 .hv-selected-panel {
   position: relative !important;
@@ -16,7 +16,7 @@
   margin-bottom: 20px !important;
 }
 
-/* Обложка выбранной игры: на всю высоту плашки с точной шириной пропорций Steam Capsule (460/215) */
+/* ── Обложка выбранной игры: на всю высоту плашки с точной шириной пропорций Steam Capsule (460/215) */
 :is(html, html.compact) .hv-selected-icon.hv-selected-cover,
 .hv-selected-icon.hv-selected-cover {
   width: 265px !important;
@@ -41,7 +41,7 @@
   box-sizing: border-box !important;
 }
 
-/* Изображение обложки: полная картинка без затуханий и без обрезки */
+/* ── Изображение обложки: полная картинка без затуханий и без обрезки */
 :is(html, html.compact) .hv-selected-icon.hv-selected-cover .hv-cover-image,
 .hv-selected-icon.hv-selected-cover .hv-cover-image,
 .hv-cover-image {
@@ -63,7 +63,7 @@
   opacity: 1 !important;
 }
 
-/* Текстовый блок выбранной игры: начинается строго возле картинки */
+/* ── Текстовый блок выбранной игры: начинается строго возле картинки */
 .hv-selected-copy {
   flex: 1 1 auto !important;
   min-width: 0 !important;
@@ -95,7 +95,7 @@
   white-space: nowrap !important;
 }
 
-/* Кнопка запуска справа */
+/* ── Кнопка запуска справа */
 .hv-selected-actions {
   flex: 0 0 auto !important;
   display: flex !important;
@@ -107,7 +107,7 @@
   width: auto !important;
 }
 
-/* Карточки игр в библиотеке */
+/* ── Карточки игр в библиотеке */
 .hv-game-list {
   display: grid !important;
   gap: 10px !important;
@@ -148,7 +148,7 @@
   box-shadow: inset 3px 0 var(--accent), 0 4px 18px rgba(0, 0, 0, 0.25) !important;
 }
 
-/* Миниатюра капсулы в карточке игры: аккуратная плашка со скруглениями со всех сторон */
+/* ── Миниатюра капсулы в карточке игры: аккуратная плашка со скруглениями со всех сторон */
 :is(html, html.compact) .hv-game-symbol.hv-game-cover,
 .hv-game-symbol.hv-game-cover {
   width: 130px !important;
@@ -189,7 +189,7 @@
   padding: 0 !important;
 }
 
-/* Общий базовый контейнер обложек */
+/* ── Общий базовый контейнер обложек */
 .hv-cover {
   position: relative !important;
   display: block !important;
@@ -205,7 +205,7 @@
   box-shadow: none !important;
 }
 
-/* Фолбэк когда обложка не найдена или еще загружается */
+/* ── Фолбэк когда обложка не найдена или еще загружается */
 .hv-cover-fallback {
   position: absolute !important;
   inset: 0 !important;
@@ -245,13 +245,13 @@
   outline-offset: 2px !important;
 }
 
-/* Ограничение высоты сценария для видимости журнала операций без прокрутки */
+/* ── Ограничение высоты сценария для видимости журнала операций без прокрутки */
 .hv-steps {
   max-height: 220px !important;
   overflow-y: auto !important;
 }
 
-/* Адаптивность для узких экранов */
+/* ── Адаптивность для узких экранов */
 @media (max-width: 1180px) {
   :is(html, html.compact) .hv-selected-panel,
   .hv-selected-panel {
@@ -259,9 +259,16 @@
     gap: 14px !important;
     padding: 0 16px 14px 0 !important;
   }
+  :is(html, html.compact) .hv-selected-icon.hv-selected-cover,
+  .hv-selected-icon.hv-selected-cover {
+    width: 214px !important;
+    min-width: 214px !important;
+    max-width: 214px !important;
+    flex: 0 0 214px !important;
+    min-height: 100px !important;
+  }
   .hv-selected-actions {
-    margin-left: 0 !important;
-    width: 100% !important;
+    margin-left: auto !important;
     justify-content: flex-end !important;
     padding: 0 0 0 16px !important;
   }
@@ -291,11 +298,11 @@
   }
 }
 
-/* Панель интеграции со Steam Play: запуск через гипервизор по кнопке «Играть» */
+/* ── Панель интеграции со Steam Play: запуск через гипервизор по кнопке «Играть» */
 .hv-steam-panel {
   display: flex !important;
   gap: 24px !important;
-  align-items: center !important;
+  align-items: flex-start !important;
   justify-content: space-between !important;
   padding: 20px 24px !important;
   border-radius: 16px !important;
@@ -352,7 +359,7 @@
   border: 1px solid var(--line) !important;
 }
 
-/* Скрытие блока команды, когда команда ещё не сформирована или игра не выбрана */
+/* ── Скрытие блока команды, когда команда ещё не сформирована или игра не выбрана */
 .hv-steam-meta code:empty {
   display: none !important;
 }
@@ -362,7 +369,7 @@
   flex-direction: column !important;
   gap: 10px !important;
   flex: 0 0 auto !important;
-  max-width: 440px !important;
+  max-width: 500px !important;
   min-width: 260px !important;
 }
 

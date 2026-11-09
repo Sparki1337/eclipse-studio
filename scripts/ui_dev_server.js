@@ -1,4 +1,4 @@
-// Локальный HTTP-сервер для разработки и тестирования интерфейса Eclipse Studio в браузере
+// Локальный HTTP-сервер разработки UI с моком Tauri API
 
 const http = require("http");
 const fs = require("fs");
@@ -40,17 +40,17 @@ const pinnedFiles = [
   },
   {
     name: "Crocodile Gena Studio",
-    build: "Build 9.0.0",
+    build: "Build 10.0.0",
     password: "",
     pinned: true,
-    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/download/v9.0.0/setup.exe",
+    url: "https://github.com/LeoBanned/crocodile-gena-studio-releases/download/v10.0.0/setup.exe",
   },
   {
     name: "Eclipse Studio",
-    build: "Build 9.0.0",
+    build: "Build 10.0.0",
     password: "",
     pinned: true,
-    url: "https://github.com/Sparki1337/eclipse-studio/download/v9.0.0/Eclipse-Studio-v9.0.0.exe",
+    url: "https://github.com/Sparki1337/eclipse-studio/download/v10.0.0/Eclipse-Studio-v10.0.0.exe",
   },
 ];
 
@@ -67,11 +67,10 @@ const regularFiles = cracksData.cracks
 
 const fullCatalogFiles = [...pinnedFiles, ...regularFiles];
 
-// Общий мок используется также UI-тестами и средством снятия снимков
+// Мок-скрипт генерируется общим модулем dev-mock.cjs
 const devMock = require("./dev-mock.cjs");
 function generateMockScript() { return devMock(fullCatalogFiles); }
 
-// Запуск HTTP-сервера
 function startDevServer(requestedPort = 8080) {
   const mimeTypes = {
     ".html": "text/html; charset=utf-8",

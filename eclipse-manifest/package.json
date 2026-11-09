@@ -7,7 +7,11 @@
   "scripts": {
     "dev": "millennium-ttc --build dev --watch",
     "build": "millennium-ttc --build prod && node ../scripts/plugin-integrity.cjs write",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "postinstall": "node ../scripts/check-deepmerge.cjs --apply",
+    "predev": "node ../scripts/check-deepmerge.cjs",
+    "prebuild": "node ../scripts/check-deepmerge.cjs",
+    "pretypecheck": "node ../scripts/check-deepmerge.cjs"
   },
   "devDependencies": {
     "@steambrew/api": "5.8.4",
@@ -16,7 +20,8 @@
     "@steambrew/webkit": "5.8.4",
     "@types/react": "19.1.1",
     "@types/react-dom": "19.1.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "deepmerge": "4.3.1"
   },
   "overrides": {
     "brace-expansion": "5.0.12",
@@ -24,6 +29,10 @@
     "minimatch": "11.0.3",
     "qs": "6.17.1",
     "serialize-javascript": "7.1.4",
-    "source-map-js": "1.2.2"
+    "source-map-js": "1.2.2",
+    "deepmerge": "$deepmerge"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

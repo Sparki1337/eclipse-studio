@@ -1,7 +1,7 @@
-// Масштабирование интерфейса через CSS-переменные
 (() => {
   "use strict";
 
+  // scale — масштабирование интерфейса через CSS-переменные (--fs, --sp, --hs)
   const PX = /(-?\d*\.?\d+)px/g;
   const FONT = new Set(["font-size"]);
   const SPACE = new Set([
@@ -29,7 +29,7 @@
     if (!style) return;
     const names = [];
     for (let index = 0; index < style.length; index += 1) names.push(style[index]);
-    // Элементы с фиксированной шириной не масштабируем по высоте
+    // Элементы с фиксированной шириной по высоте не масштабируем
     const fixedWidth = /px/.test(style.getPropertyValue("width"));
     for (const name of names) {
       const value = style.getPropertyValue(name);
@@ -42,7 +42,7 @@
     }
   }
 
-  // Пропускаем стили заставки запуска, чтобы текст не дёргался при старте
+  // Стили заставки пропускаем, чтобы текст не дёргался при старте
   function isScaleIgnored(selector) {
     if (!selector) return false;
     return selector.includes("[data-scale-skip]") ||
@@ -72,8 +72,8 @@
   function runScale() {
     for (const sheet of document.styleSheets) {
       try {
-        // Пропускаем встроенные стили заставки запуска и элементы с запретом масштабирования
         const node = sheet.ownerNode;
+        // Заставка и элементы с data-scale-skip не масштабируем
         if (node && (node.id === "splash-style" || node.hasAttribute("data-scale-skip"))) continue;
         walk(sheet.cssRules);
       } catch (_) {}

@@ -1,23 +1,33 @@
+# Манифест автономного лаунчера Eclipse-HV
+
 [package]
 name = "eclipse-hv"
-version = "1.1.0"
+version = "2.0.0"
 edition = "2021"
-description = "Eclipse-HV: универсальный автономный лаунчер игр с обходом DSE и поддержкой Secure Boot"
+description = "Eclipse-HV: автономный лаунчер гипервизорного окружения с журналированием, диагностикой и восстановлением состояния"
 authors = ["Sparki"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 winreg = "0.55"
+# Парсер файлов PDB для разрешения символов ядра (SeCiCallbacks и др.)
+pdb = "0.8"
 
-[target.'cfg(windows)'.dependencies]
+# Целевая платформа лаунчера — только Windows (x64)
 windows = { version = "0.61.3", features = [
     "Win32_Foundation",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_Console",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Services",
+    "Win32_System_IO",
     "Win32_Storage_FileSystem",
     "Win32_Security",
+    "Win32_Networking_WinHttp",
 ] }
 
 [build-dependencies]

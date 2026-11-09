@@ -1,4 +1,4 @@
-// Адаптер внешнего VBS.cmd: только журнал, фиксированные цели и проверяемый откат.
+//! Адаптер внешнего VBS.cmd: только журнал, фиксированные цели и проверяемый откат.
 use super::*;
 use crate::external_vbs_plan::{build_plan, ExternalPlan, RestoreAction, JOURNAL_PATH};
 use std::collections::BTreeSet;

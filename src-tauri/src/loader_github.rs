@@ -1,4 +1,4 @@
-// Обновление библиотек OpenSteamTool с проверкой PE-заголовков и резервными встроенными файлами
+//! Обновление библиотек OpenSteamTool: проверка PE-заголовков и резервные встроенные файлы.
 use crate::{lua_loader, models::OperationResult};
 use reqwest::blocking::Client;
 #[cfg(test)]
@@ -19,7 +19,7 @@ const RAW: &str = "https://raw.githubusercontent.com/LeoBanned/pirate-station-hv
 // Максимальный допустимый размер DLL-библиотеки (16 МБ)
 pub(crate) const MAX_DLL: usize = 16 * 1024 * 1024;
 
-// Структуры GitHub REST API удалены: теперь используется прямое взаимодействие через Git и raw
+// Структуры REST API остались только для тестов; рабочий код идёт через Git и raw
 
 #[cfg(test)]
 #[derive(Clone, Debug, Deserialize)]
@@ -53,13 +53,11 @@ struct RemoteFile {
     size: usize,
 }
 
-// Пакет бинарных файлов комплекта для установки
 pub(crate) struct Bundle {
     pub variant: String,
     pub files: BTreeMap<String, Vec<u8>>,
 }
 
-// Информация о файле комплекта для фронтенда
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileInfo {
@@ -69,7 +67,6 @@ pub struct FileInfo {
     pub status: String,
 }
 
-// Информация о статусе комплекта
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VariantInfo {
@@ -80,7 +77,6 @@ pub struct VariantInfo {
     files: Vec<FileInfo>,
 }
 
-// Общая сводка обновлений загрузчика
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateInfo {
@@ -90,7 +86,6 @@ pub struct UpdateInfo {
     variants: Vec<VariantInfo>,
 }
 
-// Создание HTTP-клиента с таймаутами
 fn client() -> Result<Client, String> {
     Client::builder()
         .user_agent("Eclipse-Studio-LuaLoader")
@@ -129,13 +124,11 @@ fn download(client: &Client, url: &str, limit: usize) -> Result<Vec<u8>, String>
     Ok(bytes)
 }
 
-// Проверка валидности 40-значного SHA-1 хеша Git
 #[cfg(test)]
 fn valid_id(id: &str) -> bool {
     id.len() == 40 && id.bytes().all(|c| c.is_ascii_hexdigit())
 }
 
-// Вычисление Git blob SHA-1 хеша для сравнения с деревом репозитория
 pub(crate) fn blob_hash(bytes: &[u8]) -> String {
     let mut digest = Sha1::new();
     digest.update(format!("blob {}\0", bytes.len()).as_bytes());
@@ -144,7 +137,6 @@ pub(crate) fn blob_hash(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
-// Построение слепка доступных на GitHub файлов из дерева Git
 fn snapshot_from_tree(commit: &str, tree: Tree) -> Result<Snapshot, String> {
     if !valid_id(commit) || tree.truncated {
         return Err("GitHub вернул неполный или некорректный список файлов.".into());
@@ -209,7 +201,6 @@ fn snapshot_from_tree(commit: &str, tree: Tree) -> Result<Snapshot, String> {
     })
 }
 
-// Получение SHA коммита ветки main через Git Smart HTTP без использования GitHub API
 fn parse_head_revision(advertisement: &str) -> Option<&str> {
     let head = advertisement.find(" HEAD")?;
     if head < 40 {
@@ -236,7 +227,6 @@ fn fetch_commit_sha(client: &Client) -> Result<String, String> {
         .ok_or_else(|| "Не удалось определить ревизию репозитория GitHub".into())
 }
 
-// Снимок репозитория через Git refs и raw.githubusercontent.com без GitHub REST API
 fn fetch_snapshot() -> Result<Snapshot, String> {
     let client = client()?;
     let commit = fetch_commit_sha(&client)?;
@@ -300,7 +290,6 @@ fn fetch_snapshot() -> Result<Snapshot, String> {
 
 type Cached = Option<(Instant, Result<Snapshot, String>)>;
 
-// Получение слепка с локальным кэшированием результатов в памяти
 fn snapshot(force: bool) -> Result<Snapshot, String> {
     static CACHE: OnceLock<Mutex<Cached>> = OnceLock::new();
     let mut cache = CACHE
@@ -318,13 +307,11 @@ fn snapshot(force: bool) -> Result<Snapshot, String> {
     result
 }
 
-// Проверка совпадения локального файла в Steam с удалённым
 fn file_current(steam: &Path, file: &RemoteFile) -> Result<bool, String> {
     Ok(lua_loader::read_optional(&steam.join(&file.target))?
         .is_some_and(|b| b.len() == file.size && blob_hash(&b) == file.sha))
 }
 
-// Скачивание и сборка комплекта DLL с GitHub
 pub(crate) fn fetch_bundle(variant: &str, steam: &Path) -> Result<Bundle, String> {
     let canonical_variant = match variant {
         "v2" | "desktop" => "compatibility",
@@ -367,7 +354,6 @@ pub(crate) fn fetch_bundle(variant: &str, steam: &Path) -> Result<Bundle, String
     })
 }
 
-// Валидация заголовка Windows Portable Executable (PE DLL)
 pub(crate) fn validate_dll(bytes: &[u8]) -> Result<(), String> {
     if bytes.len() < 1024 || bytes.len() > MAX_DLL || !bytes.starts_with(b"MZ") {
         return Err("Вместо DLL получен некорректный файл. Установка отменена.".into());
@@ -382,7 +368,6 @@ pub(crate) fn validate_dll(bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-// Сравнение локальных файлов Steam со слепком GitHub
 fn check_snapshot(steam: &Path, snapshot: &Snapshot) -> Result<UpdateInfo, String> {
     let selected = lua_loader::selected_variant(steam).unwrap_or_else(|_| "standard".into());
     let mut variants = Vec::new();
@@ -448,13 +433,11 @@ fn check_snapshot(steam: &Path, snapshot: &Snapshot) -> Result<UpdateInfo, Strin
     })
 }
 
-// Внутренняя проверка обновлений с обработкой пути Steam
 fn check(steam_path: Option<String>, force: bool) -> Result<UpdateInfo, String> {
     let steam = lua_loader::resolve(steam_path)?;
     check_snapshot(&steam, &snapshot(force)?)
 }
 
-// Tauri-команда асинхронной проверки доступности обновлений DLL
 #[tauri::command]
 pub async fn luatools_check_loader_updates(
     steam_path: Option<String>,
@@ -465,14 +448,12 @@ pub async fn luatools_check_loader_updates(
         .map_err(|e| e.to_string())?
 }
 
-// Загрузка или офлайн-установка комплекта DLL с гибридным фоллбэком
 pub(crate) fn update(steam: &Path, variant: &str) -> OperationResult {
     let canonical = match variant {
         "v2" | "desktop" => "compatibility",
         "v1" => "standard",
         other => other,
     };
-    // Попытка получить свежий комплект из GitHub
     match fetch_bundle(canonical, steam) {
         Ok(bundle) => lua_loader::install_downloaded(steam, bundle),
         Err(error) => {

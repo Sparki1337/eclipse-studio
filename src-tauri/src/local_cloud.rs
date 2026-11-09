@@ -44,7 +44,6 @@ pub async fn local_cloud_status(steam_path: Option<String>) -> Result<core::Stat
         .map_err(|error| format!("Проверка локального облака прервана: {error}"))?
 }
 
-/// Выбор папки хранения в системном диалоге с понятным заголовком
 #[tauri::command]
 pub async fn local_cloud_pick_folder(
     window: tauri::WebviewWindow,
@@ -73,13 +72,66 @@ pub async fn local_cloud_set(
     tauri::async_runtime::spawn_blocking(move || {
         let steam = steam_root(steam_path)?;
         crate::jobs::run(
-            &[steam.clone()],
+            std::slice::from_ref(&steam),
             "Настройка локального облака",
             || set_blocking(&steam, enabled, folder),
         )?
     })
     .await
     .map_err(|error| format!("Настройка локального облака прервана: {error}"))?
+}
+
+/// Обновление установленной DLL локального облака без смены режима и папки
+#[tauri::command]
+pub async fn local_cloud_update_component(
+    steam_path: Option<String>,
+) -> Result<core::Status, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let steam = steam_root(steam_path)?;
+        crate::jobs::run(
+            std::slice::from_ref(&steam),
+            "Обновление DLL локального облака",
+            || update_component_blocking(&steam),
+        )?
+    })
+    .await
+    .map_err(|error| format!("Обновление локального облака прервано: {error}"))?
+}
+
+#[cfg(not(target_os = "windows"))]
+fn update_component_blocking(_steam: &Path) -> Result<core::Status, String> {
+    Err("Локальное облако доступно только в Windows.".into())
+}
+
+#[cfg(target_os = "windows")]
+fn update_component_blocking(steam: &Path) -> Result<core::Status, String> {
+    if !steam.join("steam.exe").is_file() {
+        return Err("В выбранной папке не найден steam.exe.".into());
+    }
+    let now = now_unix();
+    let snap = core::snapshot(steam)?;
+    let status = core::status(steam, &snap, embedded_sha256());
+    // Повторный вызов при актуальной DLL не является ошибкой
+    if !status.component_outdated {
+        return if status.issue.is_none() {
+            Ok(status)
+        } else {
+            Err(
+                "Обновление DLL недоступно: сначала устраните причину в блоке локального облака."
+                    .into(),
+            )
+        };
+    }
+    // Проверка выполняется до закрытия Steam: при ошибке клиент не трогаем
+    let plan = core::plan_component_update(steam, &snap, EMBEDDED_DLL, now)?;
+    ensure_no_game_running(steam)?;
+    let was_running = crate::luatools::process_is_running("steam.exe");
+    if was_running {
+        stop_steam(steam)?;
+    }
+    let result = apply_stopped(steam, &snap, &plan, None, None, now);
+    restart_if_was_running(steam, was_running, result)?;
+    current_status(steam)
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -126,7 +178,7 @@ fn set_blocking(
     if is_noop(&plan, previous.as_ref()) {
         return current_status(steam);
     }
-    ensure_no_game_running()?;
+    ensure_no_game_running(steam)?;
     let was_running = crate::luatools::process_is_running("steam.exe");
     if was_running {
         stop_steam(steam)?;
@@ -139,10 +191,7 @@ fn set_blocking(
         target.as_deref(),
         now,
     );
-    if was_running {
-        start_steam(steam);
-    }
-    result?;
+    restart_if_was_running(steam, was_running, result)?;
     current_status(steam)
 }
 
@@ -207,13 +256,24 @@ fn ensure_local_drive(path: &Path) -> Result<(), String> {
 
 /// Пока идёт игра, Steam держит её облачные файлы — менять режим нельзя
 #[cfg(target_os = "windows")]
-fn ensure_no_game_running() -> Result<(), String> {
+fn ensure_no_game_running(steam: &Path) -> Result<(), String> {
     let running = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
         .open_subkey(r"Software\Valve\Steam")
         .and_then(|key| key.get_value::<u32, _>("RunningAppID"))
         .unwrap_or(0);
     if running != 0 {
         return Err("Закройте игры перед изменением локального облака.".into());
+    }
+    // Точная проверка игр с манифестами: Steam пишет Running в ключ каждого AppID
+    for id in core::eligible_apps(steam) {
+        let key = format!(r"Software\Valve\Steam\Apps\{id}");
+        let launched = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+            .open_subkey(key)
+            .ok()
+            .and_then(|key| key.get_value::<u32, _>("Running").ok());
+        if launched == Some(1) {
+            return Err("Закройте игры перед изменением локального облака.".into());
+        }
     }
     Ok(())
 }
@@ -239,11 +299,31 @@ fn stop_steam(steam: &Path) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
-fn start_steam(steam: &Path) {
+fn start_steam(steam: &Path) -> Result<(), String> {
     let exe = steam.join("steam.exe");
-    let _ = crate::luatools::hidden_command(exe.to_string_lossy().as_ref())
+    crate::luatools::hidden_command(exe.to_string_lossy().as_ref())
         .current_dir(steam)
-        .spawn();
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("Steam не удалось открыть: {error}"))
+}
+
+/// Перезапуск только если Steam был запущен до операции; ошибку запуска не скрываем
+#[cfg(target_os = "windows")]
+fn restart_if_was_running<T>(
+    steam: &Path,
+    was_running: bool,
+    result: Result<T, String>,
+) -> Result<T, String> {
+    if !was_running {
+        return result;
+    }
+    match (result, start_steam(steam)) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(format!("Изменения сохранены, но {error}")),
+        (Err(original), Ok(())) => Err(original),
+        (Err(original), Err(error)) => Err(format!("{original}. Также {error}")),
+    }
 }
 
 #[cfg(test)]

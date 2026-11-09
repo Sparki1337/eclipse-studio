@@ -1,4 +1,4 @@
-// Проверяемый план отката журнала VBS.cmd 2.0.1. Модуль не обращается к Windows.
+//! Проверяемый план отката журнала VBS.cmd 2.0.1. Модуль не обращается к Windows.
 use std::collections::BTreeMap;
 
 pub const JOURNAL_PATH: &str = r"SOFTWARE\ManageVBS";
@@ -77,12 +77,14 @@ enum Value {
 }
 
 fn decode_text(bytes: &[u8]) -> Result<String, String> {
-    if bytes.len() < 2 || bytes.len() > 128 || bytes.len() % 2 != 0 {
+    if bytes.len() < 2 || bytes.len() > 128 || !bytes.len().is_multiple_of(2) {
         return Err("Недопустимая длина строки ManageVBS".into());
     }
     let mut words = bytes
-        .chunks_exact(2)
-        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| u16::from_le_bytes(*pair))
         .collect::<Vec<_>>();
     if words.pop() != Some(0) || words.contains(&0) {
         return Err("Некорректная строка ManageVBS".into());

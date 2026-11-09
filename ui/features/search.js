@@ -1,7 +1,7 @@
-// Быстрый поиск по актуальному индексу; > и ! — действия, # и № — игры, @ — настройки
 (() => {
   "use strict";
 
+  // search — быстрый поиск: > и ! — действия, # и № — игры, @ — настройки
   const ENABLED_KEY = "cgs-search-enabled";
   const HOTKEY_KEY = "cgs-search-hotkey";
   const RECENT_KEY = "cgs-search-recent";
@@ -39,7 +39,7 @@
   const SCOPE_PREFIX = { action: ">", content: "#", settings: "@" };
   // Действия из поиска вызывают существующие кнопки со всеми проверками и подтверждениями
   const ACTIONS = [
-    { key: "telegram", selector: "#open-telegram-hub", title: "Telegram каналы", keys: "telegram телеграм тг каналы", stay: true },
+    { key: "telegram", selector: "#open-telegram-hub", title: "Соцсети", keys: "telegram телеграм тг каналы соцсети discord дискорд", stay: true },
     { key: "ac-scan", selector: "#ac-scan-button", title: "Сканировать античиты", keys: "anticheat scan проверить античит" },
     { key: "ac-remove", selector: "#ac-remove-all", title: "Удалить найденные античиты", keys: "anticheat remove очистить", danger: true },
     { key: "ac-restore", selector: "#ac-restore-button", title: "Вернуть античиты как было", keys: "anticheat restore восстановить", danger: true },
@@ -74,7 +74,7 @@
     ["звук", "audio", "sound", "громкост"],
     ["заставк", "splash", "интро"],
     ["обновлен", "update", "апдейт"],
-    ["телеграм", "telegram", "тг", "tg"],
+    ["телеграм", "telegram", "тг", "tg", "соцсети", "discord", "дискорд"],
     ["меню", "боковая панель", "sidebar", "рейка"],
     ["цвет", "акцент", "accent", "color"],
     ["тема", "theme", "оформлени"],

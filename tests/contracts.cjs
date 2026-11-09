@@ -1,3 +1,4 @@
+// contracts — статические проверки контрактов: IPC, хранилище, DOM id, пути
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..');
 const files=(dir,ext)=>fs.readdirSync(dir,{recursive:true}).filter(n=>n.endsWith(ext)).map(n=>path.join(dir,n));

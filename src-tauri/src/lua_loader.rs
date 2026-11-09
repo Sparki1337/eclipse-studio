@@ -1,4 +1,4 @@
-// Схема 2 хранит точные пути библиотек OpenSteamTool, включая bin/dwmapi.dll
+//! Загрузчик OpenSteamTool: встроенные комплекты DLL v1/v2, закрепление и проверка хешей.
 use crate::{
     loader_github::{self, Bundle},
     luatools,
@@ -12,7 +12,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// Встроенные файлы основной версии (standard / v1)
 pub(crate) const STANDARD: &[(&str, &[u8])] = &[
     (
         "OpenSteamTool.dll",
@@ -28,7 +27,6 @@ pub(crate) const STANDARD: &[(&str, &[u8])] = &[
     ),
 ];
 
-// Встроенные файлы альтернативной версии (compatibility / v2)
 const COMPATIBILITY: &[(&str, &[u8])] = &[
     (
         "OpenSteamTool.dll",
@@ -44,13 +42,10 @@ const COMPATIBILITY: &[(&str, &[u8])] = &[
     ),
 ];
 
-// Относительный путь к файлу фиксации выбора загрузчика
 const SELECTION: &str = "config/cgs-luatools-loader.json";
 
-// Мьютекс блокировки одновременной установки DLL в одном процессе
 static INSTALL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-// Структура конфигурации закреплённого комплекта DLL
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Selection {
@@ -59,7 +54,6 @@ pub(crate) struct Selection {
     pub(crate) hashes: BTreeMap<String, String>,
 }
 
-// Информация о текущем установленном загрузчике для интерфейса
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoaderInfo {
@@ -70,7 +64,6 @@ pub struct LoaderInfo {
     issue: Option<String>,
 }
 
-// Получение списка встроенных ресурсов по имени комплекта
 fn resources(variant: &str) -> Result<&'static [(&'static str, &'static [u8])], String> {
     match variant {
         "standard" | "v1" => Ok(STANDARD),
@@ -79,12 +72,10 @@ fn resources(variant: &str) -> Result<&'static [(&'static str, &'static [u8])], 
     }
 }
 
-// Вычисление SHA-256 хеша байтов
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-// Проверка структуры комплекта DLL под выбранную схему
 pub(crate) fn validate_layout(
     variant: &str,
     schema: u32,
@@ -97,6 +88,7 @@ pub(crate) fn validate_layout(
     {
         return Err("Неполный комплект DLL".into());
     }
+    // Схема 2 хранит точные пути библиотек, включая bin/dwmapi.dll
     let valid = match (schema, variant) {
         (1, _) => paths.contains_key("dwmapi.dll"),
         (2, "compatibility") | (2, "v2") | (2, "desktop") => paths.contains_key("bin/dwmapi.dll"),
@@ -111,7 +103,6 @@ pub(crate) fn validate_layout(
     Ok(())
 }
 
-// Создание структуры Selection из загруженного или встроенного комплекта
 fn bundle_selection(bundle: &Bundle) -> Result<Selection, String> {
     let canonical_variant = match bundle.variant.as_str() {
         "v2" | "desktop" => "compatibility",
@@ -131,7 +122,6 @@ fn bundle_selection(bundle: &Bundle) -> Result<Selection, String> {
     Ok(selection)
 }
 
-// Создание пакета Bundle из встроенных ассетов программы
 pub(crate) fn embedded_bundle(variant: &str, schema: u32) -> Result<Bundle, String> {
     let canonical_variant = match variant {
         "v2" | "desktop" => "compatibility",
@@ -156,7 +146,6 @@ pub(crate) fn embedded_bundle(variant: &str, schema: u32) -> Result<Bundle, Stri
     })
 }
 
-// Формирование структуры Selection для встроенного комплекта
 fn bundled_selection(variant: &str) -> Result<Selection, String> {
     bundle_selection(&embedded_bundle(variant, 2)?)
 }
@@ -199,7 +188,6 @@ pub(crate) fn read_optional(path: &Path) -> Result<Option<Vec<u8>>, String> {
     }
 }
 
-// Разбор JSON-файла фиксации выбора
 fn parse_selection(bytes: &[u8]) -> Result<Selection, String> {
     if bytes.len() > 16384 {
         return Err("Слишком большой файл выбора DLL".into());
@@ -218,7 +206,6 @@ fn parse_selection(bytes: &[u8]) -> Result<Selection, String> {
     Ok(value)
 }
 
-// Чтение закреплённой конфигурации из папки Steam
 pub(crate) fn read_selection(steam: &Path) -> Result<Option<Selection>, String> {
     reject_link(&steam.join("config"))?;
     read_optional(&steam.join(SELECTION))?
@@ -226,7 +213,6 @@ pub(crate) fn read_selection(steam: &Path) -> Result<Option<Selection>, String> 
         .transpose()
 }
 
-// Определение установленного варианта комплекта по имеющимся файлам
 fn detect_variant(steam: &Path) -> Result<&'static str, String> {
     if let Some(bytes) = read_optional(&steam.join("OpenSteamTool.dll"))? {
         return Ok(if bytes == COMPATIBILITY[0].1 {
@@ -241,14 +227,12 @@ fn detect_variant(steam: &Path) -> Result<&'static str, String> {
     Ok("standard")
 }
 
-// Получение текущего активного варианта загрузчика
 pub(crate) fn selected_variant(steam: &Path) -> Result<String, String> {
     Ok(read_selection(steam)?
         .map(|s| s.variant)
         .unwrap_or_else(|| detect_variant(steam).unwrap_or("standard").into()))
 }
 
-// Проверка соответствия файлов на диске хешам закреплённой конфигурации
 fn matches_selection(steam: &Path, selection: &Selection) -> Result<bool, String> {
     let mut current = true;
     for (path, expected) in &selection.hashes {
@@ -275,7 +259,6 @@ fn acquire_file_lock(steam: &Path) -> Result<fs::File, String> {
         .map_err(|_| "Загрузчик занят другой операцией или плагином. Повторите позже.".into())
 }
 
-// Путь к каталогу локального кэша комплекта
 fn cache_dir(steam: &Path, selection: &Selection) -> Result<PathBuf, String> {
     Ok(steam
         .join("config/cgs-luatools-loader-cache")
@@ -285,7 +268,6 @@ fn cache_dir(steam: &Path, selection: &Selection) -> Result<PathBuf, String> {
         )))
 }
 
-// Сохранение комплекта в локальный кэш
 fn store_bundle(steam: &Path, selection: &Selection, bundle: &Bundle) -> Result<(), String> {
     let path = cache_dir(steam, selection)?;
     let mut parent = steam.to_path_buf();
@@ -336,7 +318,6 @@ fn pinned_bundle(steam: &Path, selection: &Selection) -> Result<Bundle, String> 
     })
 }
 
-// Применение и закрепление выбранной конфигурации DLL
 fn apply_selection(
     steam: &Path,
     selection: Selection,
@@ -437,7 +418,6 @@ fn apply_selection(
     Ok(!current)
 }
 
-// Гарантированная проверка и восстановление закреплённых DLL при запуске
 pub(crate) fn ensure(steam: &Path) -> Result<(), String> {
     let _guard = INSTALL_LOCK
         .lock()
@@ -453,7 +433,6 @@ pub(crate) fn ensure(steam: &Path) -> Result<(), String> {
     }
 }
 
-// Установка комплекта в каталог Steam
 fn install(steam: &Path, bundle: Bundle) -> OperationResult {
     if !steam.join("steam.exe").is_file() {
         return OperationResult::error(
@@ -490,7 +469,6 @@ fn install(steam: &Path, bundle: Bundle) -> OperationResult {
     }
 }
 
-// Публичный интерфейс установки загруженного комплекта
 pub(crate) fn install_downloaded(steam: &Path, bundle: Bundle) -> OperationResult {
     install(steam, bundle)
 }
@@ -522,7 +500,6 @@ pub(crate) fn resolve(steam_path: Option<String>) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-// Tauri-команда получения сведений об установленном комплекте
 #[tauri::command]
 pub fn luatools_loader_info(steam_path: Option<String>) -> Result<LoaderInfo, String> {
     let steam = resolve(steam_path)?;

@@ -1,4 +1,4 @@
-// Интеграция кнопки «Играть» через LaunchOptions в localconfig.vdf при закрытом Steam
+//! Интеграция кнопки «Играть» через LaunchOptions в localconfig.vdf при закрытом Steam.
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -25,7 +25,6 @@ pub(crate) fn reject_link(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// Перезапуск клиента Steam вокруг операции изменения конфигурации
 pub(crate) fn restart_around<T>(
     was_running: bool,
     stop: impl FnOnce() -> Result<(), String>,
@@ -47,7 +46,6 @@ pub(crate) fn restart_around<T>(
     result
 }
 
-// Статус интеграции запуска через Steam для конкретной игры
 #[derive(Serialize)]
 pub(crate) struct Status {
     pub appid: u64,
@@ -57,7 +55,6 @@ pub(crate) struct Status {
     pub command: String,
 }
 
-// Модель локального профиля Steam
 #[derive(Serialize)]
 pub(crate) struct Account {
     pub id: String,
@@ -65,7 +62,6 @@ pub(crate) struct Account {
     pub preferred: bool,
 }
 
-// Структура резервной копии параметров запуска
 #[derive(Serialize, Deserialize)]
 struct Backup {
     original: Option<String>,
@@ -83,12 +79,10 @@ struct Entry {
     close: usize,
 }
 
-// Экранирование и оборачивание строки в кавычки для формата VDF
 fn quoted(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-// Парсинг VDF-файла с сохранением разметки
 fn entries(text: &str) -> Result<Vec<Entry>, String> {
     fn space(b: &[u8], p: &mut usize) {
         loop {
@@ -184,7 +178,6 @@ fn entries(text: &str) -> Result<Vec<Entry>, String> {
     Ok(object(text, &mut p, false, 0)?.0)
 }
 
-// Поиск записи по ключу без учёта регистра
 fn find<'a>(items: &'a [Entry], key: &str) -> Result<Option<&'a Entry>, String> {
     let mut matches = items.iter().filter(|e| e.key.eq_ignore_ascii_case(key));
     let first = matches.next();
@@ -194,7 +187,6 @@ fn find<'a>(items: &'a [Entry], key: &str) -> Result<Option<&'a Entry>, String> 
     Ok(first)
 }
 
-// Путь к секции LaunchOptions для конкретного AppID в дереве конфигурации
 fn path_for(appid: u64) -> Vec<String> {
     vec!["UserLocalConfigStore", "Software", "Valve", "Steam", "apps"]
         .into_iter()
@@ -203,7 +195,6 @@ fn path_for(appid: u64) -> Vec<String> {
         .collect()
 }
 
-// Чтение значения по пути ключей в VDF
 fn get(text: &str, path: &[String]) -> Result<Option<String>, String> {
     let parsed = entries(text)?;
     let mut items = parsed.as_slice();
@@ -226,7 +217,6 @@ fn get(text: &str, path: &[String]) -> Result<Option<String>, String> {
     Ok(None)
 }
 
-// Изменение конкретного значения в VDF с сохранением остального содержимого
 fn edit(text: &str, path: &[String], value: Option<&str>) -> Result<String, String> {
     let parsed = entries(text)?;
     let mut items = parsed.as_slice();
@@ -269,7 +259,6 @@ fn edit(text: &str, path: &[String], value: Option<&str>) -> Result<String, Stri
     Err("Пустой путь VDF".into())
 }
 
-// Получение списка аккаунтов Steam из loginusers.vdf и userdata
 pub(crate) fn accounts(steam: &Path) -> Result<Vec<Account>, String> {
     let text = fs::read_to_string(steam.join("config/loginusers.vdf"))
         .map_err(|_| "Сначала войдите в аккаунт Steam на этом ПК.")?;
@@ -338,7 +327,6 @@ pub(crate) fn accounts(steam: &Path) -> Result<Vec<Account>, String> {
     Ok(result)
 }
 
-// Определение пути к файлу localconfig.vdf для выбранного аккаунта
 fn config_path_for(steam: &Path, requested: Option<&str>) -> Result<(PathBuf, String), String> {
     let list = accounts(steam)?;
     let preferred: Vec<_> = list.iter().filter(|a| a.preferred).collect();
@@ -365,7 +353,6 @@ fn config_path_for(steam: &Path, requested: Option<&str>) -> Result<(PathBuf, St
     Ok((path, account))
 }
 
-// Атомарная запись файла через временный буфер
 fn atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let mut temp = tempfile::NamedTempFile::new_in(path.parent().ok_or("Нет папки настроек")?)
         .map_err(|e| e.to_string())?;
@@ -376,7 +363,6 @@ fn atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-// Путь к файлу резервной копии настроек запуска
 fn backup_path(config: &Path, appid: u64) -> PathBuf {
     config
         .parent()
@@ -384,7 +370,6 @@ fn backup_path(config: &Path, appid: u64) -> PathBuf {
         .join(format!("cgs-hv-launch-{appid}.json"))
 }
 
-// Получение статуса настроек запуска для указанной игры
 pub(crate) fn status_for(
     steam: &Path,
     appid: u64,
@@ -415,7 +400,6 @@ pub(crate) fn status_for(
     })
 }
 
-// Применение настроек запуска игры
 pub(crate) fn set(
     steam: &Path,
     appid: u64,
@@ -486,10 +470,9 @@ fn set_account_checked(
         }
     } else if !enabled {
         return status_for(steam, appid, helper, requested);
-    } else if current
-        .as_ref()
-        .is_some_and(|v| v.contains("%command%") || v.contains("Eclipse-HV") || v.contains("Crocodile-HV"))
-    {
+    } else if current.as_ref().is_some_and(|v| {
+        v.contains("%command%") || v.contains("Eclipse-HV") || v.contains("Crocodile-HV")
+    }) {
         return Err(
             "У игры уже задан собственный лаунчер. Сначала проверьте параметры запуска в Steam."
                 .into(),
@@ -553,7 +536,6 @@ fn set_account_checked(
 mod tests {
     use super::*;
 
-    // Проверка правильного порядка остановки, записи и старта Steam
     #[test]
     fn automatic_restart_orders_shutdown_write_start_and_recovers_on_error() {
         let events = std::cell::RefCell::new(Vec::new());
@@ -594,7 +576,6 @@ mod tests {
         assert_eq!(*events.borrow(), vec!["stop", "write-error", "start"]);
     }
 
-    // Проверка, что при сбое остановки запись и перезапуск не происходят
     #[test]
     fn shutdown_failure_never_writes_or_forces_a_restart() {
         let events = std::cell::RefCell::new(Vec::new());
@@ -617,17 +598,12 @@ mod tests {
         assert_eq!(*events.borrow(), vec!["stop-error"]);
     }
 
-    // Проверка парсинга структуры реального VDF
     #[test]
     fn actual_config_is_parseable_without_writing() {
         let text = "\"UserLocalConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"apps\"\n\t\t\t\t{\n\t\t\t\t\t\"480\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"LaunchOptions\"\t\t\"-test\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n";
-        assert_eq!(
-            get(text, &path_for(480)).unwrap().as_deref(),
-            Some("-test")
-        );
+        assert_eq!(get(text, &path_for(480)).unwrap().as_deref(), Some("-test"));
     }
 
-    // Проверка точечного редактирования целевого значения с сохранением экранирования
     #[test]
     fn edits_only_target_value_and_preserves_escaping() {
         let text = "\"UserLocalConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"apps\"\n\t\t\t\t{\n\t\t\t\t\t\"7\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"LaunchOptions\"\t\t\"\\\"C:\\\\Game\\\\bin.exe\\\" \\\"arg\\\"\"\n\t\t\t\t\t\t\"Other\"\t\t\"1\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n";
@@ -636,7 +612,6 @@ mod tests {
         assert!(changed.contains("\"Other\"\t\t\"1\""));
     }
 
-    // Проверка создания отсутствующей секции игры без повреждения соседних элементов
     #[test]
     fn creates_missing_app_without_touching_siblings() {
         let text = "\"UserLocalConfigStore\"\n{\n\t\"Software\"\n\t{\n\t\t\"Valve\"\n\t\t{\n\t\t\t\"Steam\"\n\t\t\t{\n\t\t\t\t\"apps\"\n\t\t\t\t{\n\t\t\t\t\t\"1\"\n\t\t\t\t\t{\n\t\t\t\t\t\t\"Other\"\t\t\"keep\"\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n}\n";
@@ -650,7 +625,6 @@ mod tests {
         assert!(get(text, &path_for(42)).unwrap().is_none());
     }
 
-    // Проверка отказа при наличии дублирующихся ключей
     #[test]
     fn refuses_duplicate_keys() {
         assert!(get(
@@ -660,7 +634,6 @@ mod tests {
         .is_err());
     }
 
-    // Создание тестового окружения с фиктивными файлами Steam
     fn fixture() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dir.path().join("config")).unwrap();
@@ -678,7 +651,6 @@ mod tests {
         dir
     }
 
-    // Проверка явного выбора аккаунта при наличии нескольких пользователей
     #[test]
     fn explicit_account_resolves_multiple_users_without_mostrecent() {
         let dir = fixture();
@@ -722,7 +694,6 @@ mod tests {
         );
     }
 
-    // Проверка идемпотентного включения и точного возврата исходных параметров
     #[test]
     fn enables_idempotently_and_restores_previous_options() {
         let dir = fixture();
@@ -751,7 +722,6 @@ mod tests {
         assert_eq!(fs::read(&config).unwrap(), before);
     }
 
-    // Проверка отказа при внешнем изменении файла и запущенном клиенте Steam
     #[test]
     fn refuses_external_edits_and_running_steam() {
         let dir = fixture();
@@ -773,7 +743,6 @@ mod tests {
         assert_eq!(fs::read_to_string(&config).unwrap(), external);
     }
 
-    // Проверка восстановления при исходно отсутствовавших параметрах запуска без изменения соседних игр
     #[test]
     fn restores_absent_launch_options_without_touching_other_games() {
         let dir = fixture();

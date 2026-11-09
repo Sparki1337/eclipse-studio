@@ -1,3 +1,5 @@
+//! Прямые запросы к Steam Store Web API: поиск, детали, DRM-метаданные.
+
 use crate::models::{DetectedGame, GameDetails, GameSummary};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};

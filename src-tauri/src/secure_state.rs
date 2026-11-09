@@ -112,6 +112,12 @@ fn view(state: State) -> StateView {
         migration_verified: state.migrated,
     }
 }
+#[cfg(windows)]
+pub(crate) fn run_as_admin_enabled(app: &AppHandle) -> Result<bool, String> {
+    let _lock = STATE_LOCK.lock().map_err(|_| "Хранилище занято")?;
+    let state = load(app)?;
+    crate::startup_policy::enabled(state.values.get("cgs-run-as-admin").map(String::as_str))
+}
 #[tauri::command]
 pub async fn state_bootstrap(
     app: AppHandle,

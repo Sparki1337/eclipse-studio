@@ -1,3 +1,5 @@
+//! Библиотеки Steam: разбор libraryfolders.vdf и манифестов appmanifest_*.acf.
+
 use crate::luatools::resolve_steam_path;
 use serde::Serialize;
 use serde_json::{Map, Value};
@@ -259,7 +261,7 @@ fn games_in_library(root: &Path, warnings: &mut Vec<String>) -> Vec<InstalledSte
             .unwrap_or(0);
         if flags & 4 == 0 {
             continue;
-        } // Игра полностью установлена, включая состояние с ожидающими обновлениями
+        } // бит 4 в stateflags — игра полностью установлена
         let Some(install) = app
             .get("installdir")
             .and_then(Value::as_str)

@@ -1,3 +1,5 @@
+//! Crack Vault: каталог из Gist, параллельная загрузка и установка кряков.
+
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -159,7 +161,6 @@ pub(crate) fn files_reveal(path: String) -> Result<(), String> {
     }
 }
 
-// Определение папки загрузки (пользовательская или системная)
 fn resolve_download_dir(
     app: &tauri::AppHandle,
     target_dir: Option<&str>,
@@ -495,7 +496,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/9.0.0")
+        .user_agent("EclipseStudio/10.0.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -721,7 +722,7 @@ pub(crate) async fn files_install_crack(
 
 // Поиск локального или прямая загрузка актуального Eclipse-HV.exe с GitHub без API
 fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // Проверяем локальные пути (папка Hypervisor, локальная сборка eclipse-hv)
+    // Локальные пути: папка Hypervisor или локальная сборка eclipse-hv
     let candidates = [
         PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-HV.exe"),
         PathBuf::from("eclipse-hv/target/release/eclipse-hv.exe"),
@@ -737,7 +738,7 @@ fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, Str
         }
     }
 
-    // Проверяем кэш приложения
+    // Кэш приложения
     let cache_dir = app
         .path()
         .app_local_data_dir()
@@ -752,7 +753,7 @@ fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, Str
         return Ok(cached_exe);
     }
 
-    // Прямая загрузка с GitHub без использования GitHub API
+    // Прямая загрузка с GitHub, без API
     let download_url =
         "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
     let client = reqwest::blocking::Client::builder()
@@ -852,7 +853,13 @@ fn perform_install_crack(
                     if checked != target {
                         return Err("Целевой путь изменился во время задания".into());
                     }
-                    crate::durable::copy(&source, &checked)
+                    crate::backup::check_current(
+                        &game_dir,
+                        &name,
+                        &crate::backup::load(&game_dir.join(crate::backup::DIR))?,
+                    )?;
+                    crate::durable::copy(&source, &checked)?;
+                    crate::backup::record_installed(&game_dir, &name)
                 });
                 match result {
                     Ok(()) => installed_files.push(target.display().to_string()),

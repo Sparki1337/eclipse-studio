@@ -1,3 +1,5 @@
+//! Менеджер Eclipse Manifest: Lua-скрипты, манифесты depotcache и загрузчик OpenSteamTool.
+
 use crate::models::OperationResult;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -15,11 +17,9 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const NO_WINDOW: u32 = 0x08000000;
 
-// Основной каталог для Lua-скриптов в Steam
 const LUA_DIR_REL: &[&str] = &["config", "lua"];
 // Устаревший каталог плагинов SteamTools
 const LEGACY_STPLUGIN_REL: &[&str] = &["config", "stplug-in"];
-// Пути к кэшу манифестов
 const DEPOTCACHE_REL: &[&str] = &["depotcache"];
 const LEGACY_DEPOTCACHE_REL: &[&str] = &["config", "depotcache"];
 
@@ -48,14 +48,12 @@ pub struct LuaStatus {
     pub games: Vec<LuaGame>,
 }
 
-// Путь к локальному реестру добавленных игр
 fn registry_path(app: &AppHandle) -> Option<PathBuf> {
     let dir = app.path().app_local_data_dir().ok()?;
     let _ = fs::create_dir_all(&dir);
     Some(dir.join("luatools-games.json"))
 }
 
-// Каталог резервных копий манифестов
 fn manifest_cache_dir(app: &AppHandle) -> Option<PathBuf> {
     let dir = app
         .path()
@@ -66,7 +64,6 @@ fn manifest_cache_dir(app: &AppHandle) -> Option<PathBuf> {
     Some(dir)
 }
 
-// Загрузка реестра добавленных игр
 fn load_registry(app: &AppHandle) -> BTreeMap<String, u64> {
     let Some(bytes) = registry_path(app).and_then(|path| fs::read(path).ok()) else {
         return BTreeMap::new();
@@ -122,7 +119,6 @@ pub(crate) fn hidden_command(program: &str) -> Command {
     command
 }
 
-// Чтение значения из реестра Windows
 fn query_registry(key: &str, name: &str) -> Option<String> {
     let output = hidden_command("reg")
         .args(["query", key, "/v", name])
@@ -143,7 +139,6 @@ fn query_registry(key: &str, name: &str) -> Option<String> {
     None
 }
 
-// Определение пути к Steam через реестр
 fn detect_steam_path() -> Option<PathBuf> {
     let candidates = [
         (r"HKLM\SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath"),
@@ -186,7 +181,6 @@ fn legacy_stplugin_dir(steam: &Path) -> PathBuf {
         .fold(steam.to_path_buf(), |acc, part| acc.join(part))
 }
 
-// Настройки источника загрузчика для манифестов
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LuatoolsSettings {
@@ -205,14 +199,12 @@ impl Default for LuatoolsSettings {
     }
 }
 
-// Путь к файлу настроек luatools
 fn settings_path(app: &AppHandle) -> Option<PathBuf> {
     let dir = app.path().app_local_data_dir().ok()?;
     let _ = fs::create_dir_all(&dir);
     Some(dir.join("luatools-settings.json"))
 }
 
-// Загрузка настроек luatools
 fn load_settings(app: &AppHandle) -> LuatoolsSettings {
     if let Some(path) = settings_path(app) {
         if let Ok(data) = fs::read(path) {
@@ -224,7 +216,6 @@ fn load_settings(app: &AppHandle) -> LuatoolsSettings {
     LuatoolsSettings::default()
 }
 
-// Сохранение настроек luatools
 fn save_settings(app: &AppHandle, settings: &LuatoolsSettings) {
     if let Some(path) = settings_path(app) {
         if let Ok(data) = serde_json::to_vec_pretty(settings) {
@@ -266,7 +257,6 @@ pub fn detect_active_loader_in_steam(steam: &Path) -> (String, String) {
     ("custom".into(), "Сторонняя версия".into())
 }
 
-// Настройка рабочей папки [lua] paths = ["config/lua"] в opensteamtool.toml
 pub(crate) fn configure_lua_folder(existing: &str) -> Result<String, String> {
     let source = if existing.trim().is_empty() {
         include_str!("../resources/opensteamtool/v1/opensteamtool.toml")
@@ -289,12 +279,10 @@ pub(crate) fn configure_lua_folder(existing: &str) -> Result<String, String> {
     Ok(config.to_string())
 }
 
-// Атомарная запись файла во временный файл с последующим переименованием
 fn atomic_loader_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
     crate::durable::write(path, bytes)
 }
 
-// Транзакционное применение изменений в файлах загрузчика с бэкапом и откатом
 pub(crate) fn install_loader_changes(
     steam: &Path,
     files: &[(&str, Option<&[u8]>)],
@@ -391,7 +379,6 @@ pub(crate) fn install_loader_changes(
     Ok(())
 }
 
-// Установка или обновление файлов OpenSteamTool в папке Steam
 pub fn apply_opensteamtool_loader(
     _app: &AppHandle,
     steam: &Path,
@@ -411,7 +398,6 @@ pub fn apply_opensteamtool_loader(
     }
 }
 
-// Обновление библиотек загрузчика с проверкой запущенного Steam
 #[tauri::command]
 pub async fn luatools_update_loader(
     steam_path: Option<String>,
@@ -444,12 +430,10 @@ pub async fn luatools_update_loader(
     .unwrap_or_else(|e| OperationResult::error(format!("Ошибка фонового потока: {e}"), vec![]))
 }
 
-// Гарантированная установка или обновление OpenSteamTool в Steam согласно выбранному источнику
 fn ensure_opensteamtool_installed(_app: &AppHandle, steam: &Path) {
     let _ = crate::lua_loader::ensure(steam);
 }
 
-// Парсинг путей к lua из opensteamtool.toml
 fn parse_opensteamtool_lua_paths(content: &str) -> Vec<String> {
     let mut in_lua = false;
     let mut section = String::new();
@@ -532,7 +516,6 @@ fn opensteamtool_lua_dirs(steam: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-// Рабочая папка Lua для текущего загрузчика
 pub(crate) fn stplugin_dir(steam: &Path) -> PathBuf {
     let preferred = default_lua_dir(steam);
     let ost_dirs = opensteamtool_lua_dirs(steam);
@@ -583,7 +566,6 @@ fn loader_state(steam: &Path) -> (String, Option<String>, Option<String>) {
     )
 }
 
-// Миграция Lua-скриптов в рабочую папку OpenSteamTool
 pub(crate) fn migrate_legacy_lua(steam: &Path, target: &Path) -> usize {
     let legacy = legacy_stplugin_dir(steam);
     if legacy == target || !legacy.is_dir() {
@@ -625,7 +607,6 @@ fn legacy_depotcache_dir(steam: &Path) -> PathBuf {
         .fold(steam.to_path_buf(), |acc, part| acc.join(part))
 }
 
-// Перенос кэша манифестов в корневой depotcache
 fn migrate_legacy_manifests(steam: &Path) -> usize {
     let legacy = legacy_depotcache_dir(steam);
     if !legacy.is_dir() {
@@ -662,7 +643,6 @@ fn migrate_legacy_manifests(steam: &Path) -> usize {
     copied
 }
 
-// Извлечение AppID из имени lua-файла
 fn appid_from_lua(name: &str) -> Option<String> {
     let base = name
         .strip_suffix(".disabled")
@@ -697,7 +677,6 @@ fn contains_root_addappid(content: &str, appid: &str) -> bool {
     })
 }
 
-// Подготовка Lua-скрипта перед установкой
 fn patch_lua(content: &str, auto_update: bool, appid: &str) -> String {
     let content = content.trim_start_matches('\u{feff}');
     let mut patched = content
@@ -717,7 +696,6 @@ fn patch_lua(content: &str, auto_update: bool, appid: &str) -> String {
     patched
 }
 
-// Поиск связок depot/manifest в коде скрипта
 fn parse_manifest_refs(content: &str) -> BTreeSet<(String, String)> {
     let mut refs = BTreeSet::new();
     for line in content.lines() {
@@ -798,7 +776,6 @@ fn game_health(lua_path: &Path, depotcache: &Path, enabled: bool) -> (String, u6
     (status.into(), manifest_count, missing)
 }
 
-// Игры из реестра с существующими lua-файлами
 fn registry_games(
     registry: &BTreeMap<String, u64>,
     stplugin: &Path,
@@ -855,7 +832,6 @@ pub fn luatools_status(app: AppHandle, steam_path: Option<String>) -> LuaStatus 
             games: Vec::new(),
         };
     };
-    // Просмотр состояния не изменяет Steam. Миграция выполняется при явной установке
     let stplugin = stplugin_dir(&steam);
     let cache = manifest_cache_dir(&app);
     let games = registry_games(
@@ -937,20 +913,12 @@ pub async fn luatools_pick_files() -> Result<Vec<String>, String> {
 }
 
 fn luatools_pick_files_blocking() -> Result<Vec<String>, String> {
-    let script = r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = 'Выберите файлы .lua, .manifest или .zip'; $d.Multiselect = $true; $d.Filter = 'LuaTools (*.lua;*.manifest;*.zip)|*.lua;*.manifest;*.zip|Все файлы (*.*)|*.*'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; $d.FileNames -join [Environment]::NewLine }"#;
-    let output = hidden_command("powershell.exe")
-        .args(["-NoProfile", "-STA", "-Command", script])
-        .output()
-        .map_err(|error| format!("Не удалось открыть выбор файлов: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-    }
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect())
+    crate::native_dialog::pick_supported_files(
+        "Выберите файлы .lua, .manifest или .zip",
+        &["lua", "manifest", "zip"],
+        true,
+        true,
+    )
 }
 
 struct InstallContext {
@@ -1145,7 +1113,6 @@ fn install_archive(
     }
 }
 
-// Установка zip-пакета игры из байтов
 pub(crate) fn install_zip_bytes(
     app: &AppHandle,
     bytes: &[u8],
@@ -1526,7 +1493,6 @@ fn luatools_restart_steam_blocking(steam_path: Option<String>) -> OperationResul
     }
 }
 
-// Завершение работы процессов Steam (штатно, затем принудительно)
 pub fn close_steam_process(steam_exe: Option<&Path>) -> bool {
     if !process_is_running("steam.exe") {
         return true;
@@ -1558,13 +1524,11 @@ pub fn close_steam_process(steam_exe: Option<&Path>) -> bool {
     !process_is_running("steam.exe")
 }
 
-// Проверка процесса Steam вне главного потока
 #[tauri::command(async)]
 pub fn luatools_is_steam_running() -> bool {
     process_is_running("steam.exe")
 }
 
-// Завершение работы клиента Steam
 #[tauri::command]
 pub async fn luatools_close_steam(steam_path: Option<String>) -> OperationResult {
     tauri::async_runtime::spawn_blocking(move || {
@@ -1592,7 +1556,6 @@ pub(crate) fn process_is_running(image_name: &str) -> bool {
         .contains(&image_name.to_ascii_lowercase())
 }
 
-// Извлечение всех AppID и депо из lua
 fn parse_lua_appids(content: &str) -> BTreeSet<u64> {
     let mut ids = BTreeSet::new();
     for line in content.lines() {
@@ -1643,7 +1606,6 @@ fn sort_depots(items: &mut [DepotItem]) {
     items.sort_by_key(|item| item.id.parse::<u64>().unwrap_or(u64::MAX));
 }
 
-// Запрос названий приложений пачками для избежания rate-limit
 fn resolve_names_map(ids: &[u64]) -> BTreeMap<String, String> {
     let mut names = BTreeMap::new();
     for chunk in ids.chunks(5) {
@@ -1692,17 +1654,14 @@ fn luatools_game_detail_blocking(
     let refs = parse_lua_appids(&content);
     let appid_num = appid.parse::<u64>().unwrap_or(0);
 
-    // Запрос метаданных игры и списка DLC
     let overview = crate::steam::app_overview(appid_num)
         .ok_or("Steam не ответил — попробуйте открыть ещё раз")?;
     let dlc_ids: BTreeSet<u64> = overview.dlc_ids.into_iter().collect();
 
-    // Получение названий для депо и DLC
     let mut need: BTreeSet<u64> = refs.iter().copied().filter(|id| *id != appid_num).collect();
     need.extend(dlc_ids.iter().copied());
     let names = resolve_names_map(&need.into_iter().collect::<Vec<_>>());
 
-    // Формирование списка разблокированных DLC
     let mut in_lua = Vec::new();
     for id in &refs {
         if *id == appid_num || !dlc_ids.contains(id) {
@@ -1720,7 +1679,6 @@ fn luatools_game_detail_blocking(
     }
     sort_depots(&mut in_lua);
 
-    // Формирование списка отсутствующих DLC
     let mut missing = Vec::new();
     for id in &dlc_ids {
         if *id == appid_num || refs.contains(id) {
@@ -1759,7 +1717,6 @@ pub async fn luatools_names(appids: Vec<u64>) -> BTreeMap<String, String> {
         .unwrap_or_default()
 }
 
-// Запрос прямых ссылок на обложки приложений пачками для исключения rate-limit
 fn resolve_headers_map(ids: &[u64]) -> BTreeMap<String, String> {
     let mut headers = BTreeMap::new();
     for chunk in ids.chunks(5) {
@@ -1796,29 +1753,19 @@ pub async fn luatools_headers(appids: Vec<u64>) -> BTreeMap<String, String> {
         .unwrap_or_default()
 }
 
-// Сведения о состоянии и доступных версиях загрузчика манифестов Steam
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ManifestLoaderInfo {
-    // Выбранный источник загрузчика ("v1" или "v2")
     pub loader_source: String,
-    // Название версии 1
     pub v1_name: String,
-    // Описание версии 1
     pub v1_desc: String,
-    // Название версии 2
     pub v2_name: String,
-    // Описание версии 2
     pub v2_desc: String,
-    // Активная версия в папке Steam ("v1", "v2", "custom", "none")
     pub active_in_steam: String,
-    // Человекочитаемая подпись текущей версии в Steam
     pub active_in_steam_label: String,
-    // Обнаружена ли папка Steam
     pub steam_detected: bool,
 }
 
-// Чтение версий загрузчиков OpenSteamTool вне главного потока
 #[tauri::command(async)]
 pub fn luatools_get_loader_info(app: AppHandle, steam_path: Option<String>) -> ManifestLoaderInfo {
     let settings = load_settings(&app);
@@ -1849,7 +1796,6 @@ pub fn luatools_get_loader_info(app: AppHandle, steam_path: Option<String>) -> M
     }
 }
 
-// Переключение выбранного источника загрузчика (встроенный v1 или встроенный v2)
 #[tauri::command]
 pub fn luatools_set_loader_source(
     app: AppHandle,
@@ -1892,7 +1838,6 @@ pub fn luatools_set_loader_source(
     }
 }
 
-// Принудительное применение текущего загрузчика в папку Steam
 #[tauri::command]
 pub fn luatools_apply_loader(app: AppHandle, steam_path: Option<String>) -> OperationResult {
     let _resource_guard =
@@ -2044,7 +1989,6 @@ paths = ["ignore"]
         let depotcache = dir.join("depotcache");
         fs::create_dir_all(&stplugin).unwrap();
         fs::create_dir_all(&depotcache).unwrap();
-        // Тестовые наборы состояний файлов и реестра
         fs::write(stplugin.join("480.lua"), b"addappid(480)").unwrap();
         fs::write(stplugin.join("70.lua.disabled"), b"addappid(70)").unwrap();
         fs::write(stplugin.join("555.lua"), b"addappid(555)").unwrap();
@@ -2124,11 +2068,9 @@ paths = ["ignore"]
             std::env::temp_dir().join(format!("cgs-loader-test-{}", std::process::id()));
         let _ = fs::create_dir_all(&temp_steam);
 
-        // Без файлов в Steam
         let (status, _) = detect_active_loader_in_steam(&temp_steam);
         assert_eq!(status, "none");
 
-        // Записываем версию 1 (базовая)
         fs::write(
             temp_steam.join("OpenSteamTool.dll"),
             include_bytes!("../resources/opensteamtool/v1/OpenSteamTool.dll"),
@@ -2137,7 +2079,6 @@ paths = ["ignore"]
         let (status_v1, _) = detect_active_loader_in_steam(&temp_steam);
         assert_eq!(status_v1, "v1");
 
-        // Записываем версию 2 (с десктопа)
         fs::write(
             temp_steam.join("OpenSteamTool.dll"),
             include_bytes!("../resources/opensteamtool/v2/OpenSteamTool.dll"),
@@ -2146,7 +2087,6 @@ paths = ["ignore"]
         let (status_v2, _) = detect_active_loader_in_steam(&temp_steam);
         assert_eq!(status_v2, "v2");
 
-        // Записываем сторонний файл
         fs::write(
             temp_steam.join("OpenSteamTool.dll"),
             b"custom-dll-bytes-for-unit-test",

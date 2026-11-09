@@ -1,3 +1,5 @@
+//! Классический CreamAPI: подмена steam_api.dll с бэкапом оригинала и восстановлением.
+
 use crate::{dlc_unlocker_path, engine, models::OperationResult, steam};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -11,7 +13,6 @@ const CONFIG_NAME: &str = "cream_api.ini";
 const NAMED_LIMIT: usize = 200;
 const PARALLEL_REQUESTS: usize = 8;
 
-// Пары библиотек Steam и резервных копий CreamAPI
 const API_NAMES: &[(&str, &str, &str)] = &[
     ("steam_api64.dll", "steam_api64_o.dll", "x64"),
     ("steam_api.dll", "steam_api_o.dll", "x86"),
@@ -80,7 +81,6 @@ fn bitness_for(api: &str) -> &'static str {
         .unwrap_or("x64")
 }
 
-// Поиск директорий с оригинальной библиотекой Steam
 fn collect_targets(game_dir: &Path) -> Vec<(PathBuf, String)> {
     let mut seen = BTreeMap::new();
     for entry in engine::walk(game_dir) {
@@ -122,7 +122,6 @@ fn key_value(line: &str) -> Option<(&str, &str)> {
         .map(|(key, value)| (key.trim(), value.trim()))
 }
 
-// Чтение параметров из cream_api.ini
 fn read_config(dir: &Path) -> Option<(Option<u64>, bool, BTreeMap<String, String>)> {
     let path = engine::find_case_insensitive(dir, CONFIG_NAME)?;
     let content = fs::read_to_string(path).ok()?;
@@ -154,7 +153,6 @@ fn read_config(dir: &Path) -> Option<(Option<u64>, bool, BTreeMap<String, String
     Some((appid, unlock_all, dlcs))
 }
 
-// Генерация конфигурации cream_api.ini
 fn build_config(request: &DlcInstallRequest) -> String {
     let has_list = !request.dlcs.is_empty();
     let mut config = String::new();
@@ -325,49 +323,46 @@ fn install_one(
             source.display()
         ));
     }
-    let backup = dir.join(backup_for(api));
-    let current_is_cream = engine::files_equal(&target_dll, &source);
-
-    if !backup.exists() {
-        if current_is_cream {
-            logs.push(format!(
-                "⚠ Оригинал {} не найден (библиотека уже подменена), резервная копия не создана",
-                engine::display_relative(&target_dll, game_dir)
-            ));
-        } else if target_dll.is_file() {
-            fs::copy(&target_dll, &backup)
-                .map_err(|error| format!("Не удалось сохранить оригинал: {error}"))?;
-            if !engine::files_equal(&target_dll, &backup) {
-                return Err(format!(
-                    "Проверка резервной копии не пройдена: {}",
-                    backup.display()
-                ));
-            }
-            logs.push(format!(
-                "Сохранён оригинал Steam API: {}",
-                engine::display_relative(&backup, game_dir)
-            ));
-        }
+    let backup_name = backup_for(api);
+    let backup = dir.join(backup_name);
+    let old = crate::backup::load(&dir.join(crate::backup::DIR))?;
+    if engine::files_equal(&target_dll, &source) && !old.originals.contains_key(&api.to_lowercase())
+    {
+        return Err("Обнаружена старая подмена без проверенного оригинала. Автоматическая установка поверх неё запрещена.".into());
     }
-
+    // Предварительно фиксируем оригиналы DLL и конфигурации до первой записи.
+    crate::backup::protect(dir, api, "creamapi")?;
+    crate::backup::protect(dir, CONFIG_NAME, "creamapi")?;
+    let manifest = crate::backup::load(&dir.join(crate::backup::DIR))?;
+    let original = manifest
+        .originals
+        .get(&api.to_lowercase())
+        .ok_or("Оригинальная Steam API отсутствует")?;
+    let original_path = crate::safe_path::join(&dir.join(crate::backup::DIR), original)?;
+    if backup.exists() {
+        crate::safe_path::join(dir, backup_name)?;
+        if !engine::files_equal(&backup, &original_path) {
+            return Err(
+                "Существующий sidecar не совпадает с проверенным оригиналом; обе копии сохранены"
+                    .into(),
+            );
+        }
+    } else {
+        crate::backup::protect(dir, backup_name, "creamapi")?;
+        crate::durable::copy(&original_path, &backup)?;
+        crate::backup::record_installed(dir, backup_name)?;
+    }
     if target_dll.exists() {
         engine::make_writable(&target_dll);
     }
-    fs::copy(&source, &target_dll)
-        .map_err(|error| format!("Не удалось установить {}: {error}", target_dll.display()))?;
-    if !engine::files_equal(&source, &target_dll) {
-        return Err(format!(
-            "Проверка библиотеки не пройдена: {}",
-            target_dll.display()
-        ));
-    }
-
-    let config_path = dir.join(CONFIG_NAME);
+    crate::durable::copy(&source, &target_dll)?;
+    crate::backup::record_installed(dir, api)?;
+    let config_path = crate::safe_path::join(dir, CONFIG_NAME)?;
     if config_path.exists() {
         engine::make_writable(&config_path);
     }
-    fs::write(&config_path, config)
-        .map_err(|error| format!("Не удалось записать cream_api.ini: {error}"))?;
+    crate::durable::write(&config_path, config.as_bytes())?;
+    crate::backup::record_installed(dir, CONFIG_NAME)?;
     logs.push(format!(
         "Анлокер установлен: {} · {}",
         engine::display_relative(dir, game_dir),
@@ -463,54 +458,18 @@ fn install_dlc_unlocker_blocking_unlocked(
     }
 }
 
-// Восстановление оригинальной библиотеки и удаление конфига
 fn uninstall_one(
     dir: &Path,
     api: &str,
     game_dir: &Path,
     logs: &mut Vec<String>,
 ) -> Result<(), String> {
-    let backup = dir.join(backup_for(api));
-    let target = dir.join(api);
-    if backup.is_file() {
-        if fs::metadata(&backup)
-            .map(|item| item.len() < 30_000)
-            .unwrap_or(true)
-        {
-            return Err(format!(
-                "Резервная копия подозрительно мала, восстановление отменено: {}",
-                backup.display()
-            ));
-        }
-        if target.exists() {
-            engine::make_writable(&target);
-        }
-        fs::copy(&backup, &target)
-            .map_err(|error| format!("Не удалось восстановить {}: {error}", target.display()))?;
-        if !engine::files_equal(&backup, &target) {
-            return Err(format!(
-                "Проверка восстановления не пройдена: {}",
-                target.display()
-            ));
-        }
-        engine::make_writable(&backup);
-        fs::remove_file(&backup).map_err(|error| {
-            format!("Оригинал восстановлен, но резервную копию удалить не удалось: {error}")
-        })?;
-        logs.push(format!(
-            "Восстановлена оригинальная библиотека: {}",
-            engine::display_relative(&target, game_dir)
-        ));
-    }
-    if let Some(config) = engine::find_case_insensitive(dir, CONFIG_NAME) {
-        engine::make_writable(&config);
-        fs::remove_file(&config)
-            .map_err(|error| format!("Не удалось удалить cream_api.ini: {error}"))?;
-        logs.push(format!(
-            "Удалён cream_api.ini: {}",
-            engine::display_relative(dir, game_dir)
-        ));
-    }
+    let _ = api;
+    let count = crate::backup::restore_operation(dir, "creamapi")?;
+    logs.push(format!(
+        "Проверено и восстановлено записей CreamAPI: {count} · {}",
+        engine::display_relative(dir, game_dir)
+    ));
     Ok(())
 }
 
@@ -726,20 +685,45 @@ mod tests {
     }
 
     #[test]
-    fn uninstall_restores_original_and_removes_config() {
+    fn uninstall_restores_verified_original_and_preserves_original_config() {
         let dir = test_dir("uninstall");
         let game = dir.join("game");
+        let unlocker = dir.join("unlocker");
         fs::create_dir_all(&game).unwrap();
-        let original = vec![7u8; 40_000];
-        fs::write(game.join("steam_api64.dll"), b"CREAMAPI-LIBRARY-BYTES").unwrap();
-        fs::write(game.join("steam_api64_o.dll"), &original).unwrap();
-        fs::write(game.join("cream_api.ini"), b"[steam]\nappid = 5\n").unwrap();
-
+        fs::create_dir_all(&unlocker).unwrap();
+        fs::write(game.join("steam_api64.dll"), b"original").unwrap();
+        fs::write(game.join("cream_api.ini"), b"user-config").unwrap();
+        fs::write(unlocker.join("steam_api64.dll"), b"creamapi").unwrap();
         let mut logs = Vec::new();
+        install_one(
+            &game,
+            "steam_api64.dll",
+            &unlocker,
+            "installed-config",
+            &game,
+            &mut logs,
+        )
+        .unwrap();
         uninstall_one(&game, "steam_api64.dll", &game, &mut logs).unwrap();
-        assert_eq!(fs::read(game.join("steam_api64.dll")).unwrap(), original);
+        assert_eq!(fs::read(game.join("steam_api64.dll")).unwrap(), b"original");
+        assert_eq!(
+            fs::read(game.join("cream_api.ini")).unwrap(),
+            b"user-config"
+        );
         assert!(!game.join("steam_api64_o.dll").exists());
-        assert!(!game.join("cream_api.ini").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn legacy_uninstall_does_not_guess_original_from_size() {
+        let dir = test_dir("legacy-uninstall");
+        fs::write(dir.join("steam_api64.dll"), b"current").unwrap();
+        fs::write(dir.join("steam_api64_o.dll"), vec![7; 40_000]).unwrap();
+        fs::write(dir.join("cream_api.ini"), b"user-config").unwrap();
+        assert!(uninstall_one(&dir, "steam_api64.dll", &dir, &mut Vec::new()).is_err());
+        assert_eq!(fs::read(dir.join("steam_api64.dll")).unwrap(), b"current");
+        assert!(dir.join("steam_api64_o.dll").exists());
+        assert!(dir.join("cream_api.ini").exists());
         fs::remove_dir_all(dir).unwrap();
     }
 

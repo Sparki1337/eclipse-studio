@@ -1,0 +1,109 @@
+{
+  "schema": 1,
+  "algorithm": "SHA-256",
+  "note": "Только целостность. Совпадение хэша не доказывает соответствие исходникам, подлинность или безопасность.",
+  "binaries": [
+    {
+      "path": "src-tauri/resources/core_engine/EOSSDK-Win64-Shipping.dll",
+      "size": 14641664,
+      "sha256": "2e4814de835eda014fc2f4f533c93b1c510dc518ca1bb00e870c626cbea51cf8",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/core_engine/EpicFix64.dll",
+      "size": 640512,
+      "sha256": "daadcd0c892dd11be41162b604730763e66658fe4c3726d7d908cfeea5cc11a9",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/core_engine/SteamFix64.dll",
+      "size": 1416192,
+      "sha256": "bb44a42ccadd9c5ed6dd7b8baf35059497d894c4de19a63f8907d48b68ae047b",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/core_engine/winmm.dll",
+      "size": 502272,
+      "sha256": "61d071e40fb1136da66bf12213062a47eccadd7556171b97381fbc937e978b0d",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/core_engine/winmm_unity.dll",
+      "size": 22016,
+      "sha256": "8c6649fb8f73ee2af7eb6b32b134e44ed5c506cc6d843b250efb515615d3548a",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/creamapi/steam_api.dll",
+      "size": 682856,
+      "sha256": "23e91e44de1adbd0544a578ab80e46c968f9394e5b419240034a55a59b131675",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/creamapi/steam_api64.dll",
+      "size": 732520,
+      "sha256": "d00a9b72e696cf5c88a5b4bbc4d7d308f9bac51a8c4712d6b26cfd863938a25f",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/hypervisor/Eclipse-HV.exe",
+      "size": 648192,
+      "sha256": "2dad35c97729858398cac24c01daae2e107e84535052e8abe921667a56b79eaa",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/local-cloud/cgs_cloud_redirect.dll",
+      "size": 2034688,
+      "sha256": "ac42fe727b6e644bb0a0ebd625f3614a3d17d31062c51d45599d9fbde8c29193",
+      "provenance": "local-source-build; see adjacent build-provenance.json"
+    },
+    {
+      "path": "src-tauri/resources/opensteamtool/v1/OpenSteamTool.dll",
+      "size": 1580544,
+      "sha256": "3bced3b2a5363f58c9e7c07d4795d64252c832a56f7c67e78e14989da440516e",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/opensteamtool/v1/dwmapi.dll",
+      "size": 112128,
+      "sha256": "81d11523a5ae35a374cc797ca3d3db924169064510acfa9940f61c609431d6b3",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/opensteamtool/v1/xinput1_4.dll",
+      "size": 123392,
+      "sha256": "287cbea6b1139bf5a3b5239a66bed670bb17b9afe8bd4f6a68ef1c5ceada8142",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/opensteamtool/v2/OpenSteamTool.dll",
+      "size": 1758720,
+      "sha256": "0bc5cb7734ae7b4f7cb1150006a4bcba570ec1db0df6fd4293ed8a2cb8a2a899",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/opensteamtool/v2/dwmapi.dll",
+      "size": 134656,
+      "sha256": "e86f95bef98c2ce8f0e1c83faa18bb62e9b2c540e9f82aa194c3f04d1a8146f2",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/opensteamtool/v2/xinput1_4.dll",
+      "size": 133632,
+      "sha256": "5c55bb96c66064dc42677d0984ca4c8d3187ea6daed73fdea9c809ceaa6517de",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/smokeapi/SmokeAPI64.dll",
+      "size": 4204032,
+      "sha256": "3891cd70b8e06cad474b9ea5b6d7c3d19b9948c41df2495e3cf02d2a256498ef",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    },
+    {
+      "path": "src-tauri/resources/smokeapi/SmokeAPI86.dll",
+      "size": 3526144,
+      "sha256": "145aadfffde5140991995d76dca8f2423e9d7f9dbb66bc21565cee59746f027b",
+      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
+    }
+  ]
+}

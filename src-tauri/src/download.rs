@@ -1,6 +1,6 @@
 //! Проверяемые диапазоны HTTP и докачка только при неизменном валидаторе сервера
 use crate::{durable, safe_path};
-use reqwest::{blocking::Client, header};
+use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -15,11 +15,12 @@ use std::{
 };
 const BUFFER: usize = 512 * 1024;
 const CHECKPOINT: u64 = 8 * 1024 * 1024;
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Control {
-    pub cancelled: AtomicBool,
-    pub paused: AtomicBool,
-    pub resumable: AtomicBool,
+    pub cancelled: Arc<AtomicBool>,
+    pub paused: Arc<AtomicBool>,
+    pub resumable: Arc<AtomicBool>,
+    abort: Option<Arc<AtomicBool>>,
 }
 impl Control {
     fn check(&self) -> Result<(), String> {
@@ -27,11 +28,193 @@ impl Control {
             Err("Загрузка отменена".into())
         } else if self.paused.load(Ordering::Relaxed) {
             Err("Загрузка приостановлена; проверенные сегменты сохранены для докачки".into())
+        } else if self
+            .abort
+            .as_ref()
+            .is_some_and(|abort| abort.load(Ordering::Relaxed))
+        {
+            Err("Загрузка остановлена из-за ошибки другого сегмента".into())
         } else {
             Ok(())
         }
     }
 }
+// Синхронный файловый конвейер читает ограниченную очередь. Сеть работает на
+// отменяемых async-future: пауза/отмена прерывает и ожидание заголовков, и тело,
+// а не ждёт очередного байта до общего 900-секундного timeout.
+struct ControlledResponse {
+    status: reqwest::StatusCode,
+    headers: header::HeaderMap,
+    length: Option<u64>,
+    receiver: tokio::sync::mpsc::Receiver<Result<Vec<u8>, String>>,
+    chunk: std::io::Cursor<Vec<u8>>,
+    control: Control,
+    stop: Arc<AtomicBool>,
+    worker: Option<std::thread::JoinHandle<()>>,
+}
+impl ControlledResponse {
+    fn status(&self) -> reqwest::StatusCode {
+        self.status
+    }
+    fn headers(&self) -> &header::HeaderMap {
+        &self.headers
+    }
+    fn content_length(&self) -> Option<u64> {
+        self.length
+    }
+    fn error_for_status(self) -> Result<Self, String> {
+        if self.status.is_success() {
+            Ok(self)
+        } else {
+            Err(format!("HTTP {}", self.status))
+        }
+    }
+}
+impl Read for ControlledResponse {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        if buffer.is_empty() {
+            return Ok(0);
+        }
+        loop {
+            self.control.check().map_err(std::io::Error::other)?;
+            let count = self.chunk.read(buffer)?;
+            if count > 0 {
+                return Ok(count);
+            }
+            match self.receiver.blocking_recv() {
+                Some(Ok(chunk)) => self.chunk = std::io::Cursor::new(chunk),
+                Some(Err(error)) => return Err(std::io::Error::other(error)),
+                None => {
+                    self.control.check().map_err(std::io::Error::other)?;
+                    return Ok(0);
+                }
+            }
+        }
+    }
+}
+impl Drop for ControlledResponse {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        self.receiver.close();
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+    }
+}
+async fn cancellable<F: std::future::Future>(
+    future: F,
+    control: &Control,
+    stop: &AtomicBool,
+) -> Result<F::Output, String> {
+    let mut future = std::pin::pin!(future);
+    loop {
+        control.check()?;
+        if stop.load(Ordering::Relaxed) {
+            return Err("Сетевой запрос остановлен".into());
+        }
+        if let Ok(result) = tokio::time::timeout(Duration::from_millis(50), future.as_mut()).await {
+            return Ok(result);
+        }
+    }
+}
+fn controlled_send(
+    request: reqwest::RequestBuilder,
+    control: &Control,
+) -> Result<ControlledResponse, String> {
+    control.check()?;
+    let stop = Arc::new(AtomicBool::new(false));
+    let worker_stop = stop.clone();
+    let worker_control = control.clone();
+    let (meta_tx, meta_rx) = std::sync::mpsc::sync_channel(1);
+    let (body_tx, body_rx) = tokio::sync::mpsc::channel(2);
+    let worker = std::thread::spawn(move || {
+        let runtime = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                let _ = meta_tx.send(Err(error.to_string()));
+                return;
+            }
+        };
+        runtime.block_on(async {
+            let response = cancellable(request.send(), &worker_control, &worker_stop)
+                .await
+                .and_then(|result| result.map_err(|e| e.to_string()));
+            let mut response = match response {
+                Ok(response) => response,
+                Err(error) => {
+                    let _ = meta_tx.send(Err(error));
+                    return;
+                }
+            };
+            if meta_tx
+                .send(Ok((
+                    response.status(),
+                    response.headers().clone(),
+                    response.content_length(),
+                )))
+                .is_err()
+            {
+                return;
+            }
+            loop {
+                match cancellable(response.chunk(), &worker_control, &worker_stop).await {
+                    Ok(Ok(Some(chunk))) => {
+                        if !matches!(
+                            cancellable(
+                                body_tx.send(Ok(chunk.to_vec())),
+                                &worker_control,
+                                &worker_stop
+                            )
+                            .await,
+                            Ok(Ok(()))
+                        ) {
+                            break;
+                        }
+                    }
+                    Ok(Ok(None)) => break,
+                    other => {
+                        let error = match other {
+                            Ok(Err(error)) => error.to_string(),
+                            Err(error) => error,
+                            _ => unreachable!(),
+                        };
+                        let _ =
+                            cancellable(body_tx.send(Err(error)), &worker_control, &worker_stop)
+                                .await;
+                        break;
+                    }
+                }
+            }
+        });
+        // Задачи DNS могут блокировать runtime; они не должны задерживать отмену из UI.
+        runtime.shutdown_timeout(Duration::from_millis(50));
+    });
+    match meta_rx
+        .recv()
+        .map_err(|_| "Сетевой поток завершился без ответа".to_string())
+        .and_then(|r| r)
+    {
+        Ok((status, headers, length)) => Ok(ControlledResponse {
+            status,
+            headers,
+            length,
+            receiver: body_rx,
+            chunk: std::io::Cursor::new(Vec::new()),
+            control: control.clone(),
+            stop,
+            worker: Some(worker),
+        }),
+        Err(error) => {
+            stop.store(true, Ordering::Relaxed);
+            let _ = worker.join();
+            Err(error)
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 struct Validator {
@@ -86,7 +269,7 @@ pub fn verify_range(value: &str, start: u64, end: u64, total: u64) -> Result<(),
     }
     Ok(())
 }
-fn validator(response: &reqwest::blocking::Response) -> Option<Validator> {
+fn validator(response: &ControlledResponse) -> Option<Validator> {
     if let Some(value) = response
         .headers()
         .get(header::ETAG)
@@ -107,7 +290,7 @@ fn validator(response: &reqwest::blocking::Response) -> Option<Validator> {
             value: value.into(),
         })
 }
-fn identity_encoding(response: &reqwest::blocking::Response) -> Result<(), String> {
+fn identity_encoding(response: &ControlledResponse) -> Result<(), String> {
     if response
         .headers()
         .get(header::CONTENT_ENCODING)
@@ -178,12 +361,13 @@ pub fn fetch(
         .pool_max_idle_per_host(6)
         .build()
         .map_err(|e| e.to_string())?;
-    let head = client
-        .head(url)
-        .header(header::ACCEPT_ENCODING, "identity")
-        .send()
-        .and_then(reqwest::blocking::Response::error_for_status)
-        .ok();
+    let head = controlled_send(
+        client.head(url).header(header::ACCEPT_ENCODING, "identity"),
+        control,
+    )
+    .and_then(ControlledResponse::error_for_status)
+    .ok();
+    control.check()?;
     let total = head
         .as_ref()
         .and_then(|r| r.content_length())
@@ -233,12 +417,13 @@ fn checkpoint(
     work: &Path,
     metadata: &Mutex<Metadata>,
     index: usize,
-    path: &Path,
+    hasher: &Sha256,
     file: &fs::File,
     length: u64,
 ) -> Result<(), String> {
     file.sync_all().map_err(|e| e.to_string())?;
-    let hash = durable::hash_file(path)?;
+    // Копируем только состояние SHA-256, а не перечитываем весь растущий префикс.
+    let hash = format!("{:x}", hasher.clone().finalize());
     let mut metadata = metadata.lock().map_err(|_| "Ошибка метаданных загрузки")?;
     metadata.parts[index].saved = length;
     metadata.parts[index].sha256 = hash;
@@ -316,7 +501,9 @@ fn ranged(
     }
     save(work, &metadata)?;
     let downloaded = AtomicU64::new(metadata.parts.iter().map(|p| p.saved).sum());
-    let abort = AtomicBool::new(false);
+    let abort = Arc::new(AtomicBool::new(false));
+    let mut network_control = control.as_ref().clone();
+    network_control.abort = Some(abort.clone());
     progress(downloaded.load(Ordering::Relaxed), Some(total), true);
     let count = metadata.parts.len();
     let metadata = Mutex::new(metadata);
@@ -326,16 +513,22 @@ fn ranged(
             let downloaded = &downloaded;
             let abort = &abort;
             let metadata = &metadata;
+            let network_control = &network_control;
             handles.push(scope.spawn(move||{
+                let worker_result = (|| -> Result<(), String> {
                 let part=metadata.lock().map_err(|_|"Ошибка метаданных")?.parts[index].clone();
                 let length=part.end-part.start+1;if part.saved==length{return Ok(());}
                 let path=safe_path::join(work,&format!("segment-{index}"))?;
                 let mut file=fs::OpenOptions::new().append(true).open(&path).map_err(|e|e.to_string())?;
+                let mut hasher=Sha256::new();
+                let mut prefix=fs::File::open(&path).map_err(|e|e.to_string())?;
+                let mut buffer=vec![0;BUFFER];
+                loop { control.check()?; let read=prefix.read(&mut buffer).map_err(|e|e.to_string())?; if read==0{break;} hasher.update(&buffer[..read]); }
                 let mut saved=part.saved;let validator=metadata.lock().map_err(|_|"Ошибка метаданных")?.validator.clone();
                 let result=(||->Result<(),String>{
                     control.check()?;
                     let start=part.start+saved;
-                    let mut response=client.get(url).header(header::ACCEPT_ENCODING,"identity").header(header::RANGE,format!("bytes={start}-{}",part.end)).header(header::IF_RANGE,&validator.value).send().map_err(|e|format!("Ошибка диапазона: {e}"))?;
+                    let mut response=controlled_send(client.get(url).header(header::ACCEPT_ENCODING,"identity").header(header::RANGE,format!("bytes={start}-{}",part.end)).header(header::IF_RANGE,&validator.value), network_control).map_err(|e|format!("Ошибка диапазона: {e}"))?;
                     if response.status()!=reqwest::StatusCode::PARTIAL_CONTENT{return Err("Сервер не подтвердил диапазон HTTP 206. Непроверенные части не используются.".into());}
                     identity_encoding(&response)?;
                     verify_range(response.headers().get(header::CONTENT_RANGE).and_then(|v|v.to_str().ok()).ok_or("Нет Content-Range")?,start,part.end,total)?;
@@ -346,15 +539,17 @@ fn ranged(
                         control.check()?;if abort.load(Ordering::Relaxed){return Err("Загрузка остановлена из-за ошибки другого сегмента".into());}
                         let read=response.read(&mut buffer).map_err(|e|e.to_string())?;if read==0{break;}
                         if saved+read as u64>length{return Err("Сервер прислал лишние байты сегмента".into());}
-                        file.write_all(&buffer[..read]).map_err(|e|e.to_string())?;saved+=read as u64;
+                        file.write_all(&buffer[..read]).map_err(|e|e.to_string())?;hasher.update(&buffer[..read]);saved+=read as u64;
                         let current=downloaded.fetch_add(read as u64,Ordering::Relaxed)+read as u64;progress(current,Some(total),true);
-                        if saved-last_saved>=CHECKPOINT{checkpoint(work,metadata,index,&path,&file,saved)?;last_saved=saved;}
+                        if saved-last_saved>=CHECKPOINT{checkpoint(work,metadata,index,&hasher,&file,saved)?;last_saved=saved;}
                     }
                     if saved!=length{return Err("Сегмент оборван раньше объявленного размера".into());}Ok(())
                 })();
-                let checkpoint_result=checkpoint(work,metadata,index,&path,&file,saved);
-                if result.is_err()||checkpoint_result.is_err(){abort.store(true,Ordering::Relaxed);}
+                let checkpoint_result=checkpoint(work,metadata,index,&hasher,&file,saved);
                 result.and(checkpoint_result)
+                })();
+                if worker_result.is_err() { abort.store(true, Ordering::Relaxed); }
+                worker_result
             }));
         }
         handles
@@ -416,12 +611,11 @@ fn sequential(
     control: &Control,
     progress: &(impl Fn(u64, Option<u64>, bool) + Sync),
 ) -> Result<Downloaded, String> {
-    let mut response = client
-        .get(url)
-        .header(header::ACCEPT_ENCODING, "identity")
-        .send()
-        .and_then(reqwest::blocking::Response::error_for_status)
-        .map_err(|e| e.to_string())?;
+    let mut response = controlled_send(
+        client.get(url).header(header::ACCEPT_ENCODING, "identity"),
+        control,
+    )
+    .and_then(ControlledResponse::error_for_status)?;
     identity_encoding(&response)?;
     let expected = total.or(response.content_length());
     if total.is_some() && response.content_length().is_some() && total != response.content_length()
@@ -469,6 +663,68 @@ fn sequential(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cancellation_and_pause_interrupt_stalled_headers_and_body() {
+        use std::{net::TcpListener, time::Instant};
+        for body in [false, true] {
+            for pause in [false, true] {
+                let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+                let url = format!("http://{}/stall", listener.local_addr().unwrap());
+                let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+                let (end_tx, end_rx) = std::sync::mpsc::channel();
+                let server = std::thread::spawn(move || {
+                    let (mut stream, _) = listener.accept().unwrap();
+                    let mut request = Vec::new();
+                    let mut byte = [0; 1];
+                    while !request.ends_with(b"\r\n\r\n") {
+                        stream.read_exact(&mut byte).unwrap();
+                        request.push(byte[0]);
+                    }
+                    if body {
+                        stream
+                            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n")
+                            .unwrap();
+                        stream.flush().unwrap();
+                    }
+                    ready_tx.send(()).unwrap();
+                    let _ = end_rx.recv_timeout(Duration::from_secs(10));
+                });
+                let control = Control::default();
+                let worker_control = control.clone();
+                let caller = std::thread::spawn(move || {
+                    let client = Client::builder()
+                        .no_proxy()
+                        .timeout(Duration::from_secs(900))
+                        .build()
+                        .unwrap();
+                    let result = controlled_send(client.get(url), &worker_control);
+                    match result {
+                        Ok(mut response) => {
+                            let mut bytes = Vec::new();
+                            response
+                                .read_to_end(&mut bytes)
+                                .map(|_| ())
+                                .map_err(|e| e.to_string())
+                        }
+                        Err(error) => Err(error),
+                    }
+                });
+                ready_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                let start = Instant::now();
+                if pause {
+                    control.paused.store(true, Ordering::Relaxed);
+                } else {
+                    control.cancelled.store(true, Ordering::Relaxed);
+                }
+                let result = caller.join().unwrap();
+                assert!(result.is_err());
+                assert!(start.elapsed() < Duration::from_secs(2));
+                end_tx.send(()).unwrap();
+                server.join().unwrap();
+            }
+        }
+    }
+
     #[test]
     fn ranges_must_match_including_total() {
         assert!(verify_range("bytes 10-19/100", 10, 19, 100).is_ok());

@@ -2,17 +2,25 @@
   "schema": 1,
   "algorithm": "SHA-256",
   "sources": {
-    "frontend/index.tsx": "af9a743ec8e340c6128821c4764c6142edb9293c26b201f6baefc83aefe87db3",
-    "webkit/index.tsx": "f70b200ba68198091a7103c37661420b8ae199656a9b5a34a248dbc9ad8f5c6c",
-    "backend/main.lua": "9710fabf81610458e2ad6cabc525306948b6e8812383b8886bdcb40ef60aea29",
+    "frontend/index.tsx": "a3551b603df934da33979b6da28d4ddab4b23ac9cf5936b6b5abd04b65e48e48",
+    "webkit/index.tsx": "219a186d2caf97a5dfbc9ffcacfab1a2272fd5d9d79f4ce80331dc3d36bb95a7",
+    "backend/main.lua": "842dbfa5f7b8f3c42a5d135b1f361f83f2bd681a0bbf08bbe20716a8240c761d",
+    "backend/safe-io.ps1": "61a658312f07b91ecb3890848bbcc631ee7073402192f55d9970f25e244bc23d",
+    "backend/state-store.ps1": "7c85390ebea83d3cd446237f92b6f65d2be9ed0def70148d3c0db96b507889e7",
+    "backend/file-transaction.ps1": "e6b20768b1a04f1933e909225125feff3fb9cd7ac8957e8962229276b5225c28",
+    "backend/download-package.ps1": "ebbfcf6b77a886867c721bab24e03f2e69d6cc20b7b1ab9320f6a6bf01732c81",
     "backend/install-loader.ps1": "8ffd61ea6a0266e3937029bc17b64a1bcb1ede8ab5012fbb75522cfb8e0c0ef3",
     "tsconfig.json": "043dd5ccb9530d62a1ed7bdc4d46c59ae3b15c4eec5f3b45245e2d3301b6a8ac",
-    "package.json": "db7c88182ee2f4f3fdb1011cb67b40ca9f51253296380e24ef53f236abb18cdb",
-    "package-lock.json": "409fd05877a85219e0969dfdebdc3748b99be7e23aabc474e70bdc4585eee2cd",
-    "plugin.json": "acfe694a0c4c1216fa053223e8d5002ea86a505a98eaaad54cf8daa2b251561c"
+    "frontend/tsconfig.json": "2363b7d4bc75c951ce19eeaebb0b08e3aace450ee70f3ddbe5784834eac7d5cc",
+    "webkit/tsconfig.json": "a367eb0bfd575494d157c3f7515ebee79c5a94ad59c20e3858a469591630e923",
+    "package.json": "a648e73f4f72355106aff98e7fe91181e2fef1b963bfcaafd423955f96846f27",
+    ".npmrc": "6d55db7155e0291a54a482e15c9c1d44fd63c8aacb58536629ebe74f068ae9d6",
+    "package-lock.json": "e8e549525153826b0b51bda23b2f53d7d306625af2aa6e9f790f01cf4483b5ed",
+    "plugin.json": "acfe694a0c4c1216fa053223e8d5002ea86a505a98eaaad54cf8daa2b251561c",
+    "../scripts/check-deepmerge.cjs": "61397c8bf59e45229375610f2e271030a4c82854742a7f0486d08f88dd6cb16a"
   },
   "outputs": {
-    ".millennium/Dist/index.js": "16d47d8d11afcdb952b21c96a1d41ba8ff23b3616ef4ab2ff6131f9454235fa4",
+    ".millennium/Dist/index.js": "59dd4d406b802ee9edbdfe398662ecae0bbdbbeed973d96616914f466aeaa1b0",
     ".millennium/Dist/webkit.js": "039be13a072998d69249fc82b66ec87c3c6c11aa7a8bf933035fd07324dc7dd5"
   }
 }

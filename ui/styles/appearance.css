@@ -1,4 +1,6 @@
-/* Боковая панель: Настройки вкладки */
+/* appearance.css — настройка внешнего вида: панель, масштаб, звуки, заставка */
+
+/* ── Боковая панель: вкладка настроек */
 .sidebar-mode-picker {
   display: flex;
   gap: 6px;
@@ -219,7 +221,7 @@
   margin-top: 16px;
 }
 
-/* Боковая панель: Размер x2 для кнопок навигации */
+/* ── Боковая панель: Размер x2 для кнопок навигации */
 .nav-item {
   position: relative;
   transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1),
@@ -247,12 +249,12 @@
   font-weight: 700;
 }
 
-/* Скрытые элементы навигации */
+/* ── Скрытые элементы навигации */
 .nav-item.nav-item-hidden {
   display: none !important;
 }
 
-/* Анимация удаления/скрытия кнопки */
+/* ── Анимация удаления/скрытия кнопки */
 .nav-item.nav-item-removing {
   pointer-events: none !important;
   opacity: 0 !important;
@@ -273,7 +275,7 @@
               padding 0.3s cubic-bezier(0.2, 0, 0, 1) !important;
 }
 
-/* Импульс при изменении размера */
+/* ── Импульс при изменении размера */
 .nav-item.size-just-changed {
   animation: nav-size-pulse 380ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
@@ -283,7 +285,7 @@
   100% { box-shadow: none; }
 }
 
-/* Перетаскивание прямо на боковой панели */
+/* ── Перетаскивание прямо на боковой панели */
 html.sidebar-live-edit .nav-item {
   cursor: grab;
   touch-action: none;
@@ -321,7 +323,7 @@ body.sidebar-dragging-active * {
   user-select: none !important;
 }
 
-/* Сетки для режимов боковой панели */
+/* ── Сетки для режимов боковой панели */
 html.sidebar-icons .app-shell,
 html.sidebar-icons.sidebar-sized .app-shell,
 html.compact.sidebar-icons .app-shell,
@@ -336,7 +338,7 @@ html:not(.sidebar-icons):not(.sidebar-compact) .app-shell {
   grid-template-columns: var(--sidebar-w, 245px) 1fr !important;
 }
 
-/* Режим боковой панели: Иконки (icons) — строго изолирован от модалок */
+/* ── Режим боковой панели: Иконки (icons) — строго изолирован от модалок */
 html.sidebar-icons {
   --sidebar-w: 68px !important;
 }
@@ -432,7 +434,7 @@ html.sidebar-icons .sidebar .channel-card .channel-arrow {
   display: none !important;
 }
 
-/* Режим боковой панели: Компактная (compact) — ощутимо компактнее обычной */
+/* ── Режим боковой панели: Компактная (compact) — ощутимо компактнее обычной */
 html.sidebar-compact .sidebar {
   padding: 14px 10px 12px !important;
 }
@@ -502,7 +504,7 @@ html.sidebar-compact .sidebar .channel-arrow {
   height: 9px !important;
 }
 
-/* Защита модального окна Telegram от сжатия и конфликта селекторов */
+/* ── Защита модального окна Telegram от сжатия и конфликта селекторов */
 .telegram-hub-modal .channel-card,
 .telegram-hub-modal .telegram-hub-card {
   width: 100% !important;
@@ -577,7 +579,7 @@ html.sidebar-compact .sidebar .channel-arrow {
   margin-left: 4px !important;
 }
 
-/* Контекстное меню для кнопок боковой панели (адаптация под все темы) */
+/* ── Контекстное меню для кнопок боковой панели (адаптация под все темы) */
 .nav-context-menu {
   position: fixed;
   z-index: 999999;
@@ -678,7 +680,7 @@ html.sidebar-compact .sidebar .channel-arrow {
   margin: 4px 6px;
 }
 
-/* Специфичные настройки тем для контекстного меню */
+/* ── Специфичные настройки тем для контекстного меню */
 html[data-theme="oled"] .nav-context-menu {
   background: rgba(0, 0, 0, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -775,7 +777,7 @@ html[data-theme="rose"] .nav-context-menu {
   box-shadow: 0 18px 48px rgba(10, 2, 8, 0.8), 0 0 0 1px rgba(var(--accent-rgb), 0.25);
 }
 
-/* Адаптация выбора формата резервного копирования под темы */
+/* ── Адаптация выбора формата резервного копирования под темы */
 html[data-theme="oled"] .archive-format select,
 html[data-theme="oled"] .archive-format select option {
   background-color: #000000;
@@ -861,7 +863,7 @@ html[data-theme="rose"] .archive-format select option {
   color: #e2e8f0;
 }
 
-/* Кряки: сворачивание закреплённых */
+/* ── Кряки: сворачивание закреплённых */
 .files-featured-heading { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; padding-bottom: 4px; }
 .files-featured-heading em { display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 6px; background: rgba(255,255,255,.05); color: #8a94a3; font-size: 9px; font-style: normal; font-weight: 800; }
 .files-featured-action { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; color: #8a94a3; font-style: normal; transition: .18s; }
@@ -874,7 +876,7 @@ html[data-theme="rose"] .archive-format select option {
 .files-featured.collapsed .files-featured-action svg { transform: rotate(180deg); }
 .files-featured.collapsed .files-featured-heading { padding-bottom: 18px; }
 
-/* Компактный режим */
+/* ── Компактный режим */
 html.compact { --sp: .68; --hs: .82; }
 html.compact .app-shell { grid-template-columns: 216px 1fr !important; grid-template-rows: 40px 1fr !important; }
 html.compact .window-button { width: 42px; }
@@ -890,7 +892,7 @@ html.compact .settings-card { min-height: 0; padding: 18px 20px; }
 html.compact .accent { border-radius: 50% !important; width: 30px; height: 30px; flex: 0 0 30px; }
 html.compact .brand-mark, html.compact .mini-mark { flex: none; }
 
-/* Компактный режим: верхняя панель и баннеры */
+/* ── Компактный режим: верхняя панель и баннеры */
 html.compact .page-topbar { display: none !important; }
 html.compact .view { padding: 16px 20px 20px !important; }
 
@@ -1121,7 +1123,7 @@ html.compact .vbs-disable-button {
 .brand-caption { overflow: hidden; text-overflow: ellipsis; }
 html.compact .brand-block { gap: 10px; }
 
-/* Иконки меню и плашек */
+/* ── Иконки меню и плашек */
 .nav-item svg, .channel-icon, .channel-arrow, .nav-live, .nav-soon { flex: none; }
 .nav-item > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1135,7 +1137,7 @@ html.compact .social-links { gap: 6px; }
 html.compact .channel-card { padding: 8px 10px; }
 html.compact .channel-icon { width: 27px; height: 27px; }
 
-/* Перетаскиваемая левая панель */
+/* ── Перетаскиваемая левая панель */
 .sidebar { position: relative; }
 .sidebar-resizer { position: absolute; z-index: 20; top: 0; right: -4px; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; outline: none; }
 .sidebar-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; border-radius: 2px; background: transparent; transition: background .18s, box-shadow .18s; }
@@ -1156,7 +1158,7 @@ html.compact.sidebar-compact:not(.sidebar-icons) .app-shell {
   grid-template-columns: var(--sidebar-w, 185px) 1fr !important;
 }
 
-/* Папка загрузки */
+/* ── Папка загрузки */
 .downloads-card { display: flex; flex-direction: column; }
 .download-path { display: flex; align-items: center; gap: 14px; margin-top: 22px; padding: 15px 16px; border: 1px solid var(--line); border-radius: 13px; background: rgba(0,0,0,.16); min-width: 0; }
 .download-path-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border: 1px solid rgba(var(--accent-rgb), .18); border-radius: 11px; color: var(--accent); background: rgba(var(--accent-rgb), .06); }
@@ -1177,7 +1179,7 @@ html.compact .channel-icon { width: 24px; height: 24px; }
 .channel-card strong { font-size: 10px; letter-spacing: -.005em; }
 .channel-arrow { width: 10px; }
 
-/* Анимации интерфейса */
+/* ── Анимации интерфейса */
 :root { --ease-out: cubic-bezier(.22, 1, .36, 1); --ease-spring: cubic-bezier(.34, 1.4, .64, 1); }
 
 @keyframes motion-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -1193,31 +1195,31 @@ html.compact .channel-icon { width: 24px; height: 24px; }
 .motion-title { animation: motion-title .45s var(--ease-out) both; }
 #page-eyebrow.motion-title { animation-duration: .35s; }
 
-/* Плавная смена темы и акцента */
+/* ── Плавная смена темы и акцента */
 html.motion-recolor *, html.motion-recolor *::before, html.motion-recolor *::after {
   transition: background-color .4s ease, border-color .4s ease, color .4s ease, box-shadow .4s ease, fill .4s ease, stroke .4s ease !important;
 }
 
-/* Кнопки: мягкое нажатие */
+/* ── Кнопки: мягкое нажатие */
 button { transition-property: background, background-color, border-color, color, box-shadow, transform, opacity; transition-duration: .18s; transition-timing-function: ease; }
 button:not(:disabled):active { transform: scale(.97); }
 .accent:not(:disabled):active { transform: scale(.96); }
 .nav-item:not(:disabled):active, .theme-option:not(:disabled):active { transform: none; }
 .window-button:active { transform: none; }
 
-/* Меню: спокойное и плавное переключение */
+/* ── Меню: спокойное и плавное переключение */
 .nav-item svg { transition: color .2s ease, filter .2s ease; }
 .nav-item:hover svg { transform: none; }
 .nav-item.active svg { animation: none; }
 .nav-item.active { transition: background .2s ease, border-color .2s ease, box-shadow .2s ease, color .2s ease; }
 
-/* Плашки Telegram: стрелка */
+/* ── Плашки Telegram: стрелка */
 .channel-arrow { transition: transform .25s var(--ease-out), color .2s; }
 .channel-card:hover .channel-arrow { transform: translateX(3px); color: var(--accent); }
 .channel-icon { transition: transform .25s var(--ease-spring); }
 .channel-card:hover .channel-icon { transform: scale(1.08) rotate(-6deg); }
 
-/* Карточки: подъём при наведении */
+/* ── Карточки: подъём при наведении */
 .file-card, .utility-card, .dlc-library-game, .hv-game-card, .svc-option, .dlc-method, .setting-card, .pref-row, .download-path, .save-card, .lua-game {
   transition: transform .25s var(--ease-out), border-color .2s ease, background .2s ease, box-shadow .25s ease;
 }
@@ -1228,12 +1230,12 @@ button:not(:disabled):active { transform: scale(.97); }
 .file-icon, .download-path-icon { transition: transform .3s var(--ease-spring); }
 .file-card:hover .file-icon, .download-path:hover .download-path-icon { transform: scale(1.08) rotate(-4deg); }
 
-/* Блик на главных кнопках */
+/* ── Блик на главных кнопках */
 .install-button, .lua-restart, .hv-launch-button { position: relative; overflow: hidden; }
 .install-button::after, .lua-restart::after, .hv-launch-button::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent); transform: translateX(-120%) skewX(-20deg); pointer-events: none; }
 .install-button:hover:not(:disabled)::after, .lua-restart:hover:not(:disabled)::after, .hv-launch-button:hover:not(:disabled)::after { animation: motion-shine .8s ease; }
 
-/* Поля ввода */
+/* ── Поля ввода */
 select {
   color-scheme: dark;
 }
@@ -1251,7 +1253,7 @@ input[type="text"]:focus, input[type="password"]:focus, input[type="search"]:foc
   box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .08);
 }
 
-/* Вложенные поля ввода (поиск, пути, запросы, ключи API): полностью убираем внутреннюю рамку, обводку и тени */
+/* ── Вложенные поля ввода (поиск, пути, запросы, ключи API): полностью убираем внутреннюю рамку, обводку и тени */
 .path-entry input, .path-entry input:focus, .path-entry input:focus-visible,
 .manual-search input, .manual-search input:focus, .manual-search input:focus-visible,
 .files-search input, .files-search input:focus, .files-search input:focus-visible,
@@ -1263,7 +1265,7 @@ input[type="text"]:focus, input[type="password"]:focus, input[type="search"]:foc
   background: transparent !important;
 }
 
-/* Внешние контейнеры поиска, путей и ввода ключа подсвечивают единую аккуратную рамку при фокусе внутри */
+/* ── Внешние контейнеры поиска, путей и ввода ключа подсвечивают единую аккуратную рамку при фокусе внутри */
 .path-entry:focus-within,
 .manual-search:focus-within,
 .files-search:focus-within,
@@ -1273,26 +1275,26 @@ input[type="text"]:focus, input[type="password"]:focus, input[type="search"]:foc
   box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .08) !important;
 }
 
-/* Переключатели */
+/* ── Переключатели */
 .switch i, .switch i::after { transition: background .25s ease, border-color .25s ease, transform .3s var(--ease-spring), box-shadow .25s ease; }
 
-/* Акценты и темы */
+/* ── Акценты и темы */
 .accent.active::after { animation: motion-pop .4s var(--ease-spring); }
 .theme-option.active .theme-preview { animation: none; }
 
-/* Прогресс-бары и счётчики */
+/* ── Прогресс-бары и счётчики */
 [class*="progress"] > span, [class*="progress"] i, .hv-progress-bar { transition: width .35s var(--ease-out); }
 .toast { animation: toast-in .35s var(--ease-out); transition: opacity .25s ease, transform .25s ease; }
 .lua-detail { animation: modal-in .3s var(--ease-out); }
 
-/* Полное отключение анимаций */
+/* ── Полное отключение анимаций */
 html.no-motion *, html.no-motion *::before, html.no-motion *::after {
   animation-duration: .001ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important;
   transition-duration: .001ms !important; scroll-behavior: auto !important;
 }
 html.no-motion .ambient { animation: none !important; }
 
-/* Окно каналов Telegram */
+/* ── Окно каналов Telegram */
 .telegram-hub-modal {
   width: min(540px, calc(100vw - 32px));
   max-width: 540px;
@@ -1463,7 +1465,7 @@ html.no-motion .ambient { animation: none !important; }
   background: rgba(var(--accent-rgb), 0.07);
 }
 
-/* Скрытие верхнего бара с заголовками страниц, надписей модулей и кикеров */
+/* ── Скрытие верхнего бара с заголовками страниц, надписей модулей и кикеров */
 .page-topbar,
 #page-title,
 #page-eyebrow,
@@ -1472,7 +1474,7 @@ html.no-motion .ambient { animation: none !important; }
 .intro-badge {
   display: none !important;
 }
-/* Заставка запуска */
+/* ── Заставка запуска */
 
 :root {
   --s: min(250px, max(40vmin, min(56vw, 30vh)));
@@ -1507,7 +1509,7 @@ html.no-splash .app-splash,
   pointer-events: none;
 }
 
-/* Фон заставки по темам */
+/* ── Фон заставки по темам */
 html[data-theme="oled"] .app-splash {
   background: #000000 !important;
 }
@@ -1566,7 +1568,7 @@ html[data-theme="graphite"] .app-splash {
   background: #090a0d;
 }
 
-/* Частицы заставки */
+/* ── Частицы заставки */
 .s4 {
   background: var(--theme-bg, #090a0d);
 }
@@ -1627,7 +1629,7 @@ html[data-theme="graphite"] .app-splash {
   text-shadow: 0 0 14px rgba(var(--accent-rgb), 0.55);
 }
 
-/* Настройки заставки */
+/* ── Настройки заставки */
 .pref-row.pref-row-splash {
   display: flex;
   align-items: center;
@@ -1691,7 +1693,7 @@ html[data-theme="graphite"] .app-splash {
   transform: scale(0.97);
 }
 
-/* Ползунок скорости заставки */
+/* ── Ползунок скорости заставки */
 .pref-row.pref-row-splash-speed {
   display: flex;
   align-items: center;
@@ -1760,7 +1762,7 @@ html[data-theme="light"] .splash-speed-slider b {
   font-weight: 800;
 }
 
-/* Настройки звуковых эффектов */
+/* ── Настройки звуковых эффектов */
 .audio-disabled .pref-row-audio-pack,
 .audio-disabled .audio-profile-form,
 .audio-disabled .audio-profiles-bar,
@@ -1886,7 +1888,7 @@ html[data-theme="light"] .audio-volume-slider b {
   transform: scale(0.95);
 }
 
-/* Появление интерфейса */
+/* ── Появление интерфейса */
 .app-shell.shell-entering {
   animation: shell-entrance 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -1902,12 +1904,12 @@ html[data-theme="light"] .audio-volume-slider b {
   }
 }
 
-/* Без анимаций */
+/* ── Без анимаций */
 html.no-motion .app-splash {
   display: none !important;
 }
 
-/* Параметры персонализации */
+/* ── Параметры персонализации */
 :root {
   --ui-panel-radius: 16px;
   --ui-control-radius: 10px;
@@ -1937,7 +1939,7 @@ html.no-motion .app-splash {
   border-radius: 14px !important;
 }
 
-/* Плотность текста (Light / Regular / Bold) для всех шрифтов */
+/* ── Плотность текста (Light / Regular / Bold) для всех шрифтов */
 :root[data-weight="light"],
 :root[data-weight="light"] body {
   font-weight: 300 !important;
@@ -1969,7 +1971,7 @@ html.no-motion .app-splash {
   font-weight: 800 !important;
 }
 
-/* Специальные правила для Minecraft шрифта (пиксельная плотность) */
+/* ── Специальные правила для Minecraft шрифта (пиксельная плотность) */
 html[data-font="minecraft"]:root[data-weight="bold"],
 html[data-font="minecraft"]:root[data-weight="bold"] body,
 html[data-font="minecraft"]:root[data-weight="bold"] :is(p, span, div, a, button, input, select, textarea, h1, h2, h3, h4, h5, h6, strong, b, label, small) {
@@ -1984,7 +1986,7 @@ html[data-font="minecraft"]:root[data-weight="light"] :is(p, span, div, a, butto
   letter-spacing: 0.01em;
 }
 
-/* Высокая контрастность */
+/* ── Высокая контрастность */
 :root[data-contrast="high"] {
   --text: #ffffff;
   --muted: #c8d3e3;
@@ -1997,7 +1999,7 @@ html[data-font="minecraft"]:root[data-weight="light"] :is(p, span, div, a, butto
 }
 :root[data-contrast="high"] .nav-item:not(.active) { color: #d5e0f0; }
 
-/* Акцентное свечение */
+/* ── Акцентное свечение */
 :root[data-glow="off"] :is(.ambient, .home-glow) { display: none !important; }
 :root[data-glow="off"] :is(.mini-mark, .accent::after, .brand-mark, .install-button, .primary-button, .pulse-dot, .activity-led, .theme-sample em, .premium-panel, .file-card, .metric-card, .hv-game-card) {
   box-shadow: none !important;
@@ -2005,7 +2007,7 @@ html[data-font="minecraft"]:root[data-weight="light"] :is(p, span, div, a, butto
 :root[data-glow="off"] .nav-item.active svg { filter: none !important; }
 :root[data-glow="off"] .nav-item.active { box-shadow: none !important; }
 
-/* Группа переключаемых кнопок */
+/* ── Группа переключаемых кнопок */
 .personalization-segment {
   display: flex;
   min-width: 0;
@@ -2043,7 +2045,7 @@ html[data-font="minecraft"]:root[data-weight="light"] :is(p, span, div, a, butto
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-/* Выбор шрифта и превью */
+/* ── Выбор шрифта и превью */
 .pref-row-font-select {
   margin-bottom: 12px;
 }
@@ -2142,7 +2144,7 @@ html[data-font="minecraft"]:root[data-weight="light"] :is(p, span, div, a, butto
   letter-spacing: 0.01em;
 }
 
-/* Специальное пиксельное сглаживание для Minecraft шрифта */
+/* ── Специальное пиксельное сглаживание для Minecraft шрифта */
 html[data-font="minecraft"],
 html[data-font="minecraft"] body,
 html[data-font="minecraft"] * {
@@ -2151,7 +2153,7 @@ html[data-font="minecraft"] * {
   text-rendering: geometricPrecision !important;
 }
 
-/* Светлая тема */
+/* ── Светлая тема */
 html[data-theme="light"] .ui-font-select,
 html[data-theme="light"] .ui-audio-select {
   background-color: #ffffff;
@@ -2177,7 +2179,7 @@ html[data-theme="light"] .typography-preview-chips span {
   color: #475569 !important;
 }
 
-/* Сворачиваемые разделы настроек */
+/* ── Сворачиваемые разделы настроек */
 details.settings-collapsible {
   margin-bottom: 16px;
   border: 1px solid var(--line);
@@ -2302,7 +2304,7 @@ html[data-theme="light"] .settings-collapsible-content {
   border-top-color: rgba(0, 0, 0, 0.06);
 }
 
-/* Пользовательские звуковые файлы в разделе аудио */
+/* ── Пользовательские звуковые файлы в разделе аудио */
 .pref-row-custom-sounds .audio-custom-ctrl {
   display: flex;
   align-items: center;
@@ -2413,7 +2415,7 @@ html[data-theme="light"] .settings-collapsible-content {
   border-color: rgba(255, 92, 119, 0.4);
 }
 
-/* Пользовательские звуковые профили */
+/* ── Пользовательские звуковые профили */
 .settings-group .pref-row.pref-row-audio-pack,
 .pref-row.pref-row-audio-pack {
   display: flex !important;
@@ -2478,7 +2480,7 @@ html[data-theme="light"] .settings-collapsible-content {
   flex-shrink: 0 !important;
 }
 
-/* Форма добавления нового звукового профиля */
+/* ── Форма добавления нового звукового профиля */
 .audio-profile-form {
   display: flex !important;
   align-items: center !important;
@@ -2574,7 +2576,7 @@ html[data-theme="light"] .settings-collapsible-content {
   background: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Панель капсул профилей */
+/* ── Панель капсул профилей */
 .audio-profiles-bar {
   display: flex !important;
   flex-wrap: wrap !important;
@@ -2655,7 +2657,7 @@ html[data-theme="light"] .settings-collapsible-content {
 }
 
 
-/* Выпадающие списки в стиле приложения */
+/* ── Выпадающие списки в стиле приложения */
 .custom-select-hidden {
   position: absolute !important;
   width: 1px !important;
@@ -2733,7 +2735,7 @@ html[data-theme="light"] .settings-collapsible-content {
   color: var(--accent);
 }
 
-/* Контейнер выпадающего списка (Floating Portal) */
+/* ── Контейнер выпадающего списка (Floating Portal) */
 .custom-select-dropdown {
   position: fixed;
   display: flex;
@@ -2753,7 +2755,7 @@ html[data-theme="light"] .settings-collapsible-content {
   font-family: var(--font);
 }
 
-/* Адаптация выпадающего списка под все темы программы */
+/* ── Адаптация выпадающего списка под все темы программы */
 html[data-theme="oled"] .custom-select-dropdown {
   background: #08080a !important;
   border-color: rgba(255, 255, 255, 0.12) !important;
@@ -2892,7 +2894,7 @@ html[data-theme="steel"] .custom-select-trigger:hover {
   background: var(--accent);
 }
 
-/* Элемент опции в списке */
+/* ── Элемент опции в списке */
 .custom-select-option {
   display: flex;
   align-items: center;
@@ -2945,7 +2947,7 @@ html[data-theme="steel"] .custom-select-trigger:hover {
   place-items: center;
 }
 
-/* Разделители категорий опций (вместо системных дефисов) */
+/* ── Разделители категорий опций (вместо системных дефисов) */
 .custom-select-separator {
   display: flex;
   align-items: center;
@@ -2967,7 +2969,7 @@ html[data-theme="steel"] .custom-select-trigger:hover {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* Специфичные размеры для модулей программы */
+/* ── Специфичные размеры для модулей программы */
 .audio-item-ctrl .custom-select-trigger {
   flex: 1;
   min-width: 0;
@@ -2991,7 +2993,7 @@ html[data-theme="steel"] .custom-select-trigger:hover {
   margin-top: 4px;
 }
 
-/* Светлая тема */
+/* ── Светлая тема */
 html[data-theme="light"] .audio-custom-list {
   background: #f1f5f9;
   border-color: rgba(0, 0, 0, 0.08);
@@ -3073,7 +3075,7 @@ html[data-theme="light"] .custom-select-separator::after {
 }
 
 
-/* Новые действия сохранений остаются в строке и имеют удобную область нажатия */
+/* ── Новые действия сохранений остаются в строке и имеют удобную область нажатия */
 #save-list .save-location { grid-template-columns: 24px 44px minmax(0, 1fr) minmax(120px, 200px) auto; gap: 12px; }
 #save-list .save-exclude, .save-archive-actions button, .save-selection-actions button { min-height: max(44px, calc(44px * var(--hs, 1))) !important; }
 #save-list .save-location-copy { min-width: 0; }
@@ -3083,7 +3085,7 @@ html[data-theme="light"] .custom-select-separator::after {
   #save-list .save-location-meta { grid-column: 3; align-items: flex-start; }
   #save-list .save-exclude { grid-column: 4; grid-row: 1 / span 2; }
 }
-/* Узкий предпросмотр; нативное окно Windows по-прежнему не меньше 960 × 640 */
+/* ── Узкий предпросмотр; нативное окно Windows по-прежнему не меньше 960 × 640 */
 @media (max-width: 760px) {
   html:not(.sidebar-icons):not(.sidebar-compact) body .app-shell,
   html.sidebar-compact:not(.sidebar-icons) body .app-shell,
@@ -3113,7 +3115,7 @@ html[data-theme="light"] .custom-select-separator::after {
 #modal-backdrop .modal-symbol svg { width: 24px; height: 24px; stroke-width: 2; flex-shrink: 0; }
 #modal-backdrop .modal-actions button { min-height: max(44px, calc(44px * var(--hs, 1))) !important; }
 
-/* Настройки: Главная и запуск */
+/* ── Настройки: Главная и запуск */
 .home-blocks-list .home-block-row { cursor: default; }
 .home-block-copy {
   flex: 1;

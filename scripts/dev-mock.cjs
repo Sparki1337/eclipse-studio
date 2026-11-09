@@ -1,4 +1,4 @@
-// Единственный источник поведения Tauri для тестов, dev-server и снимков
+// dev-mock — единый источник мока Tauri для тестов, dev-сервера и снимков
 const fs = require('node:fs');
 const path = require('node:path');
 const root = path.resolve(__dirname, '..');

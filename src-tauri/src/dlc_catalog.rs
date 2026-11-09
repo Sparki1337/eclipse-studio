@@ -1,3 +1,5 @@
+//! Каталог DLC: бинарный appinfo.vdf плюс запросы к Steam Store API.
+
 use crate::{dlc::DlcEntry, luatools, steam_library};
 use serde::Serialize;
 use serde_json::Value;
@@ -92,7 +94,7 @@ fn scan(appid: u64, steam_path: Option<String>) -> Result<DlcCatalog, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(10))
         .connect_timeout(Duration::from_secs(4))
-        .user_agent("EclipseStudio/9.0.0")
+        .user_agent("EclipseStudio/10.0.0")
         .build()
         .map_err(|e| e.to_string())?;
     let urls = [

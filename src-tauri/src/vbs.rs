@@ -1,9 +1,11 @@
-// Управление VBS, HVCI, BitLocker, KVA Shadow, UEFI Lock и гипервизором Windows
+//! Управление VBS, HVCI, BitLocker, KVA Shadow, UEFI Lock и гипервизором Windows.
 
 use serde::{Deserialize, Serialize};
 
 #[path = "vbs_external.rs"]
 mod external;
+#[path = "vbs_uefi.rs"]
+mod uefi;
 use std::{
     fs,
     path::PathBuf,
@@ -280,7 +282,6 @@ pub(crate) struct VbsComponent {
     locked: bool,
 }
 
-// Статус защиты BitLocker для безопасной перезагрузки
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct BitLockerInfo {
@@ -294,7 +295,6 @@ pub(crate) struct BitLockerInfo {
     pub needs_admin: bool,
 }
 
-// Статус защиты Meltdown (KVA Shadow) для старых процессоров
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct KvaShadowInfo {
@@ -303,7 +303,6 @@ pub(crate) struct KvaShadowInfo {
     pub label: String,
 }
 
-// Сведения о блокировке параметров в UEFI
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct UefiLockInfo {
@@ -314,7 +313,6 @@ pub(crate) struct UefiLockInfo {
     pub sec_config_available: bool,
 }
 
-// Конфликтующее стороннее ПО (античиты, утилиты)
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ConflictItem {
@@ -348,6 +346,7 @@ pub(crate) struct VbsReport {
     bitlocker: BitLockerInfo,
     kva_shadow: KvaShadowInfo,
     uefi_lock: UefiLockInfo,
+    uefi_optout: Option<uefi::Status>,
     conflicts: Vec<ConflictItem>,
 }
 
@@ -361,7 +360,6 @@ pub(crate) struct VbsChangeResult {
     restart_required: bool,
 }
 
-// Отдельный элемент защиты для раздела тонкого управления
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct IndividualProtection {
@@ -445,6 +443,8 @@ enum BootMode {
     Auto,
     AdvancedOptions,
     TestSigning,
+    // Только защиты Windows для Hypervisor: без тестового режима, DSE и меню загрузки
+    ProtectionsOnly,
 }
 
 fn boot_changes(mode: BootMode) -> Vec<(&'static str, &'static str)> {
@@ -454,11 +454,12 @@ fn boot_changes(mode: BootMode) -> Vec<(&'static str, &'static str)> {
             changes.push(("onetimeadvancedoptions", "on"))
         }
         BootMode::TestSigning => changes.push(("testsigning", "on")),
+        // Для защит Hypervisor достаточно только отключить VBS/HVCI при следующей загрузке
+        BootMode::ProtectionsOnly => {}
     }
     changes
 }
 
-// Сканирование состояния системы в рамках VBS 2.0.1
 #[tauri::command]
 pub(crate) async fn vbs_scan(app: AppHandle) -> Result<VbsReport, String> {
     tauri::async_runtime::spawn_blocking(move || scan_report(&app))
@@ -483,14 +484,34 @@ pub(crate) async fn vbs_disable(
     .map_err(|error| format!("Отключение VBS было прервано: {error}"))?
 }
 
-// Восстановление исходного состояния VBS из снимка
+// Подготовка защит Windows для запуска Hypervisor без VBS/HVCI.
+// Не включает тестовый режим, DSE и меню выбора загрузки.
 #[tauri::command]
-pub(crate) async fn vbs_restore(app: AppHandle) -> Result<VbsChangeResult, String> {
+pub(crate) async fn hv_disable_protections(
+    app: AppHandle,
+    allow_uefi: Option<bool>,
+) -> Result<VbsChangeResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::jobs::run(
+            &[crate::jobs::system_resource(&app)],
+            "Подготовка защит Hypervisor",
+            || disable_vbs(&app, BootMode::ProtectionsOnly, allow_uefi.unwrap_or(false)),
+        )?
+    })
+    .await
+    .map_err(|error| format!("Отключение защит Hypervisor было прервано: {error}"))?
+}
+
+#[tauri::command]
+pub(crate) async fn vbs_restore(
+    app: AppHandle,
+    allow_uefi: Option<bool>,
+) -> Result<VbsChangeResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         crate::jobs::run(
             &[crate::jobs::system_resource(&app)],
             "Возврат исходных параметров Windows",
-            || restore_vbs(&app, false),
+            || restore_vbs(&app, false, allow_uefi.unwrap_or(false)),
         )?
     })
     .await
@@ -514,7 +535,6 @@ pub(crate) async fn vbs_restore_external(
     .map_err(|error| format!("Внешний откат VBS был прерван: {error}"))?
 }
 
-// Включение защит ядра Windows с необязательной немедленной перезагрузкой
 #[tauri::command]
 pub(crate) async fn vbs_enable_all(
     app: AppHandle,
@@ -531,7 +551,6 @@ pub(crate) async fn vbs_enable_all(
     .map_err(|error| format!("Включение всех защит было прервано: {error}"))?
 }
 
-// Переключение тестового режима Windows (Testsigning)
 #[tauri::command]
 pub(crate) async fn vbs_set_test_mode(
     app: AppHandle,
@@ -546,7 +565,7 @@ pub(crate) async fn vbs_set_test_mode(
                 if enabled {
                     disable_vbs(&app, BootMode::TestSigning, allow_uefi.unwrap_or(false))
                 } else {
-                    restore_vbs(&app, true)
+                    restore_vbs(&app, true, allow_uefi.unwrap_or(false))
                 }
             },
         )?
@@ -555,7 +574,6 @@ pub(crate) async fn vbs_set_test_mode(
     .map_err(|error| format!("Изменение тестового режима было прервано: {error}"))?
 }
 
-// Получение списка всех защит ядра и процессора для индивидуального управления
 #[tauri::command]
 pub(crate) async fn vbs_get_protections(
     app: AppHandle,
@@ -565,7 +583,6 @@ pub(crate) async fn vbs_get_protections(
         .map_err(|error| format!("Получение списка защит прервано: {error}"))?
 }
 
-// Переключение отдельного компонента защиты
 #[tauri::command]
 pub(crate) async fn vbs_set_protection(
     app: AppHandle,
@@ -583,12 +600,17 @@ pub(crate) async fn vbs_set_protection(
     .map_err(|error| format!("Изменение защиты прервано: {error}"))?
 }
 
-// Быстрый перезапуск компьютера для применения параметров
 #[tauri::command]
-pub(crate) fn vbs_restart() -> Result<(), String> {
-    run_command("shutdown.exe", &["/r", "/t", "0"])
-        .map(|_| ())
-        .map_err(|error| format!("Не удалось перезапустить Windows: {error}"))
+pub(crate) fn vbs_restart(app: AppHandle) -> Result<(), String> {
+    crate::jobs::run(
+        &[crate::jobs::system_resource(&app)],
+        "Перезапуск Windows",
+        || {
+            run_command("shutdown.exe", &["/r", "/t", "0"])
+                .map(|_| ())
+                .map_err(|error| format!("Не удалось перезапустить Windows: {error}"))
+        },
+    )?
 }
 
 // Подготовка снятия аппаратной блокировки UEFI через SecConfig.efi
@@ -600,12 +622,12 @@ pub(crate) async fn vbs_prepare_uefi_optout(
     tauri::async_runtime::spawn_blocking(move || {
         crate::jobs::run(
             &[crate::jobs::system_resource(&app)],
-            "Подготовка снятия блокировок UEFI",
-            || setup_uefi_optout_inner(&app, allow_uefi.unwrap_or(false)),
+            "Подготовка UEFI Opt-Out с журналом возврата",
+            || uefi::prepare(&app, allow_uefi.unwrap_or(false)),
         )?
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|error| format!("Подготовка UEFI была прервана: {error}"))?
 }
 
 // Активное восстановление подсистем Windows (Fix WMI, DISM RestoreHealth, SFC Scannow)
@@ -685,137 +707,12 @@ pub(crate) async fn vbs_troubleshoot(app: AppHandle, action: String) -> Result<S
     .map_err(|e| e.to_string())?
 }
 
-const OPT_OUT_GUID: &str = "{0cb3b571-2f2e-4343-a879-d86a476d7215}";
+const LEGACY_UEFI_SNAPSHOT: &str = "Старый снимок UEFI не содержит полного журнала EFI/BCD. Он сохранён; безопасно восстановить недостающие исходные данные задним числом невозможно. Новый UEFI-сценарий доступен после разбора старого снимка.";
 
-// Определение абсолютного пути к системным утилитам Windows в System32
 fn system_tool(name: &str) -> PathBuf {
     PathBuf::from(std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()))
         .join("System32")
         .join(name)
-}
-
-// Монтирование скрытого раздела EFI на свободную букву диска от S до Z
-fn efi_mount() -> Result<String, String> {
-    for letter in 'S'..='Z' {
-        let drive = format!("{letter}:");
-        if !std::path::Path::new(&format!("{drive}\\")).exists() {
-            run_command("mountvol.exe", &[&drive, "/s"])?;
-            return Ok(drive);
-        }
-    }
-    Err("Нет свободной буквы S–Z для монтирования раздела EFI.".into())
-}
-
-// Сохранение обновлённого снимка параметров VBS
-fn save_snapshot(app: &AppHandle, snapshot: &VbsSnapshot) -> Result<(), String> {
-    let path = snapshot_path(app)?;
-    let data = crate::secure_state::crypt(
-        &serde_json::to_vec_pretty(snapshot).map_err(|e| e.to_string())?,
-        true,
-    )?;
-    crate::durable::write(&path, &data)?;
-    Ok(())
-}
-
-// Подготовка сценария SecConfig.efi в разделе EFI и BCD для снятия блокировок UEFI
-fn setup_uefi_optout_inner(app: &AppHandle, allow_uefi: bool) -> Result<String, String> {
-    if !is_admin() {
-        return Err("Для изменения параметров UEFI требуются права администратора.".into());
-    }
-    if !allow_uefi {
-        return Err("Требуется подтверждение снятия блокировок UEFI.".into());
-    }
-    let sec_config_src = system_tool("SecConfig.efi");
-    if !sec_config_src.is_file() {
-        return Err("Файл SecConfig.efi не найден в System32.".into());
-    }
-    let drive = efi_mount()?;
-    let result = (|| -> Result<String, String> {
-        let target_dir = PathBuf::from(format!(r"{drive}\EFI\Microsoft\Boot"));
-        fs::create_dir_all(&target_dir)
-            .map_err(|e| format!("Не удалось создать папку EFI: {e}"))?;
-        let target_file = target_dir.join("SecConfig.efi");
-
-        let mut snapshot = ensure_snapshot(app)?;
-        if !snapshot.uefi_optout_configured {
-            snapshot.efi_file_existed = target_file.is_file();
-            snapshot.efi_backup = if snapshot.efi_file_existed {
-                Some(
-                    fs::read(&target_file)
-                        .map_err(|e| format!("Ошибка чтения SecConfig.efi: {e}"))?,
-                )
-            } else {
-                None
-            };
-            snapshot.uefi_optout_configured = true;
-            save_snapshot(app, &snapshot)?;
-        }
-
-        fs::copy(&sec_config_src, &target_file)
-            .map_err(|e| format!("Ошибка копирования SecConfig.efi в EFI: {e}"))?;
-
-        if run_command("bcdedit.exe", &["/enum", OPT_OUT_GUID]).is_err() {
-            run_command(
-                "bcdedit.exe",
-                &[
-                    "/create",
-                    OPT_OUT_GUID,
-                    "/d",
-                    "DGOptOut",
-                    "/application",
-                    "osloader",
-                ],
-            )?;
-        }
-
-        for (name, value) in [
-            ("path", r"\EFI\Microsoft\Boot\SecConfig.efi"),
-            ("loadoptions", "DISABLE-LSA-ISO,DISABLE-VBS"),
-        ] {
-            run_command("bcdedit.exe", &["/set", OPT_OUT_GUID, name, value])?;
-        }
-        run_command(
-            "bcdedit.exe",
-            &[
-                "/set",
-                OPT_OUT_GUID,
-                "device",
-                &format!("partition={drive}"),
-            ],
-        )?;
-        run_command(
-            "bcdedit.exe",
-            &["/set", "{bootmgr}", "bootsequence", OPT_OUT_GUID],
-        )?;
-
-        let _ = app.emit(
-            "vbs-progress",
-            "SecConfig.efi подготовлен в разделе EFI. BCD bootsequence настроен.",
-        );
-        Ok("Параметры SecConfig.efi успешно подготовлены. При перезагрузке подтвердите изменение UEFI на экране компьютера.".into())
-    })();
-    let _ = run_command("mountvol.exe", &[&drive, "/d"]);
-    result
-}
-
-// Симметричное восстановление исходного SecConfig.efi и очистка BCD
-fn restore_uefi_optout_inner(snapshot: &VbsSnapshot) -> Result<(), String> {
-    if !snapshot.uefi_optout_configured {
-        return Ok(());
-    }
-    let _ = run_command("bcdedit.exe", &["/delete", OPT_OUT_GUID]);
-    let drive = efi_mount()?;
-    let target_file = PathBuf::from(format!(r"{drive}\EFI\Microsoft\Boot\SecConfig.efi"));
-    let res = if let Some(bytes) = &snapshot.efi_backup {
-        fs::write(&target_file, bytes)
-            .map_err(|e| format!("Ошибка восстановления SecConfig.efi: {e}"))
-    } else if !snapshot.efi_file_existed && target_file.exists() {
-        fs::remove_file(&target_file).map_err(|e| format!("Ошибка удаления SecConfig.efi: {e}"))
-    } else {
-        Ok(())
-    };
-    let _ = run_command("mountvol.exe", &[&drive, "/d"]);
-    res
 }
 
 // Запуск системной утилиты с потоковой трансляцией строк вывода в реальном времени
@@ -844,11 +741,9 @@ fn stream_command_progress(
 
     if let Some(stdout) = child.stdout.take() {
         let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                let _ = app.emit("vbs-progress", &line);
-                full_output.push(line);
-            }
+        for line in reader.lines().map_while(Result::ok) {
+            let _ = app.emit("vbs-progress", &line);
+            full_output.push(line);
         }
     }
 
@@ -856,7 +751,6 @@ fn stream_command_progress(
     Ok((status.code().unwrap_or(-1), full_output.join("\n")))
 }
 
-// Выполнение реального восстановления подсистем Windows
 fn run_repair_inner(app: &AppHandle, kind: &str) -> Result<String, String> {
     if !is_admin() {
         return Err("Для восстановления системы требуются права администратора.".into());
@@ -937,7 +831,6 @@ fn fix_wmi_inner(app: &AppHandle) -> Result<String, String> {
     Ok(format!("Восстановление WMI завершено:\n{salvage_msg}"))
 }
 
-// Диагностика подсистем Windows с потоковым выводом логов в терминал
 fn run_troubleshoot_inner(app: &AppHandle, action: &str) -> Result<String, String> {
     match action {
         "wmi" => {
@@ -979,7 +872,6 @@ fn run_troubleshoot_inner(app: &AppHandle, action: &str) -> Result<String, Strin
     }
 }
 
-// Сбор полного отчёта VBS 2.0.1
 fn scan_report(app: &AppHandle) -> Result<VbsReport, String> {
     let probe = system_probe()?;
     let configured = parse_service_ids(&probe.configured_services);
@@ -1096,12 +988,23 @@ fn scan_report(app: &AppHandle) -> Result<VbsReport, String> {
         None
     };
     let external = external::status(app, &probe.boot_id, own_exists);
+    let uefi_optout = uefi::status(app, &probe.boot_id);
+    if let Some(status) = &uefi_optout {
+        warnings.push(status.detail.clone());
+    }
     let enable_block_reason = if external.detected || external.pending_restart {
         Some(
             external.blocked_reason.clone().unwrap_or_else(|| {
                 "Сначала выключите внешний режим VBS.cmd по его журналу.".into()
             }),
         )
+    } else if let Some(reason) = uefi_optout
+        .as_ref()
+        .and_then(|status| status.blocked_reason.clone())
+    {
+        Some(reason)
+    } else if uefi_lock.is_locked && !uefi_lock.sec_config_available {
+        Some("Для UEFI Opt-Out недоступен системный SecConfig.efi".into())
     } else if own_exists && own_snapshot.is_none() {
         Some("Снимок Eclipse не прошёл проверку. Новые изменения заблокированы, чтобы не потерять исходные параметры.".into())
     } else {
@@ -1125,10 +1028,14 @@ fn scan_report(app: &AppHandle) -> Result<VbsReport, String> {
         secure_boot: probe.secure_boot,
         virtualization_enabled: probe.virtualization_firmware_enabled || probe.hypervisor_present,
         hypervisor_present: probe.hypervisor_present,
-        restart_required: pending_own
+        restart_required: uefi_optout
+            .as_ref()
+            .is_some_and(|status| status.pending_restart)
+            || pending_own
             || external.pending_restart
             || test_configured.is_some_and(|configured| configured != (probe.dse_mode == 1)),
-        can_restore: own_snapshot.is_some(),
+        can_restore: own_snapshot.is_some()
+            || uefi_optout.as_ref().is_some_and(|status| status.active),
         external,
         preferred_boot_mode,
         enable_block_reason,
@@ -1141,6 +1048,7 @@ fn scan_report(app: &AppHandle) -> Result<VbsReport, String> {
         bitlocker,
         kva_shadow,
         uefi_lock,
+        uefi_optout,
         conflicts,
     })
 }
@@ -1188,31 +1096,15 @@ fn dse_status(mode: i32) -> VbsDseStatus {
     }
 }
 
-// Проверка статуса BitLocker
 fn check_bitlocker() -> BitLockerInfo {
-    // PowerShell возвращает ASCII-JSON; категория и код ошибки определяют нехватку прав
-    let script = r#"$ErrorActionPreference='Stop'
-try {
-  $d=$env:SystemDrive
-  $v=Get-CimInstance -Namespace 'root/CIMV2/Security/MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume -Filter "DriveLetter='$d'"
-  if(!$v){ $r=@{error='volume'} }
-  else {
-    $p=Invoke-CimMethod -InputObject $v -MethodName GetProtectionStatus
-    $c=Invoke-CimMethod -InputObject $v -MethodName GetConversionStatus
-    if($p.ReturnValue -ne 0 -or $c.ReturnValue -ne 0){ $r=@{error='api';code=('0x{0:X8}/0x{1:X8}' -f $p.ReturnValue,$c.ReturnValue)} }
-    else { $r=@{protection=[int]$p.ProtectionStatus;encrypted=[int]$c.EncryptionPercentage} }
-  }
-} catch {
-  $r=@{error='exception';category=[string]$_.CategoryInfo.Category;id=[string]$_.FullyQualifiedErrorId;code=('0x{0:X8}' -f $_.Exception.HResult)}
-}
-$r | ConvertTo-Json -Compress
-"#;
-    match powershell_output(script) {
-        Ok(text) => parse_bitlocker(&text, is_admin()),
-        Err(error) => bitlocker_unknown(
-            false,
-            BITLOCKER_UNKNOWN_MESSAGE,
-            vec![short_diagnostic(&error)],
+    match crate::windows_probe::bitlocker() {
+        Ok(value) => parse_bitlocker(&value.to_string(), is_admin()),
+        Err(error) => parse_bitlocker(
+            &serde_json::json!({
+                "error": "exception", "code": error,
+            })
+            .to_string(),
+            is_admin(),
         ),
     }
 }
@@ -1220,7 +1112,7 @@ $r | ConvertTo-Json -Compress
 const BITLOCKER_UNKNOWN_MESSAGE: &str = "Не удалось определить BitLocker. Это не означает отсутствие шифрования; изменения загрузки заблокированы.";
 const BITLOCKER_ADMIN_MESSAGE: &str = "Windows сообщает состояние BitLocker только программам с правами администратора. Пока оно не подтверждено, изменения загрузки заблокированы.";
 
-// Разбор ответа скрипта BitLocker (отдельная функция ради модульных тестов)
+// Разбор типизированного ответа BitLocker (отдельно ради модульных тестов)
 fn parse_bitlocker(text: &str, admin: bool) -> BitLockerInfo {
     let text = text.trim_start_matches('\u{feff}').trim();
     let value = match serde_json::from_str::<serde_json::Value>(text) {
@@ -1230,7 +1122,7 @@ fn parse_bitlocker(text: &str, admin: bool) -> BitLockerInfo {
                 false,
                 BITLOCKER_UNKNOWN_MESSAGE,
                 vec![format!(
-                    "Неожиданный ответ PowerShell: {}",
+                    "Неожиданный ответ Windows: {}",
                     short_diagnostic(text)
                 )],
             )
@@ -1322,7 +1214,6 @@ fn short_diagnostic(text: &str) -> String {
     short
 }
 
-// Проверка KVA Shadow (защита от Meltdown)
 fn check_kva_shadow() -> KvaShadowInfo {
     let override_val = registry_dword(
         r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
@@ -1334,28 +1225,16 @@ fn check_kva_shadow() -> KvaShadowInfo {
     );
     let is_disabled = override_val == Some(2) && mask_val == Some(3);
 
-    // Быстрый опрос ядра через PowerShell для выявления необходимости KVA Shadow
-    let script = r#"
-try {
-  $d=Add-Type -MemberDefinition '[DllImport("ntdll.dll")] public static extern int NtQuerySystemInformation(uint a,IntPtr b,uint c,IntPtr d);' -Name KvaProbe -Namespace Crocodile -PassThru
-  $p=[Runtime.InteropServices.Marshal]::AllocHGlobal(4)
-  $r=[Runtime.InteropServices.Marshal]::AllocHGlobal(4)
-  $ret=$d::NtQuerySystemInformation(196,$p,4,$r)
-  if($ret -eq 0){
-    $f=[uint32][Runtime.InteropServices.Marshal]::ReadInt32($p)
-    if(($f -band 0x01)-ne 0 -or (($f -band 0x20)-ne 0 -and ($f -band 0x10)-ne 0)){1}else{0}
-  }else{0}
-} catch {0}
-"#;
-    let needed = powershell_output(script)
-        .map(|s| s.trim() == "1")
-        .unwrap_or(false);
+    let native = crate::windows_probe::kva_needed();
+    let needed = native.as_ref().copied().unwrap_or(false);
 
     KvaShadowInfo {
         needed,
         disabled: is_disabled,
         label: if is_disabled {
             "Отключено (твик применён)".into()
+        } else if native.is_err() {
+            "Не удалось определить состояние KVA Shadow".into()
         } else if needed {
             "Активно (требуется отключение для старых CPU)".into()
         } else {
@@ -1364,7 +1243,6 @@ try {
     }
 }
 
-// Проверка блокировки параметров в UEFI
 fn check_uefi_lock() -> UefiLockInfo {
     let vbs_locked = registry_dword(r"SYSTEM\CurrentControlSet\Control\DeviceGuard", "Locked")
         == Some(1)
@@ -1376,7 +1254,7 @@ fn check_uefi_lock() -> UefiLockInfo {
     let credential_locked =
         registry_dword(r"SYSTEM\CurrentControlSet\Control\Lsa", "LsaCfgFlags") == Some(1);
 
-    let sec_config_available = PathBuf::from(r"C:\Windows\System32\SecConfig.efi").exists();
+    let sec_config_available = system_tool("SecConfig.efi").is_file();
 
     UefiLockInfo {
         is_locked: vbs_locked || hvci_locked || credential_locked,
@@ -1387,7 +1265,6 @@ fn check_uefi_lock() -> UefiLockInfo {
     }
 }
 
-// Поиск конфликтующих служб и защитных механизмов
 fn check_conflicts() -> Vec<ConflictItem> {
     let mut items = Vec::new();
 
@@ -1605,14 +1482,16 @@ fn disable_vbs(
     if !is_admin() {
         return Err("Для изменения параметров запустите программу от имени администратора".into());
     }
+    let protections_only = matches!(mode, BootMode::ProtectionsOnly);
     let probe = system_probe()?;
-    if !probe.virtualization_firmware_enabled && !probe.hypervisor_present {
+    if !protections_only && !probe.virtualization_firmware_enabled && !probe.hypervisor_present {
         return Err(
             "Включите аппаратную виртуализацию VT-x/SVM в BIOS/UEFI перед изменением VBS".into(),
         );
     }
     windows_hello_preflight()?;
     external::guard_enable(app, &probe.boot_id)?;
+    uefi::guard_enable(app, &probe)?;
     let mode = match mode {
         BootMode::Auto if probe.secure_boot == "false" => BootMode::TestSigning,
         BootMode::Auto => BootMode::AdvancedOptions,
@@ -1625,14 +1504,21 @@ fn disable_vbs(
         );
     }
     let uefi = check_uefi_lock();
-    if uefi.is_locked && !allow_uefi {
-        return Err("Требуется подтверждение снятия блокировок UEFI.".into());
+    if uefi.is_locked {
+        if !allow_uefi {
+            return Err(
+                "Для снятия UEFI Lock сначала подтвердите отдельную подготовку UEFI Opt-Out".into(),
+            );
+        }
+        let message = uefi::prepare(app, true)?;
+        return Ok(change_result(1, Vec::new(), &message));
     }
     let snapshot = ensure_snapshot(app)?;
-    prepare_bitlocker(&snapshot)?;
-    if uefi.is_locked {
-        let _ = setup_uefi_optout_inner(app, true)?;
+    if snapshot.uefi_optout_configured {
+        return Err(LEGACY_UEFI_SNAPSHOT.into());
     }
+    uefi::mark_continuation(app)?;
+    prepare_bitlocker(&snapshot)?;
     let mut changed = 0;
     let mut failed = Vec::new();
     for target in REGISTRY_TARGETS {
@@ -1657,17 +1543,20 @@ fn disable_vbs(
             Err(e) => failed.push(e),
         }
     }
-    let kva = check_kva_shadow();
-    if kva.needed && !kva.disabled {
-        for (name, value) in [
-            ("FeatureSettingsOverride", 2),
-            ("FeatureSettingsOverrideMask", 3),
-        ] {
-            match set_registry_dword(MEMORY_PATH, name, value)
-                .and_then(|_| verify_dword(MEMORY_PATH, name, Some(value)))
-            {
-                Ok(()) => changed += 1,
-                Err(e) => failed.push(e),
+    // KVA Shadow относится к совместимости со старыми процессорами, а не к защитам Hypervisor
+    if !protections_only {
+        let kva = check_kva_shadow();
+        if kva.needed && !kva.disabled {
+            for (name, value) in [
+                ("FeatureSettingsOverride", 2),
+                ("FeatureSettingsOverrideMask", 3),
+            ] {
+                match set_registry_dword(MEMORY_PATH, name, value)
+                    .and_then(|_| verify_dword(MEMORY_PATH, name, Some(value)))
+                {
+                    Ok(()) => changed += 1,
+                    Err(e) => failed.push(e),
+                }
             }
         }
     }
@@ -1677,7 +1566,8 @@ fn disable_vbs(
             Err(e) => failed.push(e),
         }
     }
-    if read_xcr0() > 7 {
+    // Маску XSAVE меняет только полный режим VBS; защитам Hypervisor она не нужна
+    if !protections_only && read_xcr0() > 7 {
         match write_bcd(XSAVE_BCD, Some(XSAVE_HV_MASK_VALUE)) {
             Ok(()) => changed += 1,
             Err(e) => failed.push(e),
@@ -1691,7 +1581,9 @@ fn disable_vbs(
             }
         }
     }
-    let mut message = if matches!(mode, BootMode::TestSigning) {
+    let mut message = if protections_only {
+        "Защиты Windows подготовлены к отключению. Драйвер-подпись, тестовый режим и меню загрузки не изменялись. Перезагрузите Windows."
+    } else if matches!(mode, BootMode::TestSigning) {
         "Параметры VBS 2.0.1 изменены и проверены. Secure Boot отключён: выбран Test Signing. Для применения нужна обычная перезагрузка Windows."
     } else {
         "Параметры VBS 2.0.1 изменены и проверены. Подготовлено одноразовое меню: после перезагрузки выберите отключение обязательной проверки подписи драйверов."
@@ -1706,21 +1598,49 @@ fn disable_vbs(
     }
     Ok(change_result(changed, failed, &message))
 }
-fn restore_vbs(app: &AppHandle, _disable_test_mode: bool) -> Result<VbsChangeResult, String> {
+fn restore_vbs(
+    app: &AppHandle,
+    _disable_test_mode: bool,
+    allow_uefi: bool,
+) -> Result<VbsChangeResult, String> {
     if !is_admin() {
         return Err("Для восстановления запустите программу от имени администратора".into());
     }
-    let snapshot = read_snapshot(app)?;
+    if !snapshot_path(app)?
+        .try_exists()
+        .map_err(|e| e.to_string())?
+        && uefi::exists(app)?
+    {
+        uefi::restore(app, allow_uefi)?;
+        return Ok(change_result(1, Vec::new(), "Самостоятельный журнал UEFI восстановлен. Собственные EFI/BCD-объекты убраны, исходные параметры блокировки возвращены. Для применения UEFI Lock нужна перезагрузка Windows."));
+    }
+    // Независимый корректный журнал UEFI всё равно откатывается, когда основной снимок VBS
+    // повреждён или устарел. Не выдавать это за успешный основной откат.
+    let snapshot = match read_snapshot(app).and_then(|snapshot| {
+        if snapshot.uefi_optout_configured {
+            Err(LEGACY_UEFI_SNAPSHOT.into())
+        } else {
+            Ok(snapshot)
+        }
+    }) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            if !uefi::exists(app)? {
+                return Err(error);
+            }
+            uefi::restore(app, allow_uefi)?;
+            return Ok(change_result(
+                1,
+                vec![format!("Основной снимок VBS сохранён, но не восстановлен: {error}")],
+                "Собственная операция UEFI отменена по независимому проверенному журналу. Очередь и собственные EFI/BCD-объекты убраны, исходные политики UEFI возвращены. Для их применения нужна перезагрузка. Общий откат VBS не объявляется выполненным.",
+            ));
+        }
+    };
+    let uefi_restored = uefi::restore(app, allow_uefi)?;
     prepare_bitlocker(&snapshot)?;
     let mut changed = 0;
     let mut failed = Vec::new();
 
-    // Откат параметров SecConfig.efi и BCD DGOptOut, если они были настроены
-    if snapshot.uefi_optout_configured {
-        if let Err(e) = restore_uefi_optout_inner(&snapshot) {
-            failed.push(format!("Откат UEFI SecConfig: {e}"));
-        }
-    }
     for item in &snapshot.registry {
         let result = restore_registry(item);
         match result {
@@ -1770,6 +1690,9 @@ fn restore_vbs(app: &AppHandle, _disable_test_mode: bool) -> Result<VbsChangeRes
         message.push(' ');
         message.push_str(XSAVE_REMOVED_MESSAGE);
     }
+    if uefi_restored {
+        message.push_str(" Собственные EFI/BCD-объекты UEFI Opt-Out убраны; исходные политики UEFI Lock возвращены. Применение блокировок прошивкой требует перезагрузки; очистка файлов сама по себе не подтверждает состояние firmware.");
+    }
     message.push_str(" Для применения параметров загрузки требуется перезапуск Windows.");
     Ok(change_result(changed, failed, &message))
 }
@@ -1778,6 +1701,7 @@ fn enable_all_protections(app: &AppHandle, reboot: bool) -> Result<VbsChangeResu
         return Err("Для изменения параметров требуются права администратора".into());
     }
     external::guard_enable(app, &system_probe()?.boot_id)?;
+    uefi::guard_other_mutation(app)?;
     let snapshot = ensure_snapshot(app)?;
     prepare_bitlocker(&snapshot)?;
     let mut changed = 0;
@@ -1872,7 +1796,6 @@ fn xsave_mask_warning(value: &str) -> &'static str {
         XSAVE_OTHER_MASK_WARNING
     }
 }
-// Индивидуальное получение состояния всех компонентов защит
 fn get_individual_protections(_app: &AppHandle) -> Result<Vec<IndividualProtection>, String> {
     let uefi = check_uefi_lock();
     let kva = check_kva_shadow();
@@ -1994,7 +1917,6 @@ fn get_individual_protections(_app: &AppHandle) -> Result<Vec<IndividualProtecti
     ])
 }
 
-// Применение индивидуального изменения защиты
 fn set_individual_protection(
     app: &AppHandle,
     id: &str,
@@ -2003,6 +1925,7 @@ fn set_individual_protection(
     if !is_admin() {
         return Err("Требуются права администратора".into());
     }
+    uefi::guard_other_mutation(app)?;
     let snapshot = ensure_snapshot(app)?;
 
     if ["vbs", "xsave-mask", "testsigning"].contains(&id) {
@@ -2510,40 +2433,17 @@ fn capture_snapshot() -> Result<VbsSnapshot, String> {
 }
 
 fn system_probe() -> Result<SystemProbe, String> {
-    let script = r#"
-$ErrorActionPreference='SilentlyContinue'
-$dg=Get-CimInstance -Namespace 'root\Microsoft\Windows\DeviceGuard' -ClassName 'Win32_DeviceGuard'
-$cs=Get-CimInstance -ClassName Win32_ComputerSystem
-$cpu=Get-CimInstance -ClassName Win32_Processor | Select-Object -First 1
-$os=Get-CimInstance -ClassName Win32_OperatingSystem
-$sb='unknown'; try { $sb=([bool](Confirm-SecureBootUEFI)).ToString().ToLowerInvariant() } catch [System.PlatformNotSupportedException] { $sb='false' } catch {}
-$dse=-1
-try {
-  $t=Add-Type -PassThru -MemberDefinition '[DllImport("ntdll.dll")] public static extern uint NtQuerySystemInformation(int c,IntPtr b,uint s,out uint r);' -Name CGSCI -Namespace Crocodile
-  $p=[Runtime.InteropServices.Marshal]::AllocHGlobal(8)
-  [Runtime.InteropServices.Marshal]::WriteInt32($p,8)
-  $r=[uint32]0
-  $status=$t::NtQuerySystemInformation(103,$p,8,[ref]$r)
-  if($status -eq 0){
-    $o=[uint32][Runtime.InteropServices.Marshal]::ReadInt32($p,4)
-    if(-not($o -band 1)){$dse=0}elseif($o -band 2){$dse=1}else{$dse=2}
-  }
-  [Runtime.InteropServices.Marshal]::FreeHGlobal($p)
-} catch {}
-[pscustomobject]@{
-  vbsStatus=[int]$dg.VirtualizationBasedSecurityStatus
-  configuredServices=(@($dg.SecurityServicesConfigured | ForEach-Object {[int]$_}) -join ',')
-  runningServices=(@($dg.SecurityServicesRunning | ForEach-Object {[int]$_}) -join ',')
-  hypervisorPresent=[bool]$cs.HypervisorPresent
-  virtualizationFirmwareEnabled=[bool]$cpu.VirtualizationFirmwareEnabled
-  secureBoot=$sb
-  dseMode=[int]$dse
-  bootId=if($os.LastBootUpTime){$os.LastBootUpTime.ToUniversalTime().ToString('o')}else{''}
-} | ConvertTo-Json -Compress
-"#;
-    let output = powershell_output(script)?;
-    serde_json::from_str(output.trim())
-        .map_err(|error| format!("Windows вернула некорректный отчёт VBS: {error}"))
+    let value = crate::windows_probe::probe()?;
+    Ok(SystemProbe {
+        vbs_status: value.vbs_status,
+        configured_services: value.configured_services,
+        running_services: value.running_services,
+        hypervisor_present: value.hypervisor_present,
+        virtualization_firmware_enabled: value.virtualization_firmware_enabled,
+        secure_boot: value.secure_boot,
+        dse_mode: value.dse_mode,
+        boot_id: value.boot_id,
+    })
 }
 
 fn parse_service_ids(value: &str) -> Vec<i32> {
@@ -2568,7 +2468,7 @@ fn windows_hello_preflight() -> Result<(), String> {
     if enabled.bytes != 1u32.to_le_bytes() {
         return Ok(());
     }
-    let sid = powershell_output("$ErrorActionPreference='Stop'; [Security.Principal.WindowsIdentity]::GetCurrent().User.Value")?;
+    let sid = crate::windows_token::current_sid()?;
     if !sid.starts_with("S-1-")
         || !sid
             .bytes()
@@ -2781,6 +2681,15 @@ mod tests {
     }
 
     #[test]
+    fn protections_only_keeps_boot_changes_minimal() {
+        let changes = boot_changes(BootMode::ProtectionsOnly);
+        assert_eq!(
+            changes,
+            vec![("hypervisorlaunchtype", "off"), ("vsmlaunchtype", "off")]
+        );
+    }
+
+    #[test]
     fn detects_configured_test_mode_and_pending_rollback() {
         assert_eq!(test_signing_from_bcd("testsigning Yes"), Some(true));
         assert_eq!(test_signing_from_bcd("testsigning Нет"), Some(false));
@@ -2844,6 +2753,17 @@ mod tests {
             false,
         );
         assert!(by_code.needs_admin);
+    }
+
+    #[test]
+    fn native_wmi_errors_keep_bitlocker_unknown_and_request_rights() {
+        for code in ["0x80041003", "0x80070005"] {
+            let text = serde_json::json!({"error":"exception", "code":format!("Подключение WMI: {code} ({code})")}).to_string();
+            let info = parse_bitlocker(&text, false);
+            assert_eq!(info.state, "unknown");
+            assert!(info.needs_admin && !info.protected && !info.suspended);
+            assert!(!parse_bitlocker(&text, true).needs_admin);
+        }
     }
 
     #[test]

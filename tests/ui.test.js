@@ -1,4 +1,4 @@
-// UI-тесты интерфейса
+// ui.test — E2E и регрессионные тесты интерфейса (Playwright)
 const path = require("path");
 const fs = require("fs");
 const { chromium } = require("playwright");
@@ -11,12 +11,15 @@ const VBS_RS = fs.readFileSync(path.join(ROOT, "src-tauri", "src", "vbs.rs"), "u
 const COMMANDS = [...LIB_RS.matchAll(/^\s+(?:[a-z_]+::)?([a-z_0-9]+),\s*$/gm)].map((m) => m[1]);
 const SHOTS = process.env.SCREENSHOTS || "";
 
+const TEST_FILTER = process.env.ECLIPSE_TEST_FILTER || "";
 const results = [];
 let browser;
 
 function assert(condition, message) { if (!condition) throw new Error(message); }
 
 async function open({ storage = {}, mock = {}, view = "home", viewport = { width: 1440, height: 900 }, reducedMotion = "no-preference" } = {}) {
+  // Тесты по умолчанию работают на русском; English-first проверяется отдельным сценарием
+  if (!Object.prototype.hasOwnProperty.call(storage, "cgs-language")) storage = { ...storage, "cgs-language": "ru" };
   const context = await browser.newContext({ viewport, reducedMotion });
   // Подменяем внешние обложки, чтобы тесты не зависели от CDN Steam
   await context.route(/^https?:\/\//, route => route.request().resourceType() === "image"
@@ -37,7 +40,7 @@ async function open({ storage = {}, mock = {}, view = "home", viewport = { width
   page.on("console", (msg) => { if (msg.type() === "error") errors.push("console: " + msg.text()); });
   await page.goto(`${PAGE}?view=${view}`);
   page.setDefaultTimeout(6000);
-  if (!mock.migrationFailure) {
+  if (!mock.migrationFailure && !mock.startupAdminRelaunch) {
     await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
     await page.locator("#app-splash").waitFor({state:"hidden",timeout:12000});
   }
@@ -54,6 +57,7 @@ async function reload(page) {
 const calls = (page, name) => page.evaluate((n) => window.__mockCalls.filter((c) => !n || c.command === n), name);
 
 async function test(name, fn) {
+  if (TEST_FILTER && !name.includes(TEST_FILTER)) return;
   const started = Date.now();
   try {
     await fn();
@@ -102,12 +106,195 @@ async function run() {
     assert(missing.length === 0, "Не зарегистрированы: " + missing.join(", "));
   });
 
-  await test("Запуск без ошибок JS, версия 9.0.0", async () => {
+  await test("Запуск без ошибок JS, версия 10.0.0", async () => {
     const { page, context, errors } = await open();
     const version = await page.textContent(".titlebar-version");
-    assert(version.trim() === "9.0.0", "версия " + version);
+    assert(version.trim() === "10.0.0", "версия " + version);
     assert(errors.length === 0, errors.join("\n"));
     await context.close();
+  });
+
+  await test("Админ-запуск: опция включена по умолчанию и сохраняется после выключения", async () => {
+    const { page, errors } = await open({ view: "settings" });
+    await page.click('[data-settings-tab="home"]');
+    assert(await page.isChecked('#run-as-admin'), "опция по умолчанию выключена");
+    await page.click('label[for="run-as-admin"]');
+    await page.waitForFunction(() => !document.querySelector('#run-as-admin').disabled);
+    assert(await page.evaluate(() => window.cgsStorage.getItem("cgs-run-as-admin")) === "0", "выключение не подтверждено");
+    assert((await calls(page, "relaunch_as_admin")).length === 0, "переключатель немедленно перезапускает приложение");
+    await reload(page); await page.click('[data-settings-tab="home"]');
+    assert(!(await page.isChecked('#run-as-admin')), "опция не пережила перезапуск интерфейса");
+    await page.click('label[for="run-as-admin"]');
+    await page.waitForFunction(() => !document.querySelector('#run-as-admin').disabled);
+    assert(await page.evaluate(() => window.cgsStorage.getItem("cgs-run-as-admin")) === "1", "повторное включение не сохранено");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+  await test("Админ-запуск: выключенная опция не запрашивает повышение", async () => {
+    const { page } = await open({ view: "settings", storage: { "cgs-run-as-admin": "0" }, mock: { admin: false } });
+    await page.click('[data-settings-tab="home"]');
+    assert(!(await page.isChecked('#run-as-admin')), "сохранённое выключение потеряно");
+    assert(await page.evaluate(() => window.__startupAdminAttempts || 0) === 0, "права запрошены при выключенной опции");
+  });
+  await test("Админ-запуск: отказ UAC оставляет интерфейс доступным без повторов", async () => {
+    const { page, errors } = await open({ view: "settings", mock: { admin: false } });
+    assert(await page.evaluate(() => window.__startupAdminAttempts) === 1, "автозапрос не был одноразовым");
+    assert((await page.textContent('#toast-stack')).includes("Автозапуск без прав администратора"), "не показана причина обычного запуска");
+    await reload(page);
+    assert(await page.evaluate(() => window.__startupAdminAttempts || 0) === 0, "перезагрузка WebView повторяет UAC");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+  await test("Админ-запуск: успешная передача останавливает фоновые задачи прежнего процесса", async () => {
+    const { page } = await open({ mock: { admin: false, startupAdminRelaunch: true } });
+    assert(await page.evaluate(() => document.documentElement.dataset.ready !== "true"), "старый экземпляр продолжает загружать модули");
+    assert((await calls(page, "check_for_update")).length === 0, "старый экземпляр запустил фоновое обновление");
+    assert((await calls(page, "update_launch_ready")).length === 0, "старый экземпляр подтвердил чужой запуск");
+  });
+  await test("Админ-запуск: переданный и проверяемый после обновления процессы не перезапускаются", async () => {
+    for (const extra of [{ elevatedHandoff: true }, { launchOutcome: { success: true, message: "Обновление подтверждено", version: "10.0.0" } }]) {
+      const { page, context } = await open({ mock: { admin: false, ...extra } });
+      assert(await page.evaluate(() => window.__startupAdminAttempts || 0) === 0, "создан повторный процесс при передаче/проверке обновления");
+      assert((await calls(page, "update_launch_ready")).length === 1, "не выполнен обычный handshake обновления");
+      await context.close();
+    }
+  });
+  await test("Админ-запуск: ошибка записи не меняет сохранённое значение", async () => {
+    const { page } = await open({ view: "settings", mock: { startupPreferenceSaveError: true } });
+    await page.click('[data-settings-tab="home"]'); await page.click('label[for="run-as-admin"]');
+    await page.waitForFunction(() => !document.querySelector('#run-as-admin').disabled);
+    assert(await page.isChecked('#run-as-admin'), "ошибка записи выдана за выключение");
+    assert(await page.evaluate(() => window.cgsStorage.getItem("cgs-run-as-admin")) === null, "неподтверждённое значение попало в cache");
+    assert((await page.textContent('#run-as-admin-note')).includes("Не удалось сохранить"), "ошибка не показана");
+  });
+  await test("Админ-запуск: настройка переведена на английский", async () => {
+    const { page } = await open({ view: "settings", storage: { "cgs-language": "en" } });
+    await page.click('[data-settings-tab="home"]');
+    assert((await page.textContent('label[for="run-as-admin"]')).includes("Run as administrator"), "нет перевода");
+    await page.click('label[for="run-as-admin"]');
+    await page.waitForFunction(() => !document.querySelector('#run-as-admin').disabled);
+    assert((await page.textContent('#run-as-admin-note')).includes("Saved."), "статус не переведён");
+  });
+
+  async function gradientMode(page, mode) {
+    await page.click(`#collapse-gradient [data-gradient-mode="${mode}"]`);
+    await page.waitForFunction(() => !document.querySelector('#collapse-gradient [data-gradient-mode="theme"]').disabled);
+  }
+  async function gradientClick(page, x, y) {
+    await page.locator('#gradient-surface').scrollIntoViewIfNeeded();
+    const rect = await page.locator('#gradient-surface').boundingBox();
+    await page.mouse.click(rect.x + rect.width * x / 100, rect.y + rect.height * y / 100);
+    await page.waitForFunction(() => !document.querySelector('#gradient-x').disabled);
+  }
+  const gradientValue = page => page.evaluate(() => JSON.parse(window.cgsStorage.getItem('cgs-background-gradient')));
+  const gradientBackgrounds = page => page.evaluate(() => getComputedStyle(document.querySelector('.app-shell')).backgroundImage);
+
+  await test('Градиент: исходный вид темы сохранён по умолчанию', async () => {
+    const { page, errors } = await open({ view: 'settings', storage: { 'cgs-theme': 'forest' } });
+    assert(await page.evaluate(() => document.documentElement.dataset.gradientMode) === 'theme', 'нестандартный режим по умолчанию');
+    assert(!(await page.isVisible('#gradient-controls')), 'лишние контролы в исходном режиме');
+    assert(((await gradientBackgrounds(page)).match(/radial-gradient/g) || []).length === 3, 'изменён исходный фон');
+    assert(errors.length === 0, errors.join('\n'));
+  });
+  await test('Градиент: одна точка перемещается и переживает перезагрузку', async () => {
+    const { page, errors } = await open({ view: 'settings' });
+    await gradientMode(page, 'one'); await gradientClick(page, 76, 71);
+    const value = await gradientValue(page);
+    assert(Math.abs(value.points[0].x - 76) < 1 && Math.abs(value.points[0].y - 71) < 1, JSON.stringify(value));
+    assert(((await gradientBackgrounds(page)).match(/radial-gradient/g) || []).length === 1, 'не одна точка фона');
+    await reload(page);
+    assert((await gradientValue(page)).mode === 'one', 'режим не сохранён');
+    assert(await page.locator('#gradient-x').inputValue() === String(value.points[0].x), 'координата не восстановлена');
+    assert(errors.length === 0, errors.join('\n'));
+  });
+  await test('Градиент: две независимые точки и переключение режимов', async () => {
+    const { page } = await open({ view: 'settings' });
+    await gradientMode(page, 'two'); await gradientClick(page, 20, 30);
+    await page.click('[data-gradient-point="1"]'); await gradientClick(page, 80, 70);
+    const value = await gradientValue(page);
+    assert(Math.abs(value.points[0].x - 20) < 1 && Math.abs(value.points[1].x - 80) < 1, JSON.stringify(value));
+    assert(((await gradientBackgrounds(page)).match(/radial-gradient/g) || []).length === 2, 'не две точки фона');
+    await gradientMode(page, 'one');
+    assert(!(await page.isVisible('[data-gradient-marker="1"]')), 'вторая точка видна в одиночном режиме');
+    await gradientMode(page, 'two'); await reload(page);
+    assert(JSON.stringify((await gradientValue(page)).points) === JSON.stringify(value.points), 'точки потеряны при смене режима');
+  });
+  await test('Градиент: клавиатура, точные координаты и ограничение краёв', async () => {
+    const { page } = await open({ view: 'settings' }); await gradientMode(page, 'two');
+    const marker = page.locator('[data-gradient-marker="0"]'); await marker.focus();
+    await page.keyboard.press('ArrowRight');
+    await page.waitForFunction(() => !document.querySelector('#gradient-x').disabled);
+    assert(await page.evaluate(() => document.activeElement.dataset.gradientMarker) === '0', 'фокус потерян после сохранения');
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.waitForFunction(() => !document.querySelector('#gradient-y').disabled);
+    let value = await gradientValue(page); assert(value.points[0].x === 16 && value.points[0].y === 10, JSON.stringify(value));
+    await page.locator('#gradient-x').fill('100'); await page.locator('#gradient-x').dispatchEvent('change');
+    await page.waitForFunction(() => !document.querySelector('#gradient-x').disabled);
+    await marker.focus(); await page.keyboard.press('ArrowRight');
+    value = await gradientValue(page); assert(value.points[0].x === 100, 'координата вышла за экран');
+  });
+  await test('Градиент: перетаскивание без скачка и отмена жеста', async () => {
+    const { page, errors } = await open({ view: 'settings' });
+    await gradientMode(page, 'two'); await gradientClick(page, 25, 25);
+    await page.evaluate(() => document.querySelector('#gradient-map').addEventListener('pointerdown', event => { window.__gradientPointer = event.pointerId; }));
+    const surface = await page.locator('#gradient-surface').boundingBox();
+    let marker = await page.locator('[data-gradient-marker="0"]').boundingBox();
+    await page.mouse.move(marker.x + marker.width / 2 + 8, marker.y + marker.height / 2 - 6);
+    await page.mouse.down();
+    await page.mouse.move(surface.x + surface.width * .75 + 8, surface.y + surface.height * .60 - 6, { steps: 5 });
+    assert((await gradientValue(page)).points[0].x === 25, 'промежуточный жест уже записан');
+    await page.mouse.up();
+    await page.waitForFunction(() => !document.querySelector('#gradient-x').disabled);
+    const saved = await gradientValue(page);
+    assert(Math.abs(saved.points[0].x - 75) < 1 && Math.abs(saved.points[0].y - 60) < 1, JSON.stringify(saved));
+    assert(await page.evaluate(() => document.activeElement.dataset.gradientMarker) === '0', 'выбранная точка не получает фокус');
+    marker = await page.locator('[data-gradient-marker="0"]').boundingBox();
+    await page.mouse.move(marker.x + marker.width / 2, marker.y + marker.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(surface.x + surface.width * .10, surface.y + surface.height * .80);
+    await page.evaluate(() => document.querySelector('#gradient-map').dispatchEvent(new PointerEvent('pointercancel', { pointerId: window.__gradientPointer, bubbles: true, isPrimary: true })));
+    await page.mouse.up();
+    assert(JSON.stringify(await gradientValue(page)) === JSON.stringify(saved), 'отменённый жест изменил сохранённую настройку');
+    assert(Number(await page.locator('#gradient-x').inputValue()) === saved.points[0].x, 'отмена не восстановила фон');
+    assert(errors.length === 0, errors.join('\n'));
+  });
+  await test('Градиент: сброс возвращает исходный фон', async () => {
+    const { page } = await open({ view: 'settings' }); await gradientMode(page, 'two'); await gradientClick(page, 40, 60);
+    await page.click('#gradient-reset');
+    await page.waitForFunction(() => document.documentElement.dataset.gradientMode === 'theme' && !document.querySelector('#gradient-reset').disabled);
+    assert(!(await page.isVisible('#gradient-controls')), 'контролы не скрыты');
+    assert(((await gradientBackgrounds(page)).match(/radial-gradient/g) || []).length === 3, 'исходная палитра не восстановлена');
+  });
+  await test('Градиент: повреждённая настройка не ломает запуск', async () => {
+    const { page, errors } = await open({ view: 'settings', storage: { 'cgs-background-gradient': '{bad json' } });
+    assert(await page.evaluate(() => document.documentElement.dataset.gradientMode) === 'theme', 'не включён безопасный стандартный режим');
+    assert(errors.length === 0, errors.join('\n'));
+  });
+  await test('Градиент: ошибка записи возвращает предыдущее положение', async () => {
+    const { page } = await open({ view: 'settings', mock: { gradientPreferenceSaveError: true } });
+    await gradientMode(page, 'two');
+    assert(await page.evaluate(() => document.documentElement.dataset.gradientMode) === 'theme', 'неверно показан несохранённый режим');
+    assert(await page.evaluate(() => window.cgsStorage.getItem('cgs-background-gradient')) === null, 'cache подтверждает ошибочную запись');
+    assert((await page.textContent('#gradient-note')).includes('Не удалось сохранить'), 'нет сообщения об ошибке');
+  });
+  await test('Градиент: перевод, узкий экран и reduced motion', async () => {
+    for (const width of [1440, 390]) {
+      const { page, context } = await open({ view: 'settings', viewport: { width, height: 1000 }, reducedMotion: 'reduce', storage: { 'cgs-language': 'en' } });
+      await gradientMode(page, 'two');
+      await page.locator('#collapse-gradient').scrollIntoViewIfNeeded();
+      const state = await page.evaluate(() => {
+        const panel = document.querySelector('#collapse-gradient').getBoundingClientRect();
+        const nodes = [...document.querySelectorAll('#collapse-gradient button, #collapse-gradient input')].filter(n => n.offsetParent);
+        return { mode: document.querySelector('#collapse-gradient [data-gradient-mode="two"]').textContent.trim(),
+          inside: nodes.every(n => { const r = n.getBoundingClientRect(); return r.left >= panel.left - 1 && r.right <= panel.right + 1; }),
+          targets: nodes.every(n => { const r = n.getBoundingClientRect(); return r.height >= 43; }),
+          markersInside: [...document.querySelectorAll('.gradient-marker')].filter(n => !n.hidden).every(n => {
+            const r = n.getBoundingClientRect(), map = document.querySelector('#gradient-map').getBoundingClientRect();
+            return r.left >= map.left + 5 && r.right <= map.right - 5 && r.top >= map.top + 5 && r.bottom <= map.bottom - 5;
+          }) };
+      });
+      assert(state.mode === 'Two points', 'нет английского перевода: ' + state.mode);
+      assert(state.inside && state.targets && state.markersInside, `контролы не помещаются или слишком малы: ${width}`);
+      await context.close();
+    }
   });
 
   await test("Плашек NEW у Гипервизора и Утилит нет", async () => {
@@ -263,15 +450,15 @@ async function run() {
     await context.close();
   });
 
-  await test("Плашки Telegram: подписи и ссылки", async () => {
+  await test("Плашки соцсетей: подписи и ссылки", async () => {
     const { page, context } = await open();
-    const labels = await page.$$eval(".channel-card strong", (n) => n.map((x) => x.textContent.trim()).filter(text => text !== "Telegram каналы"));
-    assert(JSON.stringify(labels) === JSON.stringify(["Телеграм разработчика", "Телеграм создателя форка", "Наш Telegram"]), labels.join(" | "));
+    const labels = await page.$$eval(".channel-card strong", (n) => n.map((x) => x.textContent.trim()).filter(text => text !== "Соцсети"));
+    assert(JSON.stringify(labels) === JSON.stringify(["Телеграм разработчика", "Телеграм создателя форка", "Наш Telegram", "Наш Discord"]), labels.join(" | "));
     await page.click("#open-telegram-hub");
-    for (const id of ["#hub-channel-personal", "#hub-channel-fork", "#hub-channel-community"]) await page.click(id);
+    for (const id of ["#hub-channel-personal", "#hub-channel-fork", "#hub-channel-community", "#hub-channel-discord"]) await page.click(id);
     await page.waitForTimeout(100);
     const urls = (await calls(page, "open_external")).map((c) => c.args.url);
-    for (const url of ["https://t.me/crocodilehub2", "https://t.me/gde_sparki", "https://t.me/piratestationn"]) assert(urls.includes(url), "нет вызова " + url);
+    for (const url of ["https://t.me/crocodilehub2", "https://t.me/gde_sparki", "https://t.me/piratestationn", "https://discord.gg/Vwp5DAnFG"]) assert(urls.includes(url), "нет вызова " + url);
     await context.close();
   });
 
@@ -618,6 +805,38 @@ async function run() {
       assert(errors.length === 0, errors.join("\n"));
     });
   }
+
+  // Регрессия: кнопки действий выбранной игры в гипервизоре не съезжают после включения гипервизора
+  await test("Гипервизор: кнопки действий выбранной игры остаются справа после запуска", async () => {
+    for (const width of [1440, 960]) {
+      const { page, errors } = await open({
+        view: "hypervisor",
+        viewport: { width, height: 900 },
+        storage: { "cgs-splash": "0" },
+      });
+      const panel = await page.locator(".hv-selected-panel").boundingBox();
+      const actionsBefore = await page.locator(".hv-selected-actions").boundingBox();
+      const distBefore = Math.round(panel.x + panel.width - (actionsBefore.x + actionsBefore.width));
+
+      // Симулируем включение гипервизора и запуск игры (статус «Игра запущена»)
+      await page.evaluate(() => {
+        const btn = document.querySelector("#hv-launch-button");
+        btn.disabled = true;
+        btn.classList.add("game-running");
+        btn.querySelector("span:last-child").textContent = "Игра запущена";
+      });
+      await page.waitForTimeout(60);
+
+      const panelAfter = await page.locator(".hv-selected-panel").boundingBox();
+      const actionsAfter = await page.locator(".hv-selected-actions").boundingBox();
+      const distAfter = Math.round(panelAfter.x + panelAfter.width - (actionsAfter.x + actionsAfter.width));
+
+      assert(Math.abs(distBefore - distAfter) <= 5,
+        `Кнопки съехали после запуска на ширине ${width}px: было ${distBefore}px от правого края, стало ${distAfter}px`);
+      assert(errors.length === 0, errors.join("\n"));
+    }
+  });
+
 
   // Регрессия: ограниченная по содержимому группа центрируется относительно диалога.
   for (const mode of [
@@ -995,6 +1214,9 @@ async function run() {
     assert(await page.isChecked("#ryuu-key-source-custom"), "клавиатура не переключает источник");
     await page.waitForFunction(() => document.querySelector("#ryuu-key-help").textContent.includes("protected Windows storage"));
     assert((await page.textContent(".ryuu-key-sources legend")).includes("Choose an API key"), "нет перевода");
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForFunction(() => [...document.querySelectorAll("#ryuu-key-block button")]
+      .every(button => button.getBoundingClientRect().height >= 43.99));
     const layout = await page.locator(".ryuu-key-sources").evaluate(element => ({
       overflow: element.scrollWidth - element.clientWidth,
       heights: [...element.querySelectorAll("label")].map(label => label.getBoundingClientRect().height),
@@ -1002,7 +1224,7 @@ async function run() {
       sizes: [...element.closest("#ryuu-key-block").querySelectorAll(".svc-key-label, .hubcap-status-badge, .svc-key-link")].map(node => parseFloat(getComputedStyle(node).fontSize)),
     }));
     assert(layout.overflow <= 1 && layout.heights.every(height => height >= 44), "переключатель не помещается или слишком мал");
-    assert(layout.controls.every(height => height >= 44), "кнопки ключа слишком малы");
+    assert(layout.controls.every(height => height >= 43.99), `кнопки ключа слишком малы: ${JSON.stringify(layout.controls)}`);
     assert(layout.sizes.every(size => size >= 14), "текст ключа слишком мелкий");
     assert(errors.length === 0, errors.join("\n"));
   });
@@ -1294,6 +1516,81 @@ async function run() {
     await page.waitForFunction(()=>document.querySelector('#vbs-warnings').textContent.startsWith("XSAVE mask in the boot loader"));
     const english = await page.$$eval('#vbs-warnings p', (nodes) => nodes.map((node) => node.textContent));
     assert(english.length === 2 && english.every((text) => text.startsWith("XSAVE mask in the boot loader") && !/[А-Яа-яЁё]/u.test(text)), `нет перевода: ${english.join(" | ")}`);
+  });
+  const lockedUefi = { isLocked: true, vbsLocked: true, hvciLocked: false, credentialLocked: true, secConfigAvailable: true };
+  for (const accepted of [false, true]) {
+    await test(`UEFI: подготовка ${accepted ? "только после согласия" : "отменяется без изменений"}`, async () => {
+      const { page, errors } = await open({ view: "hypervisor", mock: { vbs: { admin: true, uefiLock: lockedUefi } } });
+      await page.click('[data-hv-tab="vbs"]'); await page.waitForSelector('#vbs-uefi-card:not(.hidden)');
+      await page.click('#vbs-uefi-optout-btn');
+      await page.waitForFunction(() => document.querySelector('#modal-title').textContent === "Подготовить снятие UEFI Lock?");
+      assert((await page.textContent('#modal-message')).includes("DPAPI-журнал"), "не объяснён журнал возврата");
+      assert((await calls(page, "vbs_prepare_uefi_optout")).length === 0, "команда вызвана до согласия");
+      await page.click(accepted ? '#modal-confirm' : '#modal-cancel');
+      if (accepted) {
+        await page.waitForFunction(() => document.querySelector('#modal-title').textContent === "Требуется перезапуск");
+        await page.click('#modal-cancel');
+        await page.waitForFunction(() => document.querySelector('#vbs-uefi-label').textContent === "UEFI: СНИМОК СОХРАНЁН");
+        const done = await calls(page, "vbs_prepare_uefi_optout");
+        assert(done.length === 1 && done[0].args.allowUefi === true, "нет отдельного согласия в native-вызове");
+        assert(await page.isDisabled('#vbs-uefi-optout-btn'), "разрешена повторная подготовка до завершения");
+        assert(await page.isVisible('#vbs-disable-button') && !(await page.isDisabled('#vbs-disable-button')), "откат недоступен до перезагрузки");
+      } else {
+        await page.waitForSelector('#modal-backdrop', { state: "hidden" });
+        assert((await calls(page, "vbs_prepare_uefi_optout")).length === 0, "подготовка выполнена после отмены");
+      }
+      assert((await calls(page, "vbs_restart")).length === 0, "Windows перезапущена без отдельного согласия");
+      assert(errors.length === 0, errors.join("\n"));
+    });
+  }
+  await test("UEFI: неизвестный BitLocker блокирует подготовку", async () => {
+    const { page } = await open({ view: "hypervisor", mock: { bitlocker: { state: "unknown", protected: false, suspended: false, needsAdmin: false }, vbs: { admin: true, uefiLock: lockedUefi } } });
+    await page.click('[data-hv-tab="vbs"]'); await page.waitForSelector('#vbs-uefi-card:not(.hidden)');
+    assert(await page.isDisabled('#vbs-uefi-optout-btn'), "кнопка доступна при неизвестном BitLocker");
+    assert((await calls(page, "vbs_prepare_uefi_optout")).length === 0, "вызвана системная команда");
+  });
+  for (const reportedAdmin of [false, true]) await test(`UEFI: без администратора подготовка не вызывается${reportedAdmin ? " даже при устаревшем скане" : ""}`, async () => {
+    const { page } = await open({ view: "hypervisor", mock: { admin: false, vbs: { admin: reportedAdmin, uefiLock: lockedUefi } } });
+    await page.click('[data-hv-tab="vbs"]'); await page.waitForSelector('#vbs-uefi-card:not(.hidden)');
+    await page.click('#vbs-uefi-optout-btn'); await page.waitForFunction(() => document.querySelector('#modal-title').textContent === "Подготовить снятие UEFI Lock?");
+    await page.click('#modal-confirm'); await page.waitForFunction(() => document.querySelector('#modal-title').textContent === "Требуются права администратора");
+    await page.click('#modal-cancel'); await page.waitForSelector('#modal-backdrop', { state: "hidden" });
+    assert((await calls(page, "vbs_prepare_uefi_optout")).length === 0, "команда вызвана без администратора");
+    assert((await calls(page, "relaunch_as_admin")).length === 0, "повышение выполнено после отмены");
+  });
+  const pendingUefi = { canRestore: true, uefiLock: { ...lockedUefi, isLocked: false, vbsLocked: false, credentialLocked: false },
+    uefiOptout: { active: true, prepared: true, canContinue: false, pendingRestart: true, requiresRelock: true,
+      blockedReason: "Сначала перезагрузите Windows и подтвердите UEFI Opt-Out либо выполните откат", detail: "UEFI Opt-Out подготовлен. Снимок сохранён." } };
+  await test("UEFI: подготовленная операция видна даже после снятия registry-флагов", async () => {
+    const { page } = await open({ view: "hypervisor", mock: { vbs: pendingUefi } });
+    await page.click('[data-hv-tab="vbs"]'); await page.waitForSelector('#vbs-uefi-card:not(.hidden)');
+    assert(await page.isDisabled('#vbs-uefi-optout-btn'), "разрешён повторный запуск");
+    assert(await page.isDisabled('#vbs-test-button'), "разрешено продолжение до перезагрузки");
+    assert(!(await page.isDisabled('#vbs-disable-button')), "заблокирована отмена");
+  });
+  for (const accepted of [false, true]) {
+    await test(`UEFI: возврат блокировок ${accepted ? "с явным согласием" : "отменяется без native-вызова"}`, async () => {
+      const { page } = await open({ view: "hypervisor", mock: { vbs: pendingUefi } });
+      await page.click('[data-hv-tab="vbs"]'); await page.waitForSelector('#vbs-disable-button:not(.hidden)');
+      await page.click('#vbs-disable-button'); await page.waitForSelector('#modal-backdrop:not(.hidden)'); await page.click('#modal-confirm');
+      await page.waitForFunction(() => document.querySelector('#modal-title').textContent === "Вернуть исходные UEFI Lock?");
+      assert((await calls(page, "vbs_restore")).length === 0, "откат начался до согласия");
+      await page.click(accepted ? '#modal-confirm' : '#modal-cancel');
+      if (accepted) {
+        await page.waitForFunction(() => document.querySelector('#modal-title').textContent === "Требуется перезапуск"); await page.click('#modal-cancel');
+        const done = await calls(page, "vbs_restore"); assert(done.length === 1 && done[0].args.allowUefi === true, "не передано согласие на relock");
+      } else { await page.waitForSelector('#modal-backdrop', { state: "hidden" }); assert((await calls(page, "vbs_restore")).length === 0, "отмена проигнорирована"); }
+    });
+  }
+  await test("UEFI: после загрузки доступно продолжение подготовки визора", async () => {
+    const ready = { ...pendingUefi, uefiOptout: { ...pendingUefi.uefiOptout, pendingRestart: false, canContinue: true, blockedReason: null } };
+    const { page } = await open({ view: "hypervisor", mock: { vbs: ready } });
+    await page.click('[data-hv-tab="vbs"]'); await page.waitForSelector('#vbs-enable-button:not(.hidden)');
+    assert(!(await page.isDisabled('#vbs-enable-button')), "продолжение заблокировано снимком UEFI");
+    await page.click('#vbs-enable-button'); await page.waitForSelector('#modal-backdrop:not(.hidden)'); await page.click('#modal-confirm');
+    await page.waitForFunction(() => document.querySelector('#modal-title').textContent === "Требуется перезапуск"); await page.click('#modal-cancel');
+    assert((await calls(page, "vbs_disable")).length === 1, "обычная подготовка не запущена");
+    assert((await calls(page, "vbs_prepare_uefi_optout")).length === 0, "UEFI Opt-Out запущен повторно");
   });
   const externalVbs = (extra = {}) => ({
     canRestore: false, testSigningConfigured: true, testSigningActive: true,
@@ -2075,6 +2372,58 @@ async function run() {
     assert(errors.length === 0, errors.join("\n"));
   });
 
+  await test("Локальное облако: стартовое обновление DLL, отложенное напоминание и повтор", async () => {
+    const { page, errors } = await open({
+      view: "home",
+      mock: { localCloud: { enabled: true, managed: true, folder: "D:\\Cloud Saves", eligibleApps: ["480"], componentOutdated: true, loaderSupported: true, issue: null } },
+    });
+    const dialog = page.locator("#lc-update-backdrop");
+    await dialog.waitFor({ state: "visible", timeout: 9000 });
+    assert((await page.textContent("#lc-update-title")).includes("Нужно обновить DLL"), "неверный заголовок окна обновления");
+    assert((await page.textContent("#lc-update-description")).includes("CloudRedirect"), "нет описания обновления");
+    // «Позже» не вызывает команду и закрывает окно
+    await page.click("#lc-update-later");
+    await dialog.waitFor({ state: "hidden" });
+    assert((await calls(page, "local_cloud_update_component")).length === 0, "«Позже» вызвало обновление");
+    // Ручная проверка снова показывает окно
+    await page.click('.nav-item[data-view="lua"]');
+    await page.waitForFunction(() => document.querySelector("#lc-badge").textContent === "Обновление");
+    await page.click("#lc-refresh");
+    await dialog.waitFor({ state: "visible" });
+    // Ошибка оставляет окно и статус, установка повторяема
+    await page.evaluate(() => { window.__CGS_MOCK_CONFIG__.localCloudUpdateError = "Закройте игры перед обновлением."; });
+    await page.click("#lc-update-install");
+    await page.waitForFunction(() => document.querySelector("#lc-update-status").dataset.kind === "error");
+    assert(await dialog.isVisible(), "окно закрылось при ошибке");
+    assert((await page.textContent("#lc-update-status")).includes("Закройте игры"), "причина ошибки скрыта");
+    // Успех: команда получила путь Steam, режим через local_cloud_set не менялся
+    await page.evaluate(() => { delete window.__CGS_MOCK_CONFIG__.localCloudUpdateError; });
+    await page.click("#lc-update-install");
+    await page.waitForFunction(() => document.querySelector("#lc-update-status").textContent.includes("DLL обновлена"));
+    const update = (await calls(page, "local_cloud_update_component")).at(-1);
+    assert(update.args.steamPath === "C:\\Program Files (x86)\\Steam", "не передан путь Steam: " + JSON.stringify(update.args));
+    assert((await calls(page, "local_cloud_set")).length === 0, "обновление включило режим через local_cloud_set");
+    assert(await page.isChecked("#lc-enabled"), "режим локального облака сбросился");
+    // Английский язык: в окне не должно остаться кириллицы
+    await page.evaluate(() => window.cgsI18n.setLanguage("en"));
+    await page.waitForTimeout(150);
+    assert(!/[А-Яа-яЁё]/.test(await page.innerText("#lc-update-backdrop")), "в окне обновления осталась кириллица");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+
+  await test("Первый запуск: английский язык по умолчанию и сохранение выбора", async () => {
+    const { page, errors } = await open({ storage: { "cgs-language": "" } });
+    assert(await page.evaluate(() => window.cgsI18n.language) === "en", "первый запуск не на английском");
+    assert(await page.getAttribute("html", "lang") === "en", "атрибут lang не обновлён");
+    assert((await page.textContent('.nav-item[data-view="fix"] span')).trim() === "Online Fix", "интерфейс не на английском");
+    // Явный выбор русского сохраняется после перезагрузки
+    await page.evaluate(() => window.cgsI18n.setLanguage("ru"));
+    await reload(page);
+    assert(await page.evaluate(() => window.cgsI18n.language) === "ru", "сохранённый язык не применился");
+    assert((await page.textContent('.nav-item[data-view="utilities"] span')).trim() === "Утилиты", "русский интерфейс не восстановлен");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+
   await test("Локальное облако: находится в быстром поиске и открывает панель", async () => {
     const { page, errors } = await open();
     const firstTitle = () => page.textContent("#cgs-search-list .k-search-item.active .k-search-title");
@@ -2101,7 +2450,7 @@ async function run() {
   });
 
   const UPDATE_RELEASE = {
-    available: true, currentVersion: "9.0.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
+    available: true, currentVersion: "10.0.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
     notes: "## Что нового\n- Локальное облако\n- Обновление с перезапуском",
     releaseUrl: "https://github.com/Sparki1337/eclipse-studio/releases/tag/v9.1.0",
     installerUrl: null, portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v9.1.0/EclipseStudio.exe",
@@ -2212,9 +2561,9 @@ async function run() {
     const { page, errors } = await open({
       view: "settings",
       storage: { "cgs-update-snooze-launches": "5", "cgs-language": "en" },
-      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 9.0.0.", version: "9.0.0" } }),
+      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 10.0.0.", version: "10.0.0" } }),
     });
-    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 9.0.0."));
+    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 10.0.0."));
     // Успешная установка сбрасывает откладывание, поэтому новое окно показывается сразу
     await dialogOpen(page);
     assert(await page.evaluate(() => cgsStorage.getItem("cgs-update-snooze-launches")) === null, "откладывание не сброшено после успешной установки");

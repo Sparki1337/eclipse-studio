@@ -1,7 +1,7 @@
-// Звуковые эффекты через Web Audio API
 (() => {
   "use strict";
 
+  // audio — звуковые эффекты Web Audio, профили и пользовательские звуки
   const STORAGE_KEY_ENABLED = "cgs-audio-enabled";
   const STORAGE_KEY_VOLUME = "cgs-audio-volume";
   const STORAGE_KEY_STARTUP = "cgs-audio-startup";
@@ -15,19 +15,18 @@
   const DEFAULT_CLICK = "cyber-click";
   const DEFAULT_SUCCESS = "eclipse-success";
 
-  // Встроенные звуковые профили по умолчанию отсутствуют
+  // Встроенных профилей по умолчанию нет
   const DEFAULT_PROFILES = [];
 
   let audioCtx = null;
   let masterGain = null;
   let lastClickTime = 0;
 
-  // Кэш декодированных AudioBuffer для пользовательских звуков в оперативной памяти
+  // Кэш декодированных AudioBuffer пользовательских звуков
   const customAudioBuffers = new Map();
-  // Список метаданных сохранённых звуков [{ id, name, sizeBytes }]
+  // Метаданные сохранённых звуков: [{ id, name, sizeBytes }]
   let customSoundsList = [];
 
-  // Ленивая инициализация Web Audio контекста
   function getContext() {
     if (!audioCtx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -47,7 +46,7 @@
     return audioCtx;
   }
 
-  // Разблокировка аудиоконтекста по первому взаимодействию пользователя
+  // Аудиоконтекст блокируется до первого взаимодействия пользователя
   function ensureUnlocked() {
     const ctx = getContext();
     if (ctx && ctx.state === "suspended") {
@@ -58,7 +57,6 @@
   window.addEventListener("pointerdown", ensureUnlocked, { passive: true, once: true });
   window.addEventListener("keydown", ensureUnlocked, { passive: true, once: true });
 
-  // Проверка активности звуков
   function isEnabled() {
     try {
       return window.cgsStorage.getItem(STORAGE_KEY_ENABLED) !== "0";
@@ -78,7 +76,6 @@
     updateAudioControlsState(on);
   }
 
-  // Получение громкости (0..100)
   function getVolumePercent() {
     try {
       const stored = window.cgsStorage.getItem(STORAGE_KEY_VOLUME);
@@ -90,16 +87,14 @@
     return DEFAULT_VOLUME;
   }
 
-  // Применение уровня усиления к главной мастер-ноде
   function applyVolumeGain() {
     if (!masterGain || !audioCtx) return;
     const vol = getVolumePercent() / 100;
-    // Логарифмическая характеристика для естественного восприятия громкости слухом
+    // Степень 1.6 — субъективно линейная громкость для слуха
     const gainValue = isEnabled() ? Math.pow(vol, 1.6) : 0;
     masterGain.gain.setValueAtTime(gainValue, audioCtx.currentTime);
   }
 
-  // Установка громкости
   function setVolume(val, save = true) {
     const clamped = Math.max(0, Math.min(100, Math.round(val)));
     if (save) {
@@ -120,7 +115,6 @@
     return clamped;
   }
 
-  // Чтение выбранного звука для категории
   function getSound(type) {
     try {
       if (type === "startup") return window.cgsStorage.getItem(STORAGE_KEY_STARTUP) || DEFAULT_STARTUP;
@@ -132,7 +126,6 @@
     return DEFAULT_SUCCESS;
   }
 
-  // Сохранение выбранного звука
   function setSound(type, soundId, save = true) {
     if (save) {
       try {
@@ -151,14 +144,13 @@
     syncProfileHighlight();
   }
 
-  // Загрузка сохранённых звуковых профилей из хранилища (базовые отсутствуют)
   function loadProfiles() {
     try {
       const raw = window.cgsStorage.getItem(STORAGE_KEY_PROFILES);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          // Исключаем любые базовые пресеты
+          // Вычищаем базовые пресеты, оставляя только пользовательские
           const customOnly = parsed.filter((p) => {
             if (!p) return false;
             const id = String(p.id || "").toLowerCase();
@@ -178,14 +170,12 @@
     return [];
   }
 
-  // Сохранение списка профилей в хранилище
   function saveProfiles(profiles) {
     try {
       window.cgsStorage.setItem(STORAGE_KEY_PROFILES, JSON.stringify(profiles));
     } catch (_) {}
   }
 
-  // Форматирование названия звука для подсказок
   function formatSoundTitle(soundId) {
     if (!soundId || soundId === "none") return "Без звука";
     if (typeof soundId === "string" && soundId.startsWith("custom_")) {
@@ -209,7 +199,6 @@
     return titles[soundId] || soundId;
   }
 
-  // Подсветка активного звукового профиля
   function syncProfileHighlight() {
     const curStartup = getSound("startup");
     const curClick = getSound("click");
@@ -240,7 +229,6 @@
     }
   }
 
-  // Применение звукового профиля
   function applyProfile(profileId, save = true) {
     const profiles = loadProfiles();
     const profile = profiles.find((p) => p.id === profileId);
@@ -264,7 +252,6 @@
     }
   }
 
-  // Создание или обновление пользовательского звукового профиля
   function createCustomProfile(name) {
     const trimmed = (name || "").trim();
     const isEn = document.documentElement.lang === "en" || window.cgsStorage.getItem("cgs-language") === "en";
@@ -313,7 +300,6 @@
     return true;
   }
 
-  // Удаление звукового профиля
   async function deleteProfile(profileId) {
     const profiles = loadProfiles();
     const profile = profiles.find((p) => p.id === profileId);
@@ -340,14 +326,12 @@
     }
   }
 
-  // Очистка звуковых профилей
   function restoreDefaultProfiles() {
     saveProfiles([]);
     renderProfiles();
     syncProfileHighlight();
   }
 
-  // Отрисовка списка звуковых профилей в виде интерактивных чипов
   function renderProfiles() {
     const container = document.getElementById("audio-profiles-bar");
     const desc = document.getElementById("audio-profile-desc");
@@ -358,7 +342,6 @@
 
     const isEn = document.documentElement.lang === "en" || window.cgsStorage.getItem("cgs-language") === "en";
 
-    // Обновляем статусное описание: если профилей ещё нет — сообщаем «Создайте свой первый профиль»
     if (desc) {
       if (!profiles.length) {
         desc.textContent = isEn ? "Create your first profile" : "Создайте свой первый профиль";
@@ -422,12 +405,11 @@
     });
   }
 
-  // Для обратной совместимости
+  // Совместимость со старым API
   function applyPack(packId, save = true) {
     applyProfile(packId, save);
   }
 
-  // Включение/отключение интерактивности контролов
   function updateAudioControlsState(enabled) {
     const group = document.getElementById("audio-settings-group");
     if (group) {
@@ -436,9 +418,9 @@
     applyVolumeGain();
   }
 
-  // Синтез звуковых эффектов
+  // ── Синтез встроенных звуков
 
-  // ЗВУКИ ЗАПУСКА
+  // ── Звуки запуска
   function synthStartupDawn(ctx, dest) {
     const now = ctx.currentTime;
     // Глубокий суб-бас
@@ -546,7 +528,7 @@
     });
   }
 
-  // ЗВУКИ КЛИКА
+  // ── Звуки клика
   function synthClickCyber(ctx, dest) {
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -631,7 +613,7 @@
     osc.stop(now + 0.026);
   }
 
-  // ЗВУКИ УСПЕХА
+  // ── Звуки успеха
   function synthSuccessEclipse(ctx, dest) {
     const now = ctx.currentTime;
     const notes = [523.25, 783.99]; // Ноты До5, Соль5
@@ -720,7 +702,6 @@
     osc.stop(now + 0.38);
   }
 
-  // Форматирование размера файла звука в байтах
   function formatAudioBytes(bytes) {
     const b = Number(bytes) || 0;
     if (b < 1024) return `${b} Б`;
@@ -728,7 +709,6 @@
     return `${(b / (1024 * 1024)).toFixed(1)} МБ`;
   }
 
-  // Загрузка и декодирование аудиоданных в оперативной памяти
   async function loadAndDecodeSound(id) {
     if (customAudioBuffers.has(id)) return customAudioBuffers.get(id);
     const tauri = window.__TAURI__;
@@ -750,7 +730,6 @@
     }
   }
 
-  // Воспроизведение пользовательского аудиофайла из кэша
   function playCustomBuffer(soundId) {
     const ctx = getContext();
     if (!ctx || !masterGain) return;
@@ -764,7 +743,7 @@
       } catch (_) {}
       return;
     }
-    // Если еще не кэширован в памяти, лениво читаем и декодируем
+    // Нет в кэше — читаем и декодируем лениво
     loadAndDecodeSound(soundId).then((decoded) => {
       if (decoded && ctx && masterGain) {
         try {
@@ -777,7 +756,6 @@
     });
   }
 
-  // Склонение слова «звук»
   function pluralAudioSounds(count) {
     const mod10 = count % 10;
     const mod100 = count % 100;
@@ -786,7 +764,6 @@
     return "звуков";
   }
 
-  // Обновление опций в выпадающих списках звуков
   function updateDropdownCustomOptions() {
     ["startup", "click", "success"].forEach((type) => {
       const select = document.getElementById(`audio-sound-${type}`);
@@ -794,12 +771,11 @@
 
       const currentValue = getSound(type);
 
-      // Удаляем старые кастомные опции и разделитель
+      // Старые кастомные опции заменяем целиком
       const oldItems = select.querySelectorAll(".custom-sound-opt, .custom-sound-sep");
       oldItems.forEach((el) => el.remove());
 
       if (customSoundsList.length > 0) {
-        // Добавляем аккуратный разделитель
         const sep = document.createElement("option");
         sep.disabled = true;
         sep.className = "custom-sound-sep";
@@ -815,7 +791,6 @@
         });
       }
 
-      // Восстанавливаем выбранное значение
       select.value = currentValue;
       if (window.cgsCustomSelect?.sync) {
         window.cgsCustomSelect.sync(select);
@@ -825,7 +800,6 @@
     syncProfileHighlight();
   }
 
-  // Отрисовка списка пользовательских звуков в настройках
   function renderCustomSoundsList() {
     const container = document.getElementById("audio-custom-list");
     const summary = document.getElementById("audio-custom-summary");
@@ -860,7 +834,7 @@
       item.dataset.soundId = sound.id;
       item.title = isEn ? "Click anywhere to preview sound" : "Нажмите в любом месте строки для прослушивания";
 
-      // Воспроизведение звука при клике в любое место строки (кроме кнопки удаления)
+      // Клик по строке прослушивает звук; кнопка удаления исключена
       item.addEventListener("click", (e) => {
         if (e.target.closest(".btn-delete")) return;
         e.preventDefault();
@@ -905,7 +879,6 @@
     });
   }
 
-  // Пакетная загрузка новых аудиофайлов в кэш
   async function handleSoundsUpload(files) {
     if (!files || !files.length) return;
     const ctx = getContext();
@@ -918,7 +891,7 @@
 
     for (const file of files) {
       if (!file) continue;
-      // Ограничение размера 15 МБ на файл
+      // Лимит 15 МБ на файл
       if (file.size > 15 * 1024 * 1024) {
         if (window.cgsToast) {
           window.cgsToast(`Файл «${file.name}» слишком большой (макс. 15 МБ)`, "error");
@@ -929,7 +902,7 @@
       try {
         const arrayBuffer = await file.arrayBuffer();
 
-        // Проверка декодирования Web Audio API
+        // Файл должен декодироваться Web Audio API
         let decodedBuffer;
         try {
           decodedBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
@@ -971,7 +944,7 @@
       updateDropdownCustomOptions();
       renderCustomSoundsList();
 
-      // Воспроизводим последний добавленный звук для быстрой проверки
+      // Последний добавленный звук — сразу для проверки
       if (lastSoundId) {
         playCustomBuffer(lastSoundId);
       }
@@ -987,7 +960,6 @@
     }
   }
 
-  // Удаление пользовательского звука из кэша
   async function deleteCustomSound(id, name) {
     const modal = window.cgsShowModal;
     if (modal) {
@@ -1009,7 +981,7 @@
       customAudioBuffers.delete(id);
       customSoundsList = customSoundsList.filter((s) => s.id !== id);
 
-      // Сброс на дефолтные звуки, если удаляемый звук был активен
+      // Удаляемый звук мог быть активным — сбрасываем на дефолтные
       if (getSound("startup") === id) setSound("startup", DEFAULT_STARTUP, true);
       if (getSound("click") === id) setSound("click", DEFAULT_CLICK, true);
       if (getSound("success") === id) setSound("success", DEFAULT_SUCCESS, true);
@@ -1028,7 +1000,6 @@
     }
   }
 
-  // Обновление списка звуков из бекенда
   async function refreshCustomSounds() {
     const tauri = window.__TAURI__;
     const invoke = window.cgsApi?.invoke;
@@ -1039,7 +1010,7 @@
       updateDropdownCustomOptions();
       renderCustomSoundsList();
 
-      // Фоновое чтение и декодирование звуков
+      // Предварительно декодируем все звуки в фоне
       for (const item of customSoundsList) {
         loadAndDecodeSound(item.id);
       }
@@ -1048,13 +1019,11 @@
     }
   }
 
-  // Диспетчер воспроизведения конкретного звука
   function playSoundById(type, soundId) {
     if (!soundId || soundId === "none") return;
     const ctx = getContext();
     if (!ctx || !masterGain) return;
 
-    // Воспроизведение пользовательского файла из кэша
     if (typeof soundId === "string" && soundId.startsWith("custom_")) {
       playCustomBuffer(soundId);
       return;
@@ -1078,7 +1047,6 @@
     }
   }
 
-  // Публичные методы воспроизведения
   function playStartup() {
     if (!isEnabled()) return;
     const soundId = getSound("startup");
@@ -1088,7 +1056,7 @@
   function playClick() {
     if (!isEnabled()) return;
     const now = performance.now();
-    // Троттлинг 35 мс от случайного дребезга
+    // Троттлинг 35 мс против дребезга
     if (now - lastClickTime < 35) return;
     lastClickTime = now;
     const soundId = getSound("click");
@@ -1101,19 +1069,17 @@
     playSoundById("success", soundId);
   }
 
-  // Предпросмотр звука из выпадающего списка
   function previewSound(type, soundId) {
     const ctx = getContext();
     if (!ctx) return;
     playSoundById(type, soundId || getSound(type));
   }
 
-  // Глобальный перехватчик кликов по интерактивным элементам
+  // Клик по интерактивному элементу — короткий звук
   document.addEventListener("click", (e) => {
-    // Исключаем ползунки громкости и слайдеры (при драге клики не нужны)
+    // Ползунки при драге не должны звучать
     if (e.target.closest("input[type='range']")) return;
 
-    // Проверяем явные интерактивные элементы UI
     const interactive = e.target.closest(
       "button, [role='button'], a[href], summary, select, " +
       "input[type='checkbox'], input[type='radio'], " +
@@ -1132,7 +1098,7 @@
       return;
     }
 
-    // Дополнительная проверка на элементы с курсором-указателем
+    // Элементы с курсором-указателем в пределах 4 уровней вложенности
     let el = e.target;
     let depth = 0;
     while (el && el !== document.body && depth < 4) {
@@ -1148,7 +1114,7 @@
     }
   }, { capture: true, passive: true });
 
-  // Привязка управляющих элементов раздела Настроек
+  // ── Настройки звука
   function bindSettings() {
     const masterToggle = document.getElementById("audio-master-toggle");
     if (masterToggle) {
@@ -1159,7 +1125,6 @@
       });
     }
 
-    // Ползунок громкости
     const volumeSlider = document.getElementById("audio-volume");
     setVolume(getVolumePercent(), false);
     if (volumeSlider) {
@@ -1181,7 +1146,6 @@
       });
     }
 
-    // Выпадающие списки звуков
     ["startup", "click", "success"].forEach((type) => {
       const select = document.getElementById(`audio-sound-${type}`);
       if (select) {
@@ -1204,7 +1168,7 @@
       }
     });
 
-    // Привязка элементов управления пользовательскими звуковыми профилями
+    // Профили: создание и отмена
     const createProfileBtn = document.getElementById("audio-create-profile-btn");
     const profileForm = document.getElementById("audio-profile-form");
     const profileInput = document.getElementById("audio-profile-name-input");
@@ -1257,7 +1221,6 @@
       });
     }
 
-    // Кнопка загрузки своего звука
     const uploadBtn = document.getElementById("audio-upload-btn");
     const fileInput = document.getElementById("audio-file-input");
     if (uploadBtn && fileInput) {
@@ -1279,7 +1242,6 @@
     syncProfileHighlight();
     updateAudioControlsState(isEnabled());
 
-    // Инициализация списка пользовательских звуков
     refreshCustomSounds();
   }
 
@@ -1289,7 +1251,6 @@
     bindSettings();
   }
 
-  // Экспорт звуковой системы в глобальное пространство
   window.cgsAudio = {
     playStartup,
     playClick,

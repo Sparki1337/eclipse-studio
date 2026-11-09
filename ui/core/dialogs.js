@@ -1,5 +1,7 @@
 (() => {
   "use strict";
+
+  // dialogs — очередь модальных диалогов (window.cgsDialogs)
   let queue = Promise.resolve();
   function show(title, message, options = {}) {
     const task = queue.then(() => open(title, message, options));

@@ -1,3 +1,5 @@
+//! Сборочный скрипт: встроенный ключ Ryuu из секрета и проверка целостности релизных ресурсов.
+
 use std::{env, fs, path::Path};
 
 // Значение не выводится в Cargo-логи и не передаётся через cargo:rustc-env.
@@ -63,7 +65,42 @@ fn prepare_ryuu_key() -> Result<(), String> {
     Ok(())
 }
 
+// Не позволяем прямому cargo release обойти соответствие Dist исходникам.
+fn verify_plugin_dist() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("project root");
+    for source in [
+        "scripts/plugin-integrity.cjs",
+        "eclipse-manifest",
+        "scripts/resource-integrity.cjs",
+        "docs/binary-resources.json",
+        "src-tauri/resources",
+        "third_party/cloudredirect",
+    ] {
+        println!("cargo:rerun-if-changed={}", root.join(source).display());
+    }
+    if env::var("PROFILE").as_deref() == Ok("release") {
+        for checker in [
+            "scripts/plugin-integrity.cjs",
+            "scripts/resource-integrity.cjs",
+        ] {
+            let status = std::process::Command::new("node")
+                .arg(root.join(checker))
+                .arg("check")
+                .current_dir(root)
+                .status()
+                .expect("Node.js required for release integrity check");
+            assert!(
+                status.success(),
+                "Release inputs are stale. Rebuild the changed component and run npm run quality."
+            );
+        }
+    }
+}
+
 fn main() {
+    verify_plugin_dist();
     if let Err(message) = prepare_ryuu_key() {
         panic!("{message}");
     }

@@ -1,7 +1,7 @@
-// Модуль заставки запуска с настройкой скорости и моментальным стартом без задержек
 (() => {
   "use strict";
 
+  // splash — заставка запуска: анимация затмения, частицы, скорость и настройки
   const STORAGE_KEY = "cgs-splash";
   const SPEED_STORAGE_KEY = "cgs-splash-speed";
   // Длительность сцены «затмения» при скорости 1× (как в дизайне: диск, наезд тени, кольцо, подпись)
@@ -11,7 +11,6 @@
   const DEFAULT_SPEED = 1.0;
   const root = document.documentElement;
 
-  // Вспомогательные математические функции для анимации
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
   const ss = (a, b, v) => {
     v = clamp((v - a) / (b - a));
@@ -36,7 +35,7 @@
     );
   }
 
-  // Получение актуального RGB-цвета акцента темы
+  // Акцентный RGB текущей темы
   function getThemeAccentRgb() {
     try {
       const raw = getComputedStyle(root).getPropertyValue("--accent-rgb").trim();
@@ -59,7 +58,6 @@
     return ctx;
   }
 
-  // Проверка включения заставки пользователем
   function isEnabled() {
     try {
       if (root.classList.contains("no-motion")) return false;
@@ -71,7 +69,6 @@
     }
   }
 
-  // Чтение сохранённой скорости заставки
   function getSpeed() {
     try {
       const stored = window.cgsStorage.getItem(SPEED_STORAGE_KEY);
@@ -85,7 +82,6 @@
     return DEFAULT_SPEED;
   }
 
-  // Обновление состояния строки настройки скорости в зависимости от активности заставки
   function updateSpeedRowState(enabled) {
     const row = document.getElementById("pref-row-splash-speed");
     if (row) {
@@ -93,7 +89,6 @@
     }
   }
 
-  // Сохранение и визуальное обновление скорости заставки
   function setSpeed(speed, save = true) {
     const clamped = Math.round(clamp(speed, MIN_SPEED, MAX_SPEED) * 4) / 4;
     const speedInput = document.getElementById("splash-speed");
@@ -117,7 +112,6 @@
     return clamped;
   }
 
-  // Включение/выключение заставки
   function setEnabled(on, save = true) {
     root.classList.toggle("no-splash", !on);
     const input = document.getElementById("splash-mode");
@@ -130,7 +124,7 @@
     }
   }
 
-  // Картинка логотипа для сборки частиц (используем уже созданную в head или новую)
+  // Логотип для карты частиц — переиспользуем уже созданный в head
   const logoImg = window.__splashLogo || new Image();
   if (!logoImg.src) {
     logoImg.src = "./assets/images/icon-loader.png";
@@ -157,7 +151,7 @@
   }
   ensureLogoReady();
 
-  // Кэш карты точек логотипа для исключения повторного сканирования пикселей
+  // Кэш карты точек логотипа — исключает повторное сканирование пикселей
   let cachedPixelMap = null;
   let cachedKey = "";
 
@@ -165,7 +159,7 @@
   let activeDismissTimer = null;
   let isRunning = false;
 
-  // Мгновенное отображение окна операционной системы, когда заставка уже готова и нарисована
+  // Показываем окно ОС только после первого кадра — без чёрного экрана
   let windowRevealed = false;
   function revealWindow() {
     if (windowRevealed) return;
@@ -177,7 +171,6 @@
     } catch (_) {}
   }
 
-  // Завершение заставки и уведомление приложения о готовности
   function dismiss(splash, instant = false) {
     if (!splash || splash.classList.contains("splash-dismissed")) return;
     splash.classList.add("splash-dismissed");
@@ -190,7 +183,7 @@
 
     const shell = document.querySelector(".app-shell");
 
-    // Оповещаем другие модули об окончании заставки для мягкого старта фоновых задач
+    // splash-finished — сигнал модулям начинать фоновые задачи
     try {
       window.dispatchEvent(new CustomEvent("splash-finished"));
     } catch (_) {}
@@ -222,7 +215,7 @@
     }, 480);
   }
 
-  // Отрисовка начального свечения до готовности пикселей логотипа (полный уход от черного экрана)
+  // Свечение до готовности пикселей логотипа — уход от чёрного экрана
   function drawInitialGlow(ctx, W, H, accentRgb) {
     if (!ctx) return;
     ctx.clearRect(0, 0, W, H);
@@ -236,7 +229,6 @@
     ctx.fillRect(0, 0, W, H);
   }
 
-  // Основная функция запуска анимации заставки
   async function runSplash(options = {}) {
     const splash = document.getElementById("app-splash");
     if (!splash) return;
@@ -256,7 +248,7 @@
 
     isRunning = true;
     splash.classList.remove("hidden", "splash-dismissed", "splash-dismissing", "done");
-    // Сцена затмения анимируется стилями: передаём длительность и перезапускаем анимацию (повтор из настроек)
+    // Сцена затмения анимируется CSS: длительность из скорости, перезапуск для повторов
     const sceneDuration = options.duration || Math.round(BASE_DURATION / getSpeed());
     splash.style.setProperty("--k-splash-dur", `${sceneDuration}ms`);
     splash.classList.remove("k-play");
@@ -273,7 +265,6 @@
       return;
     }
 
-    // Подготавливаем холст немедленно и рисуем мягкое акцентное свечение
     const r = box.getBoundingClientRect();
     const W = r.width || 480;
     const H = r.height || 300;
@@ -281,7 +272,6 @@
     const accentRgb = getThemeAccentRgb();
     drawInitialGlow(x, W, H, accentRgb);
 
-    // Воспроизведение звука запуска Eclipse Studio
     try {
       window.cgsAudio?.playStartup();
     } catch (_) {}
@@ -291,17 +281,16 @@
     letters.forEach((l) => l.classList.remove("on"));
     if (percentEl) percentEl.textContent = "0%";
 
-    // Пропуск заставки по клику
     splash.onclick = (e) => {
-      // Игнорируем клики по элементам управления, если заставка открыта для предпросмотра
+      // В режиме предпросмотра клики по контролам не закрывают заставку
       if (e.target.closest("button") || e.target.closest("input")) return;
       dismiss(splash);
     };
 
-    // Частицы логотипа нужны, только если холст показан оформлением (в новом дизайне он скрыт)
+    // Частицы нужны только если холст показан оформлением
     const particles = getComputedStyle(canvas).display !== "none";
 
-    // Ожидаем готовности картинки (при наличии preload она уже в кэше)
+    // При наличии preload картинка уже в кэше
     if (particles) await ensureLogoReady();
     if (!isRunning) return;
 
@@ -316,7 +305,6 @@
     const isLight = root.dataset.theme === "light";
     const currentKey = `${lw}x${lh}_${st}_${ar},${ag},${ab}_${isLight ? "l" : "d"}`;
 
-    // Быстрое извлечение или переиспользование структуры частиц
     if (!particles) {
       P.st = st;
     } else if (cachedPixelMap && cachedKey === currentKey) {
@@ -402,7 +390,6 @@
       cachedKey = currentKey;
     }
 
-    // Отрисовка кадра частиц и букв логотипа
     function update(p, now, done) {
       x.clearRect(0, 0, W, H);
       const stSize = P.st;
@@ -431,13 +418,12 @@
     }
 
     let doneFlag = false;
-    // Расчет длительности с учетом пользовательской скорости заставки
     const currentSpeed = getSpeed();
     const duration = options.duration || Math.round(BASE_DURATION / currentSpeed);
     const startTime = performance.now();
 
     update(0, startTime, false);
-    // Как только первый кадр заставки готов, немедленно открываем окно приложения без пустого синего экрана
+    // Первый кадр готов — сразу показываем окно
     requestAnimationFrame(() => {
       revealWindow();
     });
@@ -452,7 +438,7 @@
         splash.classList.add("done");
         update(1, now, true);
 
-        // Завершение с задержкой, масштабируемой относительно скорости
+        // Финальная пауза масштабируется скоростью (250–520 мс)
         const exitDelay = Math.max(250, Math.round(520 / currentSpeed));
         setTimeout(() => {
           dismiss(splash);
@@ -470,7 +456,7 @@
     activeRaf = requestAnimationFrame(frame);
   }
 
-  // Привязка управляющих элементов в панели Настроек
+  // ── Настройки заставки
   function bindSettings() {
     const splashCheckbox = document.getElementById("splash-mode");
     if (splashCheckbox) {
@@ -484,7 +470,6 @@
       });
     }
 
-    // Инициализация ползунка скорости заставки
     const speedInput = document.getElementById("splash-speed");
     const initialSpeed = getSpeed();
     setSpeed(initialSpeed, false);
@@ -497,7 +482,6 @@
       });
     }
 
-    // Кнопка сброса скорости к стандартной (1.0x)
     const resetSpeedBtn = document.getElementById("splash-speed-reset");
     if (resetSpeedBtn) {
       resetSpeedBtn.addEventListener("click", (e) => {
@@ -507,7 +491,6 @@
       });
     }
 
-    // Кнопка предпросмотра заставки
     const replayBtn = document.getElementById("replay-splash-button");
     if (replayBtn) {
       replayBtn.addEventListener("click", (e) => {
@@ -520,10 +503,10 @@
     }
   }
 
-  // Мгновенный запуск заставки: так как скрипт подключен сразу после aside, запускаем немедленно!
+  // Скрипт подключён сразу после разметки — запускаем немедленно
   runSplash();
 
-  // Привязку настроек делаем по DOMContentLoaded, когда секция настроек построена
+  // Настройки связываем после построения секции настроек
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", bindSettings);
   } else {

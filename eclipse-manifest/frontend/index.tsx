@@ -50,6 +50,7 @@ type InstalledGame = {
   installedAt: number;
   luaCount?: number;
   manifestCount?: number;
+  missingLua?: boolean;
 };
 
 type PluginStateReply = {
@@ -589,9 +590,10 @@ function PluginContent() {
                     fontWeight: 800,
                   }}
                 >
-                  ✓
+                  {game.missingLua ? '!' : '✓'}
                 </div>
                 <div style={{ minWidth: 0, flex: 1 }}>
+                  {game.missingLua && <div style={{ color: '#f3c777', fontSize: 11 }}>Lua недоступен — запись сохранена для восстановления</div>}
                   <strong
                     style={{
                       display: 'block',

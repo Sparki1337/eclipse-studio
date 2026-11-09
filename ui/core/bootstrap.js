@@ -1,5 +1,5 @@
-// Общая палитра: светлые акценты затемняются до контраста ≥ 4,5:1; --accent-contrast задаёт цвет текста
 (function () {
+  // bootstrap — общая палитра акцентов; светлые темы получают затемнённый вариант (контраст ≥ 4,5:1)
   var ACCENTS = {
     white:  ["#ffffff", "#1e293b"],
     red:    ["#ff5252", "#dc2626"],
@@ -36,7 +36,7 @@
     root.style.setProperty("--accent-2", value.color);
     root.style.setProperty("--accent-contrast", value.contrast);
     root.dataset.accent = value.name;
-    // Образцы в настройках показывают цвет, который реально получит интерфейс в текущей теме
+    // Образцы в настройках показывают цвет, реально применяемый в текущей теме
     var swatches = document.querySelectorAll(".accent[data-accent]");
     for (var i = 0; i < swatches.length; i++) {
       var key = normalize(swatches[i].dataset.accent);
@@ -48,6 +48,7 @@
 })();
 
 (function () {
+      // Применение сохранённой темы и вида до первой отрисовки — без мигания
       try {
         var root = document.documentElement;
         var theme = window.cgsStorage.getItem("cgs-theme") || "graphite";
@@ -87,7 +88,7 @@
         if (font >= 85 && font <= 140) root.style.setProperty("--fs", String(font / 100));
         var side = parseInt(window.cgsStorage.getItem("cgs-sidebar-width") || "", 10);
         if (side >= 84 && side <= 380) { root.style.setProperty("--sidebar-w", side + "px"); root.classList.add("sidebar-sized"); }
-        // Положение рейки и строки поиска до первой отрисовки, чтобы раскладка не перескакивала
+        // Положение рейки и поиска — до первой отрисовки, чтобы раскладка не прыгала
         var dock = window.cgsStorage.getItem("cgs-sidebar-dock");
         if (dock === "right" || dock === "top" || dock === "bottom") root.classList.add("sidebar-dock-" + dock);
         if (dock === "top" || dock === "bottom") root.classList.add("sidebar-horizontal");
@@ -95,7 +96,7 @@
         if (searchDock === "left" || searchDock === "right") root.classList.add("search-dock-" + searchDock);
         if (window.cgsStorage.getItem("cgs-splash") === "0") root.classList.add("no-splash");
         window.cgsAccent.apply(window.cgsStorage.getItem("accent") || "white", theme);
-        // Мгновенная предварительная загрузка логотипа заставки для исключения черного экрана
+        // Предзагрузка логотипа заставки — исключает чёрный экран
         window.__splashLogo = new Image();
         window.__splashLogo.src = "./assets/images/icon-loader.png";
       } catch (_) {}

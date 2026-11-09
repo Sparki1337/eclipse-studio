@@ -1,0 +1,61 @@
+/* gradient.css — настраиваемая подсветка фона; палитра темы не меняется */
+:root { --gradient-x1: 15%; --gradient-y1: 0%; --gradient-x2: 85%; --gradient-y2: 100%; }
+:root:is([data-gradient-mode="one"], [data-gradient-mode="two"]) #korona .app-shell {
+  background: radial-gradient(90% 85% at var(--gradient-x1) var(--gradient-y1), rgba(var(--k-g1), var(--k-g-alpha)), transparent 72%), var(--k-bg) !important;
+}
+:root[data-gradient-mode="two"] #korona .app-shell {
+  background: radial-gradient(80% 80% at var(--gradient-x1) var(--gradient-y1), rgba(var(--k-g1), var(--k-g-alpha)), transparent 72%),
+    radial-gradient(80% 80% at var(--gradient-x2) var(--gradient-y2), rgba(var(--k-g2), var(--k-g-alpha)), transparent 72%), var(--k-bg) !important;
+}
+:root:is([data-gradient-mode="one"], [data-gradient-mode="two"]) #korona .app-shell::before {
+  inset: 0; height: 100%;
+  background: radial-gradient(60% 60% at var(--gradient-x1) var(--gradient-y1), rgba(var(--accent-rgb), .07), transparent 72%);
+}
+:root[data-gradient-mode="two"] #korona .app-shell::before {
+  background: radial-gradient(55% 55% at var(--gradient-x1) var(--gradient-y1), rgba(var(--accent-rgb), .05), transparent 72%),
+    radial-gradient(55% 55% at var(--gradient-x2) var(--gradient-y2), rgba(var(--accent-rgb), .05), transparent 72%);
+}
+#korona .gradient-modes, #korona .gradient-points { display: flex; flex-wrap: wrap; gap: 8px; }
+#korona .gradient-modes button, #korona .gradient-points button, #korona #gradient-reset {
+  min-height: 44px; padding: 0 16px; border: 1px solid var(--k-border-2); border-radius: var(--k-r-ctl);
+  background: var(--k-field); color: var(--k-text-2); font-size: max(14px, calc(14px * var(--fs, 1))); font-weight: 650; cursor: pointer;
+}
+#korona .gradient-modes button:hover, #korona .gradient-points button:hover { background: var(--k-panel-2); color: var(--k-text); }
+#korona .gradient-modes button.active, #korona .gradient-points button.active { color: var(--k-text); background: var(--k-panel-3); border-color: var(--k-border-3); }
+#korona #collapse-gradient :is(button, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+#korona #collapse-gradient :is(button, input):disabled { opacity: .55; cursor: wait; }
+#korona .gradient-layout { display: grid; grid-template-columns: minmax(200px, 360px) minmax(220px, 1fr); align-items: center; gap: 24px; margin-top: 20px; }
+#korona .gradient-map { padding: max(32px, calc(32px * var(--sp, 1))); border: 1px solid var(--k-border-2); border-radius: var(--k-r-card); background: var(--k-bg); touch-action: none; user-select: none; }
+#korona .gradient-surface { position: relative; aspect-ratio: 16 / 10; border-radius: 6px; outline: 1px dashed var(--k-border-2);
+  background: radial-gradient(90% 85% at var(--gradient-x1) var(--gradient-y1), rgba(var(--k-g1), var(--k-g-alpha)), transparent 72%), var(--k-bg); }
+:root[data-gradient-mode="two"] #korona .gradient-surface { background: radial-gradient(80% 80% at var(--gradient-x1) var(--gradient-y1), rgba(var(--k-g1), var(--k-g-alpha)), transparent 72%), radial-gradient(80% 80% at var(--gradient-x2) var(--gradient-y2), rgba(var(--k-g2), var(--k-g-alpha)), transparent 72%), var(--k-bg); }
+#korona .gradient-marker { position: absolute; transform: translate(-50%, -50%); width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 2px solid var(--k-text); background: var(--k-bg); color: var(--k-text); font-size: max(14px, calc(16px * var(--fs, 1))); font-weight: 800; cursor: grab; z-index: 1; }
+#korona .gradient-marker.active { outline: 2px solid var(--accent); outline-offset: 3px; z-index: 2; }
+#korona .gradient-map:active .gradient-marker.active { cursor: grabbing; }
+#korona .gradient-position { min-width: 0; display: grid; gap: 16px; }
+#korona .gradient-axis { min-width: 0; display: grid; gap: 4px; }
+#korona .gradient-axis > span { display: flex; justify-content: space-between; gap: 12px; color: var(--k-text-2); font-size: max(14px, calc(14px * var(--fs, 1))); }
+#korona .gradient-axis output { color: var(--k-text); font-variant-numeric: tabular-nums; }
+#korona #collapse-gradient input[type="range"] { min-width: 0; width: 100%; height: 44px; margin: 0; }
+#korona .gradient-help { margin: 16px 0 0; color: var(--k-muted); font-size: max(14px, calc(14px * var(--fs, 1))); line-height: 1.5; }
+#korona #gradient-note { margin: 12px 0 0; color: var(--k-text-2); font-size: max(14px, calc(14px * var(--fs, 1))); line-height: 1.5; }
+#korona #gradient-note[role="alert"] { color: var(--k-bad); }
+#korona #gradient-reset { justify-self: start; }
+#korona #collapse-gradient [hidden] { display: none !important; }
+@media (max-width: 900px) { #korona .gradient-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; } #korona .gradient-map { width: 100%; max-width: 360px; box-sizing: border-box; } }
+@media (max-width: 480px) { #korona .gradient-modes { gap: 6px; } #korona .gradient-modes button { flex: 1 1 120px; padding-inline: 10px; } }
+/* ── Плотность может увеличить контролы, но не уменьшить цель ниже 44 пикселей. */
+#korona #collapse-gradient :is(.gradient-modes button, .gradient-points button, #gradient-reset) { min-height: max(44px, calc(44px * var(--hs, 1))) !important; }
+#korona #collapse-gradient input[type="range"] {
+  height: max(44px, calc(44px * var(--hs, 1))) !important; min-height: max(44px, calc(44px * var(--hs, 1))) !important; max-height: none !important;
+  padding: 0 !important; border: 0 !important; background: transparent !important;
+}
+#korona #collapse-gradient input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) 0 var(--fill), var(--k-border-3) var(--fill) 100%);
+}
+#korona #collapse-gradient input[type="range"]::-webkit-slider-thumb {
+  width: 18px; height: 18px; margin-top: -6px; border: 2px solid var(--k-bg); background: var(--accent); border-radius: 50%;
+}
+#korona #collapse-gradient input[type="range"]::-moz-range-track { height: 6px; border-radius: 999px; background: var(--k-border-3); }
+#korona #collapse-gradient input[type="range"]::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--accent); }

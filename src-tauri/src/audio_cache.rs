@@ -1,9 +1,8 @@
-//! Модуль управления кэшем пользовательских звуковых файлов Eclipse Studio (.mp3, .ogg, .wav и др.)
+//! Кэш пользовательских звуковых файлов (.mp3, .ogg, .wav и др.).
 use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
-/// Получение пути к папке кэша пользовательских звуков программы
 pub fn custom_sounds_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
         .path()
@@ -43,7 +42,6 @@ fn sound_name_from_id(id: &str) -> Result<&str, String> {
     Ok(name)
 }
 
-/// Метаданные сохраненного звукового файла
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CustomSoundMeta {
@@ -52,7 +50,6 @@ pub struct CustomSoundMeta {
     pub size_bytes: u64,
 }
 
-/// Сохранение пользовательского аудиофайла в кэш программы
 #[tauri::command]
 pub async fn audio_save_custom_sound(
     app: AppHandle,
@@ -102,7 +99,6 @@ pub async fn audio_save_custom_sound(
     .map_err(|e| format!("Ошибка фонового потока: {e}"))?
 }
 
-/// Получение списка всех сохраненных звуков из кэша программы
 #[tauri::command]
 pub async fn audio_list_custom_sounds(app: AppHandle) -> Result<Vec<CustomSoundMeta>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -148,7 +144,6 @@ pub async fn audio_list_custom_sounds(app: AppHandle) -> Result<Vec<CustomSoundM
     .map_err(|e| format!("Ошибка фонового потока: {e}"))?
 }
 
-/// Удаление пользовательского звука из кэша программы
 #[tauri::command]
 pub async fn audio_delete_custom_sound(app: AppHandle, id: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -166,7 +161,6 @@ pub async fn audio_delete_custom_sound(app: AppHandle, id: String) -> Result<(),
     .map_err(|e| format!("Ошибка фонового потока: {e}"))?
 }
 
-/// Чтение файла звука в виде байтов для воспроизведения во фронтенде
 #[tauri::command]
 pub async fn audio_read_custom_sound(app: AppHandle, id: String) -> Result<Vec<u8>, String> {
     tauri::async_runtime::spawn_blocking(move || {

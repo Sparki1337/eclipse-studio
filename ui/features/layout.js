@@ -1,7 +1,7 @@
-// Расположение панелей меняется в настройках или перетаскиванием
 (() => {
   "use strict";
 
+  // layout — расположение рейки и строки поиска: настройки или перетаскивание
   const root = document.documentElement;
   const SIDEBAR_KEY = "cgs-sidebar-dock";
   const SEARCH_KEY = "cgs-search-dock";

@@ -1,8 +1,8 @@
-// Связывает поставляемый Dist с исходниками и lock-файлом конкретной сборки
+// plugin-integrity — карта SHA-256: Dist ↔ исходники и lock-файл сборки
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const root=path.resolve(__dirname,'../eclipse-manifest');
 const manifest=path.join(root,'.millennium/Dist/build-integrity.json');
-const sources=['frontend/index.tsx','webkit/index.tsx','backend/main.lua','backend/install-loader.ps1','tsconfig.json','package.json','package-lock.json','plugin.json'];
+const sources=['frontend/index.tsx','webkit/index.tsx','backend/main.lua','backend/safe-io.ps1','backend/state-store.ps1','backend/file-transaction.ps1','backend/download-package.ps1','backend/install-loader.ps1','tsconfig.json','frontend/tsconfig.json','webkit/tsconfig.json','package.json','.npmrc','package-lock.json','plugin.json','../scripts/check-deepmerge.cjs'];
 const outputs=['.millennium/Dist/index.js','.millennium/Dist/webkit.js'];
 const hashes=names=>Object.fromEntries(names.map(name=>[name,crypto.createHash('sha256').update(fs.readFileSync(path.join(root,name))).digest('hex')]));
 const actual={schema:1,algorithm:'SHA-256',sources:hashes(sources),outputs:hashes(outputs)};

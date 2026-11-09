@@ -1,10 +1,48 @@
 (() => {
   "use strict";
 
+  // i18n — словари ru/en, мгновенное переключение языка без перезагрузки
   const STORAGE_KEY = "cgs-language";
   const SUPPORTED = new Set(["ru", "en"]);
 
   const EN = {
+    "Градиент фона": "Background gradient",
+    "Один или два источника подсветки в выбранных точках окна": "One or two glow sources at selected positions in the window",
+    "Источники градиента": "Gradient sources",
+    "Как в теме": "Theme default",
+    "Одна точка": "One point",
+    "Две точки": "Two points",
+    "Положение подсветки на экране": "Glow position on the screen",
+    "Первая точка градиента": "First gradient point",
+    "Вторая точка градиента": "Second gradient point",
+    "Редактируемая точка": "Point to edit",
+    "Точка 1": "Point 1",
+    "Точка 2": "Point 2",
+    "По горизонтали": "Horizontal position",
+    "По вертикали": "Vertical position",
+    "Сбросить градиент": "Reset gradient",
+    "Нажмите на миниатюру или перетащите точку. Стрелки сдвигают её на 1%, Shift + стрелки — на 10%. Цвет берётся из темы.": "Click the preview or drag a point. Arrow keys move it by 1%; Shift + arrows by 10%. Colors follow the theme.",
+    "Положение градиента сохранено.": "Gradient position saved.",
+    "Не удалось сохранить градиент. Предыдущее положение восстановлено.": "Could not save the gradient. The previous position has been restored.",
+    "Запускать от имени администратора": "Run as administrator",
+    "Включено по умолчанию. Запрашивать права UAC при запуске; изменение действует со следующего запуска.": "Enabled by default. Request UAC privileges at startup; changes apply on the next launch.",
+    "Сохранено. Изменение применится при следующем запуске приложения.": "Saved. The change applies the next time the app starts.",
+    "Не удалось сохранить настройку запуска. Повторите попытку.": "Could not save the startup preference. Please try again.",
+    "Подготовить снятие UEFI Lock": "Prepare UEFI Lock removal",
+    "Подготовить снятие UEFI Lock?": "Prepare UEFI Lock removal?",
+    "Подготовить с журналом": "Prepare with recovery journal",
+    "UEFI Opt-Out недоступен": "UEFI Opt-Out unavailable",
+    "Подготовка UEFI Opt-Out…": "Preparing UEFI Opt-Out…",
+    "Ошибка подготовки UEFI": "UEFI preparation failed",
+    "Вернуть исходные UEFI Lock?": "Restore the original UEFI locks?",
+    "Вернуть по снимку": "Restore from snapshot",
+    "UEFI: СНИМОК СОХРАНЁН": "UEFI: SNAPSHOT SAVED",
+    "UEFI-сценарий уже записан: перезагрузите Windows либо выполните откат.": "A UEFI operation is already recorded: restart Windows or roll it back.",
+    "Системный SecConfig.efi недоступен.": "The system SecConfig.efi is unavailable.",
+    "Сначала выполните откат UEFI Opt-Out по снимку Eclipse.": "First roll back UEFI Opt-Out using the Eclipse snapshot.",
+    "Параметры закреплены UEFI. Подготовка SecConfig требует отдельного согласия; исходные настройки и собственные EFI/BCD-объекты учитываются в журнале возврата.": "These settings are UEFI-locked. SecConfig preparation requires separate consent; original settings and owned EFI/BCD objects are tracked in a recovery journal.",
+    "Откат отменит одноразовую загрузку SecConfig, удалит только собственные EFI/BCD-объекты и вернёт исходные параметры защит и UEFI Lock из снимка. Применение блокировок требует перезагрузки; повторное отключение может потребовать физического подтверждения. Продолжить?": "Rollback will cancel the one-time SecConfig boot, remove only owned EFI/BCD objects, and restore the original protection and UEFI Lock settings. Applying locks requires a restart; disabling them again may require physical confirmation. Continue?",
+    "Программа подготовит системный SecConfig.efi для снятия UEFI Lock. Перед изменениями сохраняется проверяемый DPAPI-журнал; создаются отдельные EFI-файлы и BCD-запись, существующие системные объекты не перезаписываются. BitLocker должен быть проверен; активная защита приостанавливается на одну перезагрузку — заранее обеспечьте доступ к ключу восстановления. При загрузке потребуется подтверждение на экране компьютера. Отмена и возврат исходных блокировок доступны через откат Eclipse. Только для личного, не управляемого организацией устройства.": "The app will prepare the system SecConfig.efi to remove UEFI Lock. A verified DPAPI recovery journal is saved before changes. Separate EFI files and a BCD object are created without overwriting existing system objects. BitLocker must be checked; active protection is suspended for one restart, so ensure access to the recovery key first. Physical confirmation is required during boot. Eclipse rollback can cancel the operation and restore the original locks. Use only on a personal, unmanaged device.",
     "ВНЕШНИЙ": "EXTERNAL",
     "ПРОВЕРЬТЕ": "REVIEW",
     "ПЕРЕЗАГРУЗКА": "RESTART",
@@ -160,6 +198,11 @@
     "Телеграм создателя форка": "Fork author's Telegram",
     "Наш Telegram": "Community Telegram",
     "Telegram каналы": "Telegram Channels",
+    "Соцсети": "Social hub",
+    "Открыть соцсети": "Open social hub",
+    "Будем на связи: новости программы, общение и наше сообщество": "Stay connected: app updates, conversations and our community",
+    "Автор": "Author",
+    "Наш Discord": "Our Discord",
     "Сообщество и разработчики": "Community & Developers",
     "Официальные сообщества и контакты разработчиков": "Official communities and developer contacts",
     "Автор проекта": "Original Author",
@@ -555,6 +598,10 @@
     "Открыть в Проводнике": "Open in File Explorer",
     "Сбросить к папке по умолчанию": "Reset to default folder",
     "Выберите цвет светового акцента. Настройка сохраняется локально.": "Choose the accent color. This setting is stored locally.",
+    "Новогоднее оформление": "New Year decorations",
+    "Снег и праздничные детали. Ваш стиль сохраняется.": "Snow and festive details. Your theme stays yours.",
+    "Зимний сезон": "Winter edition",
+    "Новогодний сезон": "New Year season",
     "Язык интерфейса": "Interface language",
     "Меняется моментально без перезапуска": "Changes instantly without restarting",
     "Русский": "Russian",
@@ -806,7 +853,6 @@
     "Кэш обновлений применен к добавленным играм.": "The update cache was applied to added games.",
     "Готова к запуску.": "Ready to launch.",
     "EXE больше не найден.": "The executable is no longer available.",
-        "Нужен HV-Launcher.bat.": "HV-Launcher.bat is required.",
         "Выбранный exe не найден.": "The selected executable was not found.",
     "Нужно выбрать именно exe-файл.": "Select an executable file.",
     "Можно добавить только .exe файл.": "Only .exe files can be added.",
@@ -1167,7 +1213,7 @@
     "Текущий:": "Current:",
     "Новый:": "New:",
     "Текущий": "Current",
-    // Главная и журнал операций
+    // ── Главная и журнал операций
     "Недавние игры": "Recent games",
     "Последние резервные копии": "Latest backups",
     "Незавершённые операции": "Unfinished operations",
@@ -1176,7 +1222,7 @@
     "Модули": "Modules",
     "Папка": "Folder",
     "Показать меньше": "Show less",
-    // Настройки «Главная и запуск»
+    // ── Настройки «Главная и запуск»
     "Главная и запуск": "Home & startup",
     "Раздел при запуске программы, состав и порядок блоков главной страницы": "The section opened at startup and the blocks shown on the home page",
     "Запуск программы": "App startup",
@@ -1273,7 +1319,7 @@
     "Загрузка обновления программы": "App update download",
     "Запуск обновления программы": "App update launch",
     "Сохранение настроек": "Saving settings",
-    // Быстрый поиск
+    // ── Быстрый поиск
     "Быстрый поиск": "Quick search",
     "Включить быстрый поиск": "Enable quick search",
     "Поиск разделов, вкладок и настроек": "Search sections, tabs and settings",
@@ -1357,7 +1403,7 @@
     "Поиск по разделам, настройкам, играм и действиям": "Search sections, settings, games and actions",
     "Попросит подтверждение": "Asks for confirmation",
     "Убрать фильтр (Backspace)": "Remove filter (Backspace)",
-    // Локальное облако и обновление программы (порт 5.6.3)
+    // ── Локальное облако и обновление программы
     "Локальное облако": "Local Cloud",
     "Информация": "Information",
     "Включено": "Enabled",
@@ -1401,6 +1447,16 @@
     "Файл cgs_cloud_redirect.dll изменён извне; автоматическая замена отменена.": "cgs_cloud_redirect.dll was modified externally; automatic replacement was cancelled.",
     "Файл локального облака отсутствует или изменён. Включите режим заново, чтобы восстановить его.": "The local cloud file is missing or modified. Turn the mode on again to restore it.",
     "Этот загрузчик не поддерживает CloudRedirect. Выберите совместимый комплект DLL (Версия 1 или Версия 2) и примените его в Steam.": "This loader does not support CloudRedirect. Choose a compatible DLL bundle (Version 1 or Version 2) and apply it to Steam.",
+    "Нужно обновить DLL локального облака": "Local Cloud DLL update required",
+    "В программу встроен исправленный CloudRedirect. Обновите установленную DLL, чтобы синхронизация сохранений игр с Lua и манифестами работала корректно, в том числе после выхода и повторного запуска игры.": "This app includes a repaired CloudRedirect component. Update the installed DLL for correct save synchronization in Lua and manifest games, including after exiting and reopening a game.",
+    "Если Steam открыт, он перезапустится автоматически. Перед обновлением закройте игры. Прежняя DLL сохраняется в резервной копии; папка сохранений и выбранный режим останутся прежними. Скачивать файлы не требуется.": "Steam restarts automatically if it is running. Close your games first. The previous DLL is backed up; your save folder and the current mode stay unchanged. No download is required.",
+    "Закрываем Steam, сохраняем резервную копию и обновляем DLL…": "Closing Steam, backing up the previous DLL and installing the update…",
+    "DLL не обновлена. Повторите операцию.": "The DLL was not updated. Please try again.",
+    "DLL обновлена. Если Steam был открыт, он запущен снова. Локальное облако готово к работе.": "DLL updated. Steam has been restarted if it was running. The Local Cloud component is ready.",
+    "DLL локального облака обновлена": "Local Cloud DLL updated",
+    "Обновление DLL локального облака": "Local Cloud DLL update",
+    "Обновление": "Update",
+    "Доступно обновление DLL локального облака.": "A Local Cloud DLL update is available.",
     "Обновить и перезапустить": "Update and restart",
     "Отложить на 5 запусков": "Remind me after 5 launches",
     "Отменить обновление": "Cancel update",
@@ -1445,7 +1501,7 @@
     "Программа не подтвердила обновление.": "The app did not confirm the update."
   };
 
-  // Префиксы сообщений бэкенда «Причина: подробности» (локальное облако и обновление)
+  // ── Префиксы сообщений бэкенда «Причина: подробности»
   const BACKEND_PREFIXES = {
     "Проверка локального облака прервана": "Local cloud check was interrupted",
     "Настройка локального облака прервана": "Local cloud setup was interrupted",
@@ -1478,6 +1534,7 @@
   const BACKEND_PREFIX_RE = new RegExp(`^(${Object.keys(BACKEND_PREFIXES).join("|")}): ([\\s\\S]+)$`, "u");
 
     const PATTERNS = [
+    [/^Автозапуск без прав администратора: (.+)$/u, (_, reason) => `Started without administrator privileges: ${reason.replace("Запрос прав администратора отменён", "The administrator request was cancelled")}`],
     [/^Установлен v([\d\.]+)(.*)$/u, (_, v, rest) => `Installed v${v}${rest.replace("КБ", "KB")}`],
     [/^Папка:\s*(.+)$/u, (_, p) => `Folder: ${p}`],
     [/^Папка игр:\s*(.+)$/u, (_, p) => `Game folder: ${p}`],
@@ -1526,9 +1583,9 @@
     [/^Файл «(.+)» слишком большой/u, (_, name) => `File "${name}" is too large`],
     [/^Не удалось декодировать «(.+)»/u, (_, name) => `Failed to decode "${name}"`],
     [/^Список изменений \(v(.+)\)$/u, (_, version) => `Changelog (v${version})`],
-    // Локальное облако и обновление программы
-    [/^Локальный режим включён · игр с манифестами: (\d+)\.(\nВстроенный компонент новее установленного: он обновится при следующем изменении режима\.)?$/u,
-      (_, count, outdated) => `Local mode enabled · manifest games: ${count}.${outdated ? "\nThe bundled component is newer than the installed one; it updates the next time the mode changes." : ""}`],
+    // ── Локальное облако и обновление программы
+    [/^Локальный режим включён · игр с манифестами: (\d+)\.(\nДоступно обновление DLL локального облака\.)?$/u,
+      (_, count, outdated) => `Local mode enabled · manifest games: ${count}.${outdated ? "\nA Local Cloud DLL update is available." : ""}`],
     [/^В новой папке уже есть другое сохранение: (.+)\. Выберите пустую папку\.$/u, (_, path) => `The new folder already contains a different save: ${path}. Choose an empty folder.`],
     [/^Папка недоступна для записи: (.+) \(([\s\S]+)\)$/u, (_, path, error) => `The folder is not writable: ${path} (${error})`],
     [/^Не удалось прочитать opensteamtool\.toml: ([\s\S]+)\. Файлы не изменены\.$/u, (_, error) => `Could not read opensteamtool.toml: ${error}. No files were changed.`],
@@ -1545,7 +1602,7 @@
     [/^([\s\S]+) Прежнюю версию вернуть не удалось: она сохранена как (.+)\.$/u, (_, error, path) => `${translateBody(error)} The previous version could not be restored; it was saved as ${path}.`],
     [/^Попытка (\d+) из (\d+)\. ([\s\S]*)$/u, (_, attempt, total, rest) => `Attempt ${attempt} of ${total}. ${translateBody(rest)}`],
     [BACKEND_PREFIX_RE, (_, prefix, rest) => `${BACKEND_PREFIXES[prefix]}: ${translateBody(rest)}`],
-    // Статусы строк главной: «статус · время · путь»
+    // ── Статусы строк главной: «статус · время · путь»
     [/^(Выполняется|Прервано — проверьте результат|Завершилось с ошибкой|Выполнено частично|Операция не выполнена|Операция выполняется|Операция прервана \(например, при закрытии программы\)\. Проверьте результат и резервную копию)((?: · [\s\S]*)?)$/u, (_, status, rest) => ({
       "Выполняется": "Running",
       "Прервано — проверьте результат": "Interrupted — check the result",
@@ -1630,7 +1687,7 @@
     ["Резервная копия:", "Backup:"],
     ["Удалено компонентов:", "Components removed:"],
     ["Системный модуль недоступен", "System module is unavailable"],
-    ["Eclipse Studio 9.0.0 инициализирован", "Eclipse Studio 9.0.0 initialized"],
+    ["Eclipse Studio 10.0.0 инициализирован", "Eclipse Studio 10.0.0 initialized"],
     ["Доступна версия", "Version available:"],
     ["Осталось", "Remaining"],
     ["локальная копия", "local copy"]
@@ -1647,7 +1704,8 @@
       const stored = window.cgsStorage.getItem(STORAGE_KEY);
       if (SUPPORTED.has(stored)) return stored;
     } catch (_) {}
-    return "ru";
+    // Первый запуск на английском; сохранённый выбор пользователя важнее
+    return "en";
   }
 
   function translateBody(source) {
@@ -1679,7 +1737,8 @@
   }
 
   function processAttribute(element, name) {
-    if (!element.hasAttribute(name)) return;
+    // Смешанные двуязычные подписи (например, выбор языка) не переводим
+    if (!element.hasAttribute(name) || element.closest("[data-i18n-skip]")) return;
     const current = element.getAttribute(name) || "";
     let records = attributeRecords.get(element);
     if (!records) {
@@ -1702,7 +1761,7 @@
       const textWalker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
         acceptNode(node) {
           const parent = node.parentElement;
-          return parent && !parent.closest("script,style,code,pre") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+          return parent && !parent.closest("script,style,code,pre,[data-i18n-skip]") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
         }
       });
       while (textWalker.nextNode()) processText(textWalker.currentNode);
@@ -1731,9 +1790,11 @@
   }
 
   function setLanguage(next) {
-    if (!SUPPORTED.has(next) || next === language) return;
+    if (!SUPPORTED.has(next)) return;
+    // Сохраняем даже выбор, совпадающий с текущим языком: так первый запуск запоминает ответ
+    try { window.cgsStorage.setItem(STORAGE_KEY, next); } catch (_) {}
+    if (next === language) return;
     language = next;
-    try { window.cgsStorage.setItem(STORAGE_KEY, language); } catch (_) {}
     refresh();
     window.dispatchEvent(new CustomEvent("cgs:language-changed", { detail: { language, locale: locale() } }));
   }

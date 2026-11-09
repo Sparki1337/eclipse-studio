@@ -1,6 +1,7 @@
 (() => {
   "use strict";
 
+  // hypervisor — рабочее пространство Hypervisor: игры, статусы, запуск, ярлыки
   const invoke = window.cgsApi?.invoke;
   const listen = window.__TAURI__?.event?.listen;
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -20,7 +21,7 @@
 
   ];
 
-  // Ключ хранилища для автоматического создания ярлыков на рабочем столе
+  // Ключ настройки ярлыков на рабочем столе
   const SHORTCUT_KEY = "cgs-hv-desktop-shortcuts";
 
   function isShortcutsEnabled() {
@@ -130,7 +131,7 @@
     }));
     return artworkRequests.get(key);
   }
-  // Фоновая предзагрузка обложки игры в память браузера
+  // Фоновая предзагрузка обложки в кэш браузера
   function preloadArtwork(game) {
     if (!game?.exe_path) return;
     artworkFor(game).then(url => {
@@ -142,7 +143,6 @@
     });
   }
 
-  // Привязка обложек к элементам интерфейса
   function hydrateArtwork() {
     document.querySelectorAll(".hv-cover[data-artwork-key]").forEach(cover => {
       const key = cover.dataset.artworkKey;
@@ -307,7 +307,7 @@
     renderGames();
     const sel = selectedGame();
     if (sel) selectedArtwork(sel);
-    // Немедленная фоновая предзагрузка всех обложек сразу при запуске приложения
+    // Предзагрузка всех обложек при старте
     for (const game of state.games) {
       preloadArtwork(game);
     }
@@ -398,7 +398,6 @@
   let steamRequest = 0;
   let steamBusy = false;
 
-  // Обновление состояния параметров запуска в клиенте Steam для выбранной игры
   async function refreshSteamLaunch(id) {
     const token = ++steamRequest;
     steamStatus = null;
@@ -448,7 +447,6 @@
     }
   }
 
-  // Применение или сброс параметров запуска в Steam
   async function changeSteamLaunch(enabled) {
     const id = state.selectedId;
     if (!id || !steamStatus || steamBusy || state.running) return;
@@ -494,7 +492,6 @@
     }
   }
 
-  // Создание ярлыка на рабочем столе для выбранной игры
   async function createShortcut(id) {
     try {
       const path = await call("create_game_shortcut", { id });
@@ -507,7 +504,6 @@
     }
   }
 
-  // Удаление ярлыка с рабочего стола
   async function removeShortcut(id) {
     try {
       await call("remove_game_shortcut", { id });
@@ -537,6 +533,8 @@
       } else {
         appendLog("success", "Игра добавлена в библиотеку гипервизора.");
       }
+      // После добавления игры предлагаем заранее отключить мешающие защиты Windows
+      await window.cgsHvProtectionCheck?.();
     } catch (error) {
       appendLog("error", String(error));
     } finally {
@@ -638,7 +636,7 @@
   }
 
 
-  // Управление универсальным автономным лаунчером Eclipse-HV
+  // ── Лаунчер Eclipse-HV
   async function checkEclipseHvUpdate(interactive = false) {
     const statusEl = $("#hv-eclipse-status");
     const pathEl = $("#hv-eclipse-path");
@@ -648,7 +646,6 @@
 
     if (!statusEl) return;
 
-    // Включаем плавную анимацию вращения векторной иконки и состояние проверки
     if (checkBtn) {
       checkBtn.classList.add("is-checking", "busy");
       checkBtn.disabled = true;
@@ -666,7 +663,7 @@
     }
 
     try {
-      // Запрашиваем проверку на бэкенде с минимальной анимационной паузой 400мс
+      // Пауза 400 мс — чтобы анимация проверки не мигала
       const [status] = await Promise.all([
         call("eclipse_hv_check_update").catch(() => call("eclipse_hv_status")),
         new Promise((resolve) => setTimeout(resolve, 400)),
@@ -922,6 +919,8 @@ ${destShort}
       catch (error) { appendLog("warning", `События запуска недоступны: ${error}`); }
     }
     await refreshAll(true);
+    // Возвращаемся к диалогу защит после перезапуска с правами администратора
+    await window.cgsHvProtectionResume?.();
     call("check_asset_updates").catch((error) => appendLog("warning", `Обновление профилей пропущено: ${error}`));
   }
 

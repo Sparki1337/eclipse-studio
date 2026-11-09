@@ -1,3 +1,5 @@
+//! Менеджер сохранений: сканирование известных папок, архивация и восстановление.
+
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -397,22 +399,11 @@ fn pick_save_archive_blocking(format: String) -> Result<Option<String>, String> 
         .map(|value| value.as_secs())
         .unwrap_or(0);
     let default_name = format!("CrocodileGena-Saves-{stamp}.{format}");
-    let script = r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.SaveFileDialog; $d.Title = 'Сохранить архив игровых сохранений'; $d.FileName = $env:CGS_ARCHIVE_NAME; if ($env:CGS_ARCHIVE_FORMAT -eq 'rar') { $d.Filter = 'RAR archive (*.rar)|*.rar' } else { $d.Filter = 'ZIP archive (*.zip)|*.zip' }; $d.DefaultExt = $env:CGS_ARCHIVE_FORMAT; $d.AddExtension = $true; $d.OverwritePrompt = $true; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; Write-Output $d.FileName }"#;
-    let mut command = Command::new("powershell.exe");
-    command
-        .args(["-NoProfile", "-STA", "-Command", script])
-        .env("CGS_ARCHIVE_NAME", default_name)
-        .env("CGS_ARCHIVE_FORMAT", format);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000);
-    let output = command
-        .output()
-        .map_err(|error| format!("Не удалось открыть выбор файла: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-    }
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Ok((!path.is_empty()).then_some(path))
+    crate::native_dialog::save_archive_file(
+        "Сохранить архив игровых сохранений",
+        &default_name,
+        format,
+    )
 }
 
 #[tauri::command]
@@ -423,19 +414,14 @@ pub async fn pick_save_restore_archive() -> Result<Option<String>, String> {
 }
 
 fn pick_save_restore_archive_blocking() -> Result<Option<String>, String> {
-    let script = r#"Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Title = 'Выберите архив сохранений Crocodile Gena Studio'; $d.Filter = 'Архивы сохранений (*.zip;*.rar)|*.zip;*.rar|ZIP archive (*.zip)|*.zip|RAR archive (*.rar)|*.rar'; $d.Multiselect = $false; $d.CheckFileExists = $true; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [Text.Encoding]::UTF8; Write-Output $d.FileName }"#;
-    let mut command = Command::new("powershell.exe");
-    command.args(["-NoProfile", "-STA", "-Command", script]);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000);
-    let output = command
-        .output()
-        .map_err(|error| format!("Не удалось открыть выбор файла: {error}"))?;
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-    }
-    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    Ok((!path.is_empty()).then_some(path))
+    Ok(crate::native_dialog::pick_supported_files(
+        "Выберите архив сохранений Crocodile Gena Studio",
+        &["zip", "rar"],
+        false,
+        false,
+    )?
+    .into_iter()
+    .next())
 }
 
 fn known_roots() -> Vec<(&'static str, PathBuf)> {

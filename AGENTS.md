@@ -174,13 +174,39 @@ E:\Projects\eclipse-studio\
 
 ├── eclipse-hv\                         # Standalone Rust launcher Eclipse-HV (separate Cargo crate)
 
-│   ├── Cargo.toml, build.rs            # Crate manifest; build.rs embeds app-icon.ico via winres
+│   ├── Cargo.toml, build.rs            # Crate manifest (v2.0.0); build.rs embeds app-icon.ico via winres
 
-│   ├── src\main.rs                     # Launcher source code
+│   ├── src\main.rs                     # Launcher entry point: step pipeline, subcommands (--status, cert), emergency cleanup
 
-│   ├── resources\drvloader.exe         # Embedded into Eclipse-HV.exe (include_bytes!)
+│   ├── src\logging.rs                  # Leveled journal: file (always), debug console, in-memory ring buffer
 
-│   └── reference\                      # HV-Launcher.bat, HV-PlugNPlay.bat, kvc.exe — reference only, not embedded
+│   ├── src\error.rs                    # Structured HvError + Diagnostics + JSON error report with session log
+
+│   ├── src\sys.rs                      # Windows wrappers: UAC/elevation, console, dialogs, Ctrl+C, local time
+
+│   ├── src\preflight.rs                # HVCI/VBS checks from registry + runtime Win32_DeviceGuard, UEFI-lock/policy detection, XCR0, BCD changes with verification and reboot
+
+│   ├── src\status.rs                   # Read-only `--status` inspection: protections, services, conflicts, DSE state → JSON report
+
+│   ├── src\avcheck.rs                  # Read-only Defender probe: realtime status, path exclusions, vulnerable-driver blocklist
+
+│   ├── src\avguard.rs                  # Temporary Defender exclusions for the session: Add/Remove-MpPreference + registry cleanup state
+
+│   ├── src\cert.rs                     # Own test code-signing certificate «Eclipse-HV Test CA»: install/remove/sign/status
+
+│   ├── src\dse.rs                      # DSE session: SeCiCallbacks+0x20 → ZwFlushInstructionCache patch, registry state, restore
+
+│   ├── src\rtcore.rs                   # Kernel R/W primitive via signed RTCore64.sys (CVE-2019-16098 IOCTLs), SCM service lifecycle; driver staged next to the game with AV read-back probe and %TEMP% fallback
+
+│   ├── src\offsets.rs                  # Kernel offsets resolution: cache → drivers.ini → local PDB → Microsoft symbol server
+
+│   ├── src\conflicts.rs                # Vanguard / MSI Afterburner / RTSS neutralization and restore
+
+│   ├── src\game.rs                     # Smart game executable search (priority names, size heuristic)
+
+│   ├── src\process.rs                  # Process utilities: capture runs, process control, detached spawns
+
+│   └── resources\RTCore64.sys          # Embedded MSI-signed driver (embedded into Eclipse-HV.exe via include_bytes!)
 
 │
 
@@ -364,7 +390,7 @@ All backend operations run asynchronously or via `tauri::async_runtime::spawn_bl
 
 | **`anticheat.rs`** | Anti-Cheat Auditor. Scans Windows services and filesystem for 12 anti-cheat solutions (EAC, BattlEye, Vanguard, FACEIT, EA AntiCheat, PunkBuster, XIGNCODE3, GameGuard, ACE, TrueProtect/MoMo, Denuvo AC, EQU8). Backs up service registry keys and driver binaries before removal. |
 
-| **`vbs.rs`** | Windows VBS (Virtualization-Based Security), HVCI, and Driver Signature Enforcement auditor. Inspects registry settings under `HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard`. Features active repair (`vbs_repair`: WMI salvage/reset, DISM RestoreHealth, SFC Scannow) and non-destructive diagnostics (`vbs_troubleshoot`: WMI verify, DISM ScanHealth, SFC VerifyOnly) with live `vbs-progress` streaming. Implements UEFI `SecConfig.efi` opt-out (`vbs_prepare_uefi_optout`), BitLocker key protector suspension and automatic resumption (with CIM fallback on Windows Home Edition), and symmetric rollback snapshots in `cgs-vbs-snapshot.json`. |
+| **`vbs.rs`** | Windows VBS (Virtualization-Based Security), HVCI, and Driver Signature Enforcement auditor. Inspects registry settings under `HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard`. Features active repair (`vbs_repair`: WMI salvage/reset, DISM RestoreHealth, SFC Scannow) and non-destructive diagnostics (`vbs_troubleshoot`: WMI verify, DISM ScanHealth, SFC VerifyOnly) with live `vbs-progress` streaming. Implements UEFI `SecConfig.efi` opt-out (`vbs_prepare_uefi_optout`), BitLocker key protector suspension and automatic resumption (with CIM fallback on Windows Home Edition), and symmetric rollback snapshots in `cgs-vbs-snapshot.json`. `hv_disable_protections` prepares only VBS/HVCI for Hypervisor (`BootMode::ProtectionsOnly`): no Test Signing, DSE, XSAVE, KVA or boot-menu changes. |
 
 | **`files.rs`** | Crack Vault cloud sync and downloader. Fetches catalog from GitHub Gist. Runs 6-part parallel chunk downloads with cancellation tokens. Implements **1-click crack auto-installation**: inspects archive directory structure, determines root directory vs nested game folders, extracts files (ZIP or RAR with password support), creates backups in `.backup_orig`, and optionally deletes the archive. |
 
@@ -372,9 +398,9 @@ All backend operations run asynchronously or via `tauri::async_runtime::spawn_bl
 
 | **`update_core.rs`** | Tauri-free updater core (also compiled into `tests/safety-core`): version comparison, release asset + digest parsing, PE/version-resource checks, stage protocol (`owner`, `plan.json` whose SHA-256 is passed in the helper arguments, `ready`/`go`/`abort`/`healthy` signals, `result.json`, `helper.log`), in-place replacement with backup, health probe of the new EXE (`--eclipse-update-probe`) and rollback with relaunch of the old EXE (`--eclipse-update-failed`). Timeouts: decision 600 s, app exit 120 s, health 90 s. Stale stages are cleaned on start. |
 
-| **`local_cloud.rs`** | Local cloud (CloudRedirect) commands: `local_cloud_status`, `local_cloud_set`, `local_cloud_pick_folder`. Embeds `resources/local-cloud/cgs_cloud_redirect.dll` (`include_bytes!`). Requires a local/removable drive and no running games, stops Steam gracefully (30 s), writes files with a backup and rollback, then restarts Steam. |
+| **`local_cloud.rs`** | Local cloud (CloudRedirect) commands: `local_cloud_status`, `local_cloud_set`, `local_cloud_pick_folder`, `local_cloud_update_component`. Embeds `resources/local-cloud/cgs_cloud_redirect.dll` (`include_bytes!`). Requires a local/removable drive and no running games, stops Steam gracefully (30 s), writes files with a backup (including the previous DLL) and rollback, then restarts Steam only if it was running. The component update replaces only a trusted managed DLL and preserves the mode, folder and provider config. |
 
-| **`local_cloud_core.rs`** | Tauri-free local cloud core (also compiled into `tests/safety-core`): eligible games (numeric root Lua in `config/lua` or `config/stplug-in` with `addappid` and a manifest), loader check (`OpenSteamTool.dll` must reference `CR_InitCloudSave`), `[cloud]` section edit in `opensteamtool.toml` via `toml_edit` (the previous section is restored on disable), provider config `config/cgs-local-cloud.json`, state `config/cgs-local-cloud-state.json`, up to 10 backups in `config/cgs-local-cloud-backups`, folder validation and data migration on folder change. Saves are never deleted. |
+| **`local_cloud_core.rs`** | Tauri-free local cloud core (also compiled into `tests/safety-core`): eligible games (numeric root Lua in `config/lua` or `config/stplug-in` with `addappid` and a manifest), loader check (`OpenSteamTool.dll` must reference `CR_InitCloudSave`), `[cloud]` section edit in `opensteamtool.toml` via `toml_edit` (the previous section is restored on disable), provider config `config/cgs-local-cloud.json`, state `config/cgs-local-cloud-state.json`, up to 10 backups in `config/cgs-local-cloud-backups`, folder validation and data migration on folder change, and `plan_component_update` for the embedded DLL (trusted-hash checks, no mode/folder changes). Saves are never deleted. |
 
 | **`models.rs`** | Shared Rust data structures (`PlatformInfo`, `GameInfo`, etc.) with `Serialize` / `Deserialize`. |
 
@@ -390,11 +416,11 @@ All frontend code is written in clean, modern vanilla JavaScript (ES6+) without 
 
 | :--- | :--- |
 
-| **`index.html`** | Single-page UI layout: titlebar with window controls, resizable sidebar with navigation links (`home`, `fix`, `saves`, `dlc`, `lua`, `hypervisor`, `files`, `utilities`, `settings`), social channels, and content panels for each view. Settings has five tabs: Interface, Home & startup, Sidebar, Modules & API, Paths & downloads. |
+| **`index.html`** | Single-page UI layout: titlebar with window controls, resizable sidebar with navigation links (`home`, `fix`, `saves`, `dlc`, `lua`, `hypervisor`, `files`, `utilities`, `settings`), social channels, and content panels for each view. Settings has five tabs: Interface, Home & startup, Sidebar, Modules & API, Paths & downloads. Also hosts the first-run language dialog (`#first-language-dialog`) and the Hypervisor protection dialog (`#hv-protection-dialog`). |
 
 | **`core/storage.js`** | Protected storage `window.cgsStorage` (native DPAPI state with migration from legacy `localStorage`). The only module allowed to touch `localStorage`. |
 
-| **`core/loader.js`** | Waits for `cgsStorage.ready`, loads all other modules in order, then dispatches `cgs:modules-loaded` / `cgs:ready` and sets `data-ready`. Shows a startup error panel if a module fails to load. |
+| **`core/loader.js`** | Waits for `cgsStorage.ready`, loads all other modules in order, then dispatches `cgs:modules-loaded` / `cgs:ready` and sets `data-ready`. Shows a startup error panel if a module fails to load. Loads `core/onboarding.js` after i18n and before `app.js`, so the first-run language dialog and Hypervisor protection dialog do not overlap background update checks. |
 
 | **`core/bootstrap.js`** | Single source of accent colors for the splash, `app.js` and `appearance.js`: `window.cgsAccent` (`names`, `normalize`, `resolve`, `apply`). Each of the 12 accents has a dark-theme and a light-theme value; light values keep ≥ 4.5:1 contrast on white (`white` becomes graphite). Sets `--accent`, `--accent-rgb`, `--accent-2`, `--accent-contrast`. |
 
@@ -410,7 +436,7 @@ All frontend code is written in clean, modern vanilla JavaScript (ES6+) without 
 
 | **`core/scale.js`** | Window and DPI scaling utilities. |
 
-| **`core/i18n.js`** | Internationalization engine with complete Russian (`ru`) and English (`en`) dictionaries. Allows instant language switching without page reload. |
+| **`core/i18n.js`** | Internationalization engine with complete Russian (`ru`) and English (`en`) dictionaries. Allows instant language switching without page reload. English is the first-launch default; a saved `cgs-language` choice always wins. |
 
 | **`core/app.js`** | Central frontend coordinator. Handles navigation between panels, toast notifications, modal dialogs, IPC event listeners, and drag-and-drop feedback. Picks the startup view on boot (`?view=` first, then `cgsHome.startTarget()`, then the Hypervisor sub-tab) and delegates `[data-open-view]` clicks. Owns the update dialog (`#app-update-backdrop`: phases, progress/speed/ETA, cancel, retry, the shell is `inert` while installing), the 5-launch snooze (`cgs-update-snooze-launches`, consumed once per process session) and the launch outcome toast. Tracks running operations (`activeOperations`, `window.cgsReportBusy`) so an update cannot start while another operation is in progress. |
 
@@ -420,7 +446,7 @@ All frontend code is written in clean, modern vanilla JavaScript (ES6+) without 
 
 | **`features/home.js`** | Home dashboard: hero, recent games, recent backups, pending operations, needs attention, module cards (ordered like the sidebar). Renders the **Home & startup** settings tab (block order/visibility, module cards, rows per list 3/4/6/8, operation IDs, hidden notifications, history) and the startup view selector. Exposes `window.cgsHome` (`recordGame`, `startTarget`, `openSettings`). `cgsStorage` keys: `cgs-home-layout`, `cgs-home-modules-hidden`, `cgs-home-rows`, `cgs-home-ids`, `cgs-start-view` (`home` \| `last` \| view \| `view:tab`), `cgs-last-view`. |
 
-| **`features/local-cloud.js`** | «Локальное облако» panel in the Eclipse Manifest view (`#local-cloud-panel`): status badge, folder picker (`local_cloud_pick_folder`), enable toggle (`local_cloud_set`), loader compatibility warning, footer status and help. Refreshes after loader installs and Steam path changes. |
+| **`features/local-cloud.js`** | «Локальное облако» panel in the Eclipse Manifest view (`#local-cloud-panel`): status badge, folder picker (`local_cloud_pick_folder`), enable toggle (`local_cloud_set`), loader compatibility warning, footer status and help. Checks the installed DLL at startup (after the splash) and offers a component-only update (`local_cloud_update_component`, `#lc-update-backdrop`) with retry, progress and no mode/folder changes. Refreshes after loader installs and Steam path changes. |
 
 | **`features/saves.js`** | Save Manager view logic (`window.cgsSaves`): scan results, selection, archive and restore actions. |
 
@@ -464,7 +490,7 @@ All scripts are started from the repository root; paths inside them are resolved
 
 | **`build.py`** | Automated build script (`python scripts/build.py`). Supports interactive menu or CLI flags (`--type portable/nsis/all/debug`, `--out <dir>`, `--clean`, `--no-open`). Saves output path in `scripts/build_config.json` (defaults to `C:\Users\Sparki\Desktop\Programms\Hypervisor`), checks prerequisites, calculates SHA-256 hashes, and offers to open Windows Explorer. |
 
-| **`bump_version.py`** | Updates the project version across the repository (`python scripts/bump_version.py 9.0.0`): `tauri.conf.json`, `Cargo.toml`, `package.json`, `package-lock.json`, `ui/index.html`, `ui/core/app.js`, `ui/core/i18n.js`, `dlc_catalog.rs`, `files.rs`, `tauri-mock.js`, `ui.test.js`, `README.md`, `BUILD.md`, `docs/`, the scripts in `scripts/` and `.agents/skills/build/SKILL.md`. Refreshes `Cargo.lock` automatically. |
+| **`bump_version.py`** | Updates the project version across the repository (`python scripts/bump_version.py 10.0.0`): `tauri.conf.json`, `Cargo.toml`, `package.json`, `package-lock.json`, `ui/index.html`, `ui/core/app.js`, `ui/core/i18n.js`, `dlc_catalog.rs`, `files.rs`, `tauri-mock.js`, `ui.test.js`, `README.md`, `BUILD.md`, `docs/`, the scripts in `scripts/` and `.agents/skills/build/SKILL.md`. Refreshes `Cargo.lock` automatically. |
 
 | **`build_local_cloud.ps1`** | Rebuilds `src-tauri/resources/local-cloud/cgs_cloud_redirect.dll` from `third_party/cloudredirect` (port of upstream `tools/Build-LocalCloud.ps1`; run from an x64 Developer PowerShell, needs `cl.exe`, C++20, Windows SDK; static CRT). Copies the MIT license and prints the SHA-256. Not needed for regular builds. |
 
@@ -650,7 +676,7 @@ python scripts/bump_version.py
 
 # Or pass the new version directly:
 
-python scripts/bump_version.py 9.0.0
+python scripts/bump_version.py 10.0.0
 
 ```
 

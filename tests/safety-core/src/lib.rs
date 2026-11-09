@@ -1,3 +1,5 @@
+//! Общие Tauri-независимые модули: компилируются тестами safety-core через #[path].
+
 #![allow(dead_code)]
 #[path = "../../../src-tauri/src/archive_policy.rs"]
 mod archive_policy;
@@ -29,3 +31,18 @@ mod local_cloud_core;
 
 #[path = "../../../src-tauri/src/update_core.rs"]
 mod update_core;
+
+#[path = "../../../src-tauri/src/uefi_transaction.rs"]
+mod uefi_transaction;
+
+#[path = "../../../src-tauri/src/uefi_files.rs"]
+mod uefi_files;
+
+#[path = "../../../src-tauri/src/startup_policy.rs"]
+mod startup_policy;
+
+#[path = "../../../src-tauri/src/bcd_policy.rs"]
+mod bcd_policy;
+
+#[path = "../../../src-tauri/src/windows_probe_core.rs"]
+mod windows_probe_core;

@@ -1,0 +1,7 @@
+# MSVC пишет временные файлы (в том числе отладочные записи /Z7) в TEMP. Если
+# системный TEMP недоступен дочерним процессам Cargo, cl.exe падает с D8050, а
+# lib.exe/link.exe — с LNK1104. Для сборки используем каталог target, который
+# Cargo создаёт сам; относительный путь считается от корня проекта.
+[env]
+TEMP = { value = "src-tauri/target", relative = true, force = true }
+TMP = { value = "src-tauri/target", relative = true, force = true }

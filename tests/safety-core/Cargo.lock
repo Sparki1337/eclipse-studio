@@ -216,6 +216,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "tokio",
  "toml_edit",
  "unrar",
  "uuid",

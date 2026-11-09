@@ -787,7 +787,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "eclipse-studio"
-version = "9.0.0"
+version = "10.0.0"
 dependencies = [
  "reqwest 0.12.28",
  "rfd",
@@ -798,6 +798,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tempfile",
+ "tokio",
  "toml_edit 0.25.12+spec-1.1.0",
  "unrar",
  "uuid",

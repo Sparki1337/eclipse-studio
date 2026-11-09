@@ -1,11 +1,11 @@
-/* Появление блоков управляется общим модулем анимаций */
+/* motion.css — анимации появления блоков и обратная связь */
 html.motion-ready #korona .view.active,
 html.motion-ready #korona .settings-tab-panel,
 html.motion-ready #korona .settings-collapsible-content {
   animation: none !important;
 }
 
-/* Обратная связь без сдвига раскладки */
+/* ── Обратная связь без сдвига раскладки */
 #korona :is(.files-sort-item, .custom-select-option, .settings-tab-btn, .hv-module-tab,
   .home-item, .hv-step, .pref-row, .loader-option, [data-files-page]) {
   transition-property: background-color, border-color, color, box-shadow, opacity;
@@ -29,7 +29,7 @@ html.motion-ready #korona .settings-collapsible-content {
   transition: width 280ms ease-out, background-color 180ms ease;
 }
 
-/* Отключение движения имеет приоритет над стилями тем */
+/* ── Отключение движения имеет приоритет над стилями тем */
 @layer cgs-motion-preferences {
   @media (prefers-reduced-motion: reduce) {
     :root *, :root *::before, :root *::after {

@@ -41,8 +41,12 @@ fn persist(journal: &Journal) -> Result<(), String> {
 }
 static INSTANCE: OnceLock<std::fs::File> = OnceLock::new();
 pub fn init(app: &AppHandle) -> Result<(), String> {
-    let base = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
-    std::fs::create_dir_all(&base).map_err(|e| e.to_string())?;
+    let base = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|e| format!("Не удалось определить папку данных приложения: {e}"))?;
+    std::fs::create_dir_all(&base)
+        .map_err(|e| format!("Не удалось создать папку данных {}: {e}", base.display()))?;
     if INSTANCE.get().is_none() {
         let instance_path = crate::safe_path::join(&base, "instance.lock")?;
         let instance = std::fs::OpenOptions::new()
@@ -50,8 +54,13 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
             .truncate(false)
             .read(true)
             .write(true)
-            .open(instance_path)
-            .map_err(|e| e.to_string())?;
+            .open(&instance_path)
+            .map_err(|e| {
+                format!(
+                    "Не удалось открыть файл блокировки {}: {e}",
+                    instance_path.display()
+                )
+            })?;
         let handoff = std::env::args().any(|arg| arg == "--elevated-handoff");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
         loop {
@@ -72,7 +81,12 @@ pub fn init(app: &AppHandle) -> Result<(), String> {
         Ok(data) => serde_json::from_slice::<Vec<Job>>(&data)
             .map_err(|e| format!("Журнал заданий повреждён: {e}"))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-        Err(e) => return Err(e.to_string()),
+        Err(e) => {
+            return Err(format!(
+                "Не удалось прочитать журнал заданий {}: {e}",
+                path.display()
+            ))
+        }
     };
     let mut journal = journal().lock().map_err(|_| "Журнал занят")?;
     journal.path = Some(path);
@@ -128,6 +142,8 @@ pub fn run<T: Serialize>(
     action: impl FnOnce() -> T,
 ) -> Result<T, String> {
     let guard = crate::resource_lock::Guard::scope(resources)?;
+    #[cfg(windows)]
+    let _system_guard = crate::system_lock::Guard::for_resources(resources)?;
     {
         let mut journal = journal().lock().map_err(|_| "Журнал занят")?;
         journal.jobs.push(Job {

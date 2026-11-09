@@ -1,4 +1,4 @@
-// Мок Tauri API для UI-тестов
+// tauri-mock — мок IPC Tauri для UI-тестов и dev-сервера
 (() => {
   const config = window.__CGS_MOCK_CONFIG__ || {};
   const registered = new Set(config.commands || []);
@@ -33,7 +33,11 @@
       const {hubcapKey,ryuuKey,...values}=data.values;
       return {values,secretConfigured:{hubcapKey:!!hubcapKey,ryuuKey:!!ryuuKey},migrationVerified:true};
     },
-    state_apply: ({changes}) => { const data=nativeRead(); for(const [key,value] of Object.entries(changes)){if(value===null)delete data.values[key];else data.values[key]=value;} nativeSave(data); return null; },
+    state_apply: ({changes}) => {
+      if (config.gradientPreferenceSaveError && Object.hasOwn(changes, "cgs-background-gradient")) throw new Error("fixture: gradient write denied");
+      if (config.startupPreferenceSaveError && Object.hasOwn(changes, "cgs-run-as-admin")) throw new Error("fixture: preference write denied");
+      const data=nativeRead(); for(const [key,value] of Object.entries(changes)){if(value===null)delete data.values[key];else data.values[key]=value;} nativeSave(data); return null;
+    },
     state_set_secret: ({service,value}) => {const data=nativeRead();data.values[service+"Key"]=value;nativeSave(data);return !!value;},
     jobs_list: () => config.jobs || [],
     files_install_crack: () => ({success:true,status:"success",installedFiles:["game.dll"],skipped:[],message:"Установлено и проверено"}),
@@ -50,6 +54,16 @@
   const responses = {
     ...defaults,
     process_is_elevated: () => config.admin ?? true,
+    startup_admin: () => {
+      if (sessionStorage.getItem("__startup_admin_checked")) return false;
+      sessionStorage.setItem("__startup_admin_checked", "1");
+      if (nativeRead().values["cgs-run-as-admin"] === "0" || (config.admin ?? true)
+          || config.elevatedHandoff || config.launchOutcome) return false;
+      window.__startupAdminAttempts = (window.__startupAdminAttempts || 0) + 1;
+      if (config.startupAdminRelaunch) return true;
+      // Не-админ фикстуры: имитируем отказ от автозапроса UAC
+      throw new Error(config.startupAdminError || "Запрос прав администратора отменён");
+    },
     relaunch_as_admin: () => null,
     enable_file_drop: () => null,
     open_external: () => null,
@@ -71,7 +85,7 @@
     files_pause_download: () => {window.__pendingDownload?.reject("Загрузка приостановлена; проверенные сегменты сохранены для докачки");return true;},
     files_cancel_download: () => {window.__pendingDownload?.reject("Загрузка отменена");return true;},
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "9.0.0", latest_version: "9.0.0", currentVersion: "9.0.0", latestVersion: "9.0.0" }),
+    check_for_update: () => ({ available: false, current_version: "10.0.0", latest_version: "10.0.0", currentVersion: "10.0.0", latestVersion: "10.0.0" }),
     platform_info: () => ({ os: "windows", windows: true, windowsOnlyModules: [], sessionId: config.sessionId || "test-session" }),
     update_launch_ready: () => config.launchOutcome ?? null,
     // Установка обновления: с installPending остаётся ожидающей, ход задаётся через __mockEmit
@@ -98,6 +112,14 @@
       return next;
     },
     local_cloud_pick_folder: () => (config.localCloudPick === undefined ? "D:\\Cloud Saves" : config.localCloudPick),
+    // Обновление только DLL: режим, папка и состояние копируются, флаг устаревания снимается
+    local_cloud_update_component: () => {
+      if (config.localCloudUpdateError) throw config.localCloudUpdateError;
+      if (!localCloudState().componentOutdated) throw "Встроенная DLL уже установлена: обновление не требуется.";
+      const next = { ...localCloudState(), componentOutdated: false, issue: null };
+      sessionStorage.setItem(localCloudKey, JSON.stringify(next));
+      return next;
+    },
     cleanup_old_app_versions: () => 0,
     luatools_restore_manifests: () => null,
     luatools_detect_steam: () => "C:\\Program Files (x86)\\Steam",
@@ -202,9 +224,11 @@
       testSigningActive: false,
       dse: { state: "enabled", label: "DSE включён", detail: "Проверка цифровой подписи активна" },
       components: [
-        { id: "hvci", name: "Memory Integrity (HVCI)", description: "Hyper-V Protected Code Integrity", state: "active", enabled: true, locked: false }
+        { id: "hvci", name: "Memory Integrity (HVCI)", description: "Hyper-V Protected Code Integrity", state: "enabled", enabled: true, locked: false },
+        { id: "vbs", name: "Virtualization-based Security (VBS)", description: "Базовая изоляция ядра и системный гипервизор Windows", state: "enabled", enabled: true, locked: false },
+        { id: "credential-guard", name: "Credential Guard", description: "Защита учётных данных LSA", state: "disabled", enabled: false, locked: false }
       ],
-      enabledCount: 1,
+      enabledCount: 2,
       warnings: config.vbsWarnings || [],
       bitlocker: config.bitlocker || { state: "off", protected: false, suspended: false, message: "BitLocker не используется на системном диске" },
       kvaShadow: { needed: false, disabled: false, label: "Не требуется (современный CPU)" },
@@ -221,14 +245,39 @@
           detail: "Внешний режим восстановлен. Изменения загрузки вступят в силу после перезагрузки Windows.", blockedReason: "Сначала перезагрузите Windows для завершения отката внешнего режима." } };
       return { success: true, message: "Внешние настройки восстановлены по журналу VBS.cmd.", changed: 3, failed: [], restartRequired: true };
     },
-    vbs_disable: () => ({ success: true, message: "VBS 2.0.1: гипервизор отключён", changed: 3, failed: [], restartRequired: true }),
-    vbs_restore: () => ({ success: true, message: "VBS 2.0.1: параметры восстановлены", changed: 3, failed: [], restartRequired: true }),
+    vbs_disable: () => {
+      if (config.vbs?.uefiOptout?.active) config.vbs.uefiOptout.canContinue = false;
+      return { success: true, message: "VBS 2.0.1: гипервизор отключён", changed: 3, failed: [], restartRequired: true };
+    },
+    hv_disable_protections: () => ({
+      success: true,
+      message: "Защиты Windows подготовлены к отключению. Перезагрузите Windows.",
+      changed: 2,
+      failed: [],
+      restartRequired: true
+    }),
+    vbs_restore: (args) => {
+      if (config.vbs?.uefiOptout?.active) {
+        if (args?.allowUefi !== true) throw new Error("Требуется согласие на возврат UEFI Lock");
+        config.vbs = { ...config.vbs, uefiOptout: null, canRestore: false,
+          uefiLock: config.uefiOriginalLock || config.vbs.uefiLock };
+      }
+      return { success: true, message: "VBS 2.0.1: параметры восстановлены", changed: 3, failed: [], restartRequired: true };
+    },
     vbs_set_test_mode: (args) => ({ success: true, message: args?.enabled ? "Тестовый режим включён" : "Тестовый режим выключен", changed: 1, failed: [], restartRequired: true }),
     vbs_restart: () => ({ success: true }),
     vbs_repair: (args) => `Восстановление ${args?.kind || "компонентов"} успешно завершено.`,
     create_game_shortcut: () => "C:\\Users\\Sparki\\Desktop\\Game.lnk",
     remove_game_shortcut: () => null,
-    vbs_prepare_uefi_optout: () => "UEFI Opt-Out успешно настроен.",
+    vbs_prepare_uefi_optout: (args) => {
+      if (args?.allowUefi !== true) throw new Error("Требуется отдельное согласие на UEFI Opt-Out");
+      config.uefiOriginalLock = config.vbs?.uefiLock;
+      config.vbs = { ...(config.vbs || {}), canRestore: true, restartRequired: true,
+        uefiLock: { isLocked: false, vbsLocked: false, hvciLocked: false, credentialLocked: false, secConfigAvailable: true },
+        uefiOptout: { active: true, prepared: true, canContinue: false, pendingRestart: true, requiresRelock: true,
+          blockedReason: "Сначала перезагрузите Windows и подтвердите UEFI Opt-Out либо выполните откат", detail: "UEFI Opt-Out подготовлен. Снимок сохранён; можно выполнить откат." } };
+      return "UEFI Opt-Out подготовлен и проверен; исходные параметры сохранены в журнале.";
+    },
     vbs_disable_faceit: () => "Служба FACEIT успешно остановлена и отключена.",
     vbs_troubleshoot: (args) => `Диагностика ${args?.action || "unknown"} успешно завершена.`,
     vbs_get_protections: () => [

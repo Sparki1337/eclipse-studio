@@ -1,4 +1,4 @@
-// Подавляем пустой SC_KEYMENU от Alt/F10; Alt+Пробел, Alt+F4 и сочетания с буквами сохраняются
+//! Подавление пустого SC_KEYMENU от Alt/F10; Alt+Пробел, Alt+F4 и буквенные сочетания сохраняются.
 
 #[cfg_attr(not(windows), allow(dead_code))]
 const WM_SYSCOMMAND: u32 = 0x0112;

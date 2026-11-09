@@ -1,0 +1,187 @@
+/* holiday.css — новогодние украшения: бейдж, сцена на главной и снег */
+.holiday-season,
+.holiday-snow,
+.holiday-hero-scene { display: none; }
+html[data-holiday="on"] .holiday-season { display: flex; }
+html[data-holiday="on"] .holiday-snow { display: block; }
+html[data-holiday="on"] .holiday-hero-scene { display: block; }
+/* ── При строке поиска справа бейдж уступает место, чтобы не перекрывать её */
+html.search-dock-right .holiday-season { display: none !important; }
+
+/* ── Гирлянда-бейдж: праздничная плашка слева от кнопок управления окном */
+.window-actions { position: relative; }
+.holiday-season {
+  --holiday-gold: #e6bd7d;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px 0 8px;
+  border: 1px solid var(--k-border-2, var(--line-strong, rgba(255, 255, 255, .14)));
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), .12), var(--k-panel-2, rgba(255, 255, 255, .07)) 72%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), inset 0 0 0 1px rgba(230, 189, 125, .07), 0 6px 18px rgba(0, 0, 0, .16);
+  color: var(--accent);
+  white-space: nowrap;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+}
+/* ── Плашка висит слева от кнопок и не участвует в раскладке заголовка */
+.holiday-season-docked {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 12px);
+  transform: translateY(-50%);
+}
+/* ── Запасной вариант размещения: обычный элемент в заголовке */
+.holiday-season-inline { position: static; margin-left: 10px; }
+.holiday-season-icon { display: flex; flex: none; width: 34px; height: 22px; }
+.holiday-season-icon svg { width: 100%; height: 100%; overflow: visible; }
+.holiday-season .holiday-wire { fill: none; stroke: currentColor; stroke-width: .9; stroke-linecap: round; opacity: .45; }
+.holiday-season .holiday-bulb { fill: currentColor; }
+.holiday-season .holiday-bulb:nth-of-type(2) { fill: var(--holiday-gold); }
+.holiday-season .holiday-spark { fill: none; stroke: var(--holiday-gold); stroke-width: 1; stroke-linecap: round; }
+.holiday-season-label { font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.holiday-season-year { font-size: 9px; font-weight: 700; letter-spacing: .04em; color: var(--holiday-gold); font-variant-numeric: tabular-nums; }
+.holiday-season-year::before { content: "·"; margin: 0 4px 0 1px; opacity: .5; }
+html[data-theme="light"] .holiday-season {
+  --holiday-gold: #8f6d32;
+  color: #2f6f68;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), .10), var(--k-solid, #ffffff) 70%);
+  border-color: rgba(12, 13, 18, .14);
+  box-shadow: inset 0 1px 0 #ffffff, inset 0 0 0 1px rgba(143, 109, 50, .08), 0 4px 14px rgba(15, 23, 42, .10);
+}
+
+/* ── Снег: фиксированный canvas ниже заголовка окна */
+.holiday-snow {
+  position: fixed;
+  inset: 52px 0 0;
+  width: 100%;
+  height: calc(100% - 52px);
+  z-index: 25;
+  pointer-events: none;
+}
+/* ── Снег не рисуется без движения и при высокой контрастности */
+html.no-motion .holiday-snow,
+html[data-contrast="high"] .holiday-snow { display: none !important; }
+
+/* ── Сцена внутри приветственного блока главной: под текстом, но над артом */
+.holiday-hero-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ── Мягкое тёплое и холодное свечение по краям баннера */
+.holiday-hero-bokeh {
+  position: absolute;
+  inset: -12%;
+  background:
+    radial-gradient(circle at 84% 16%, rgba(230, 189, 125, .20), transparent 17%),
+    radial-gradient(circle at 94% 48%, rgba(var(--accent-rgb), .16), transparent 15%),
+    radial-gradient(circle at 64% 86%, rgba(168, 214, 245, .10), transparent 20%),
+    radial-gradient(circle at 16% 20%, rgba(230, 189, 125, .10), transparent 22%);
+  filter: blur(14px);
+  opacity: .8;
+}
+
+/* ── Ёлочные шары на золотых нитях и звезда в правом верхнем углу */
+.holiday-ornaments { position: absolute; right: 14px; top: 0; width: 272px; height: 233px; overflow: visible; }
+.holiday-string { fill: none; stroke: #c9a86c; stroke-width: .9; opacity: .5; }
+.holiday-cap { fill: #c5a971; }
+.holiday-ball-detail { fill: none; stroke: #f7ecd2; stroke-width: .8; opacity: .55; }
+.holiday-star { fill: none; stroke: #e6bd7d; stroke-width: 1.1; stroke-linecap: round; opacity: .8; }
+html[data-glow="on"] .holiday-ornament > circle { filter: drop-shadow(0 0 7px rgba(230, 189, 125, .28)); }
+html[data-glow="on"] .holiday-star { filter: drop-shadow(0 0 4px rgba(230, 189, 125, .45)); }
+
+/* ── Редкие искры по свободной части баннера */
+.holiday-glint { position: absolute; width: 12px; height: 12px; color: #ecd3a2; opacity: .55; }
+.holiday-glint path { fill: none; stroke: currentColor; stroke-width: 1.1; stroke-linecap: round; }
+.holiday-glint-a { right: 34%; top: 13%; }
+.holiday-glint-b { right: 9%; top: 44%; width: 9px; height: 9px; }
+.holiday-glint-c { right: 48%; bottom: 17%; width: 10px; height: 10px; opacity: .4; }
+.holiday-glint-d { right: 24%; bottom: 9%; width: 8px; height: 8px; opacity: .35; }
+
+/* ── Праздничная подсветка самого баннера */
+html[data-holiday="on"] .home-hero { border-color: rgba(213, 172, 103, .26); }
+html[data-holiday="on"] .home-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 100% 0, rgba(230, 189, 125, .12), transparent 52%),
+    radial-gradient(ellipse at 0 100%, rgba(94, 165, 140, .10), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, .05), transparent 20%);
+  pointer-events: none;
+}
+
+/* ── Анимации только при включённом движении */
+html:not(.no-motion) .holiday-season .holiday-bulb { animation: holiday-bulb 3.4s ease-in-out infinite alternate; }
+html:not(.no-motion) .holiday-season .holiday-bulb:nth-of-type(2) { animation-delay: -1.1s; }
+html:not(.no-motion) .holiday-season .holiday-bulb:nth-of-type(3) { animation-delay: -2.2s; }
+html:not(.no-motion) .holiday-season .holiday-spark { animation: holiday-twinkle 4.2s ease-in-out infinite; }
+html:not(.no-motion) .holiday-ornament { transform-origin: top center; animation: holiday-sway 8s ease-in-out infinite alternate; }
+html:not(.no-motion) .holiday-ornament-one { animation-duration: 7s; }
+html:not(.no-motion) .holiday-ornament-two { animation-duration: 9.5s; animation-delay: -3s; }
+html:not(.no-motion) .holiday-ornament-three { animation-duration: 6.2s; animation-delay: -1.5s; }
+html:not(.no-motion) .holiday-star { animation: holiday-twinkle 5.5s ease-in-out infinite; }
+html:not(.no-motion) .holiday-glint { animation: holiday-twinkle 6s ease-in-out infinite; }
+html:not(.no-motion) .holiday-glint-b { animation-delay: -1.8s; animation-duration: 7.4s; }
+html:not(.no-motion) .holiday-glint-c { animation-delay: -3.1s; animation-duration: 8.2s; }
+html:not(.no-motion) .holiday-glint-d { animation-delay: -4.4s; animation-duration: 6.8s; }
+html:not(.no-motion) .holiday-hero-bokeh { animation: holiday-bokeh 16s ease-in-out infinite alternate; }
+
+@keyframes holiday-bulb { from { opacity: .5; } to { opacity: 1; } }
+@keyframes holiday-twinkle { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+@keyframes holiday-sway { from { transform: rotate(-1.4deg); } to { transform: rotate(1.4deg); } }
+@keyframes holiday-bokeh { from { opacity: .55; transform: scale(1); } to { opacity: .95; transform: scale(1.05); } }
+
+/* ── В умеренном окне бейдж сначала теряет год, затем подпись */
+@media (max-width: 1400px) {
+  .holiday-season-year { display: none; }
+}
+@media (max-width: 1120px) {
+  .holiday-season-label { display: none; }
+  .holiday-season { padding-right: 8px; }
+}
+@media (max-width: 980px) {
+  html[data-holiday="on"] .holiday-season { display: none !important; }
+}
+
+/* ── Сцена подстраивается под узкий баннер */
+@media (max-width: 1050px) {
+  .holiday-ornaments { width: 204px; height: 175px; right: 6px; }
+}
+@media (max-width: 760px) {
+  .holiday-ornaments,
+  .holiday-glint { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holiday-snow { display: none !important; }
+  .holiday-ornament,
+  .holiday-bulb,
+  .holiday-spark,
+  .holiday-star,
+  .holiday-glint,
+  .holiday-hero-bokeh { animation: none !important; }
+}
+
+/* ── Высокая контрастность: убираем мягкие эффекты, оставляя чёткие украшения */
+html[data-contrast="high"] .holiday-hero-bokeh,
+html[data-contrast="high"] .holiday-glint { display: none; }
+html[data-contrast="high"] .holiday-season { background: var(--k-solid, #141417); }
+html[data-contrast="high"] .holiday-ornament,
+html[data-contrast="high"] .holiday-star,
+html[data-contrast="high"] .holiday-season .holiday-bulb { animation: none; }
+
+/* ── Принудительные цвета системы: декоративные слои не мешают интерфейсу */
+@media (forced-colors: active) {
+  html[data-holiday="on"] .holiday-season,
+  html[data-holiday="on"] .holiday-hero-scene,
+  html[data-holiday="on"] .holiday-snow { display: none !important; }
+}

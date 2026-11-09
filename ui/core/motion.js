@@ -1,7 +1,7 @@
-// Анимации интерфейса
 (() => {
   "use strict";
 
+  // motion — анимации интерфейса: вход, списки, аккордеоны, выключение
   const root = document.documentElement;
   const STORAGE_KEY = "cgs-motion";
   const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
@@ -164,7 +164,7 @@
     stopWithin(document.documentElement);
     clearTimeout(recolorTimer);
     root.classList.remove("motion-recolor");
-    // Завершаем внешние переходы, сохраняя их обработчики очистки
+    // Завершаем внешние анимации, сохраняя их обработчики
     document.getAnimations().forEach(animation => {
       if ((typeof CSSAnimation !== "undefined" && animation instanceof CSSAnimation) || (typeof CSSTransition !== "undefined" && animation instanceof CSSTransition)) return;
       try { animation.finish(); } catch (_) { animation.cancel(); }
@@ -280,7 +280,7 @@
       const previous = animations.get(details)?.get("accordion");
       if (previous) stop(previous);
       if (!state.running) state.overflow = details.style.overflow;
-      // Измеряем оба состояния до следующего кадра
+      // Высоты обоих состояний меряем синхронно, до отрисовки
       details.open = target;
       const end = details.getBoundingClientRect().height;
       details.open = true;

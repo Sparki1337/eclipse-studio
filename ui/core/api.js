@@ -1,5 +1,7 @@
 (() => {
   "use strict";
+
+  // api — обёртка над Tauri invoke: сброс хранилища до вызова и события cgs:request
   const rawInvoke = window.__TAURI__?.core?.invoke;
   async function invoke(command, args = {}) {
     if (!rawInvoke) throw new Error("Системный модуль недоступен. Запустите приложение Windows.");

@@ -1,12 +1,17 @@
+//! Ядро библиотеки: модули, регистрация Tauri-команд, встроенные ресурсы и управление окном.
+
 mod anticheat;
 mod archive_policy;
 mod audio_cache;
 mod backup;
+mod bcd_policy;
 mod dlc;
 mod dlc_catalog;
 mod download;
 mod durable;
+mod elevation;
 mod engine;
+mod external_vbs_plan;
 mod files;
 mod game_artwork;
 mod hubcap;
@@ -30,13 +35,26 @@ mod safe_path;
 mod saves;
 mod secure_state;
 mod smaki;
+mod startup_policy;
 mod steam;
 mod steam_hv;
 mod steam_library;
+#[cfg(windows)]
+mod system_lock;
+#[cfg(windows)]
+mod uefi_bcd;
+mod uefi_files;
+mod uefi_transaction;
 mod update_core;
 mod updates;
-mod external_vbs_plan;
 mod vbs;
+#[cfg(windows)]
+mod windows_probe;
+mod windows_probe_core;
+#[cfg(windows)]
+mod windows_token;
+#[cfg(windows)]
+mod windows_wmi;
 
 use std::process::Command;
 use tauri::{AppHandle, Manager, WebviewWindow};
@@ -205,7 +223,6 @@ struct PlatformInfo {
     os: &'static str,
     windows: bool,
     windows_only_modules: Vec<&'static str>,
-    /// Один идентификатор на процесс: перезагрузка WebView не считается новым запуском
     session_id: &'static str,
 }
 
@@ -231,23 +248,11 @@ fn platform_info() -> PlatformInfo {
 // Блокирующая системная проверка выполняется вне главного потока
 #[tauri::command(async)]
 fn process_is_elevated() -> bool {
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        Command::new("fltmc.exe")
-            .creation_flags(0x08000000)
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(false)
-    }
-    #[cfg(not(windows))]
-    {
-        false
-    }
+    elevation::is_elevated().unwrap_or(false)
 }
 
 #[cfg(target_os = "windows")]
-#[tauri::command]
+#[tauri::command(async)]
 fn relaunch_as_admin(app: AppHandle) -> Result<(), String> {
     let handoff = crate::resource_lock::begin_handoff()?;
     use std::os::windows::ffi::OsStrExt;
@@ -294,9 +299,41 @@ fn relaunch_as_admin(app: AppHandle) -> Result<(), String> {
 }
 
 #[cfg(not(target_os = "windows"))]
-#[tauri::command]
+#[tauri::command(async)]
 fn relaunch_as_admin() -> Result<(), String> {
     Err("Повышение прав через UAC доступно только в Windows".into())
+}
+
+/// Выполняется до модулей UI и фоновых заданий; при отказе процесс остаётся открытым.
+#[tauri::command(async)]
+fn startup_admin(app: AppHandle) -> Result<bool, String> {
+    static CHECKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !startup_policy::first_check(&CHECKED) {
+        return Ok(false);
+    }
+    // Dev-сервер и тестовый стенд нельзя передавать неуправляемому дочернему процессу.
+    if cfg!(debug_assertions) {
+        return Ok(false);
+    }
+    #[cfg(windows)]
+    {
+        let enabled = secure_state::run_as_admin_enabled(&app)?;
+        let handoff = std::env::args_os().any(|arg| arg == "--elevated-handoff");
+        if !startup_policy::needs_elevation(enabled, false, handoff, updates::has_launch_context())
+        {
+            return Ok(false);
+        }
+        if elevation::is_elevated()? {
+            return Ok(false);
+        }
+        relaunch_as_admin(app)?;
+        Ok(true)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app;
+        Ok(false)
+    }
 }
 
 /// Запуск в роли помощника обновления: замена EXE без окна и WebView
@@ -315,6 +352,7 @@ pub fn run() {
             platform_info,
             process_is_elevated,
             relaunch_as_admin,
+            startup_admin,
             minimize_window,
             toggle_maximize_window,
             close_window,
@@ -414,6 +452,7 @@ pub fn run() {
             vbs::vbs_get_protections,
             vbs::vbs_set_protection,
             vbs::vbs_disable,
+            vbs::hv_disable_protections,
             vbs::vbs_restore,
             vbs::vbs_restore_external,
             vbs::vbs_enable_all,
@@ -444,6 +483,7 @@ pub fn run() {
             updates::cleanup_old_app_versions,
             local_cloud::local_cloud_status,
             local_cloud::local_cloud_set,
+            local_cloud::local_cloud_update_component,
             local_cloud::local_cloud_pick_folder,
         ])
         .setup(|app| {

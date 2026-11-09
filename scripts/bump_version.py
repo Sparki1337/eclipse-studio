@@ -50,7 +50,6 @@ SKILL_BUILD_MD = ROOT_DIR / ".agents" / "skills" / "build" / "SKILL.md"
 
 
 def get_current_version() -> str:
-    # Чтение текущей версии из tauri.conf.json или Cargo.toml
     if TAURI_CONF.exists():
         try:
             with open(TAURI_CONF, "r", encoding="utf-8") as f:
@@ -70,13 +69,12 @@ def get_current_version() -> str:
 
 
 def validate_version(ver: str) -> bool:
-    # Проверка формата semver (например, 8.0.0, 8.0.1-beta.1)
+    # Semver: 8.0.0, 8.0.1-beta.1
     pattern = r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$"
     return bool(re.match(pattern, ver))
 
 
 def update_json_version(path: Path, new_ver: str) -> bool:
-    # Обновление поля version в JSON-файле
     if not path.exists():
         return False
     try:
@@ -95,7 +93,6 @@ def update_json_version(path: Path, new_ver: str) -> bool:
 
 
 def update_cargo_toml(new_ver: str) -> bool:
-    # Обновление версии в Cargo.toml
     if not CARGO_TOML.exists():
         return False
     try:
@@ -114,7 +111,6 @@ def update_cargo_toml(new_ver: str) -> bool:
 
 
 def update_html(old_ver: str, new_ver: str) -> bool:
-    # Обновление версий в UI index.html
     if not INDEX_HTML.exists():
         return False
     try:
@@ -156,7 +152,6 @@ def update_html(old_ver: str, new_ver: str) -> bool:
 
 
 def update_js_files(old_ver: str, new_ver: str) -> bool:
-    # Обновление логов и строк в app.js и i18n.js
     success = True
     if APP_JS.exists():
         try:
@@ -201,7 +196,6 @@ def update_js_files(old_ver: str, new_ver: str) -> bool:
 
 
 def update_rust_sources(old_ver: str, new_ver: str) -> bool:
-    # Обновление User-Agent в сетевых модулях Rust
     success = True
     for file_path in [DLC_CATALOG_RS, FILES_RS]:
         if file_path.exists():
@@ -220,7 +214,6 @@ def update_rust_sources(old_ver: str, new_ver: str) -> bool:
 
 
 def update_tests(old_ver: str, new_ver: str) -> bool:
-    # Обновление тестовых фикстур
     success = True
     if TAURI_MOCK_JS.exists():
         try:
@@ -244,7 +237,6 @@ def update_tests(old_ver: str, new_ver: str) -> bool:
 
 
 def update_docs(old_ver: str, new_ver: str) -> bool:
-    # Обновление документации README.md и BUILD.md
     success = True
     if README_MD.exists():
         try:
@@ -318,7 +310,6 @@ def update_docs(old_ver: str, new_ver: str) -> bool:
 
 
 def update_website(old_ver: str, new_ver: str) -> bool:
-    # Обновление версий на промо-сайте docs/index.html и docs/app.js
     success = True
     if DOCS_INDEX_HTML.exists():
         try:
@@ -382,7 +373,6 @@ def update_website(old_ver: str, new_ver: str) -> bool:
 
 
 def update_capture_tools(old_ver: str, new_ver: str) -> bool:
-    # Обновление скриптов снятия скриншотов
     success = True
     for file_path in [CAPTURE_JS]:
         if not file_path.exists():
@@ -417,7 +407,6 @@ def update_capture_tools(old_ver: str, new_ver: str) -> bool:
 
 
 def update_dev_servers(old_ver: str, new_ver: str) -> bool:
-    # Обновление тестовых серверов разработки UI
     success = True
     for file_path in [UI_DEV_JS]:
         if not file_path.exists():
@@ -457,7 +446,6 @@ def update_dev_servers(old_ver: str, new_ver: str) -> bool:
 
 
 def update_build_helpers(old_ver: str, new_ver: str) -> bool:
-    # Обновление скриптов сборки и хелперов релиза
     success = True
 
     # Версия в скрипте сборки
@@ -523,7 +511,6 @@ def update_build_helpers(old_ver: str, new_ver: str) -> bool:
 
 
 def sync_cargo_lock() -> None:
-    # Синхронизация Cargo.lock через cargo check
     print("[*] Синхронизация Cargo.lock...")
     try:
         subprocess.run(
@@ -547,7 +534,6 @@ def main() -> None:
     current_ver = get_current_version()
     print(f"Текущая версия проекта: {current_ver}\n")
 
-    # Получение новой версии из аргументов или интерактивно
     if len(sys.argv) > 1:
         new_ver = sys.argv[1].strip()
     else:
@@ -571,7 +557,6 @@ def main() -> None:
 
     print(f"\nПрименение новой версии: {current_ver} -> {new_ver}...")
 
-    # Выполнение обновлений всех файлов проекта
     updated_files = []
 
     if update_json_version(TAURI_CONF, new_ver):
@@ -601,7 +586,6 @@ def main() -> None:
     if update_build_helpers(current_ver, new_ver):
         updated_files.append("scripts/build.py, scripts/release.py & .agents/skills/build/SKILL.md")
 
-    # Синхронизация Cargo.lock
     sync_cargo_lock()
     if (ROOT_DIR / "src-tauri" / "Cargo.lock").exists():
         updated_files.append("src-tauri/Cargo.lock")

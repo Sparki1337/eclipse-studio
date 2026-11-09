@@ -1,3 +1,5 @@
+//! Клиент HubCap Manifest API: поиск, дневной лимит, загрузка манифестов.
+
 use crate::{
     luatools::{self, LuaInstallResult},
     ryuu::RyuuGame,
@@ -209,7 +211,7 @@ fn hubcap_get_blocking(
         let response = client
             .get(format!("{BASE}/manifest/{clean}"))
             .bearer_auth(key)
-            // Загрузка zip без авто-распаковки
+            // identity: без транспортного сжатия, нужен исходный zip-поток
             .header(reqwest::header::ACCEPT_ENCODING, "identity")
             .send()
             .map_err(|error| format!("HubCap недоступен: {error}"))?;

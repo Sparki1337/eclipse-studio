@@ -1,6 +1,7 @@
-// Главная: недавние игры, резервные копии, незавершённые операции и проблемы
 (() => {
   "use strict";
+
+  // home — главная: недавние игры, копии, операции и проблемы
   const storage = window.cgsStorage;
   const ROW_CHOICES = [3, 4, 6, 8];       // Строк в панели до кнопки «Ещё» (настройка «Строк в списке»)
   const limit = () => { const value = Number(storage.getItem("cgs-home-rows")); return ROW_CHOICES.includes(value) ? value : 4; };
@@ -162,7 +163,7 @@
     if (!card || card !== event.target || !["Enter", " "].includes(event.key)) return;
     event.preventDefault(); card.click();
   });
-  // ── Настройки главной: блоки, карточки модулей, длина списков и раздел при запуске ──
+  // ── Настройки главной: блоки, карточки, длина списков, раздел при запуске
   const LAYOUT_KEY = "cgs-home-layout";            // Порядок и скрытые блоки
   const MODULES_KEY = "cgs-home-modules-hidden";   // Карточки модулей, выключенные на главной
   const IDS_KEY = "cgs-home-ids";                  // "0" — не показывать ID операций

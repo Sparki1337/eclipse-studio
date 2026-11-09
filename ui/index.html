@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -146,7 +146,10 @@
   <link rel="stylesheet" href="./styles/appearance.css" />
   <link rel="preload" href="./assets/fonts/Manrope[wght].ttf" as="font" type="font/ttf" crossorigin />
   <link rel="stylesheet" href="./styles/korona.css" />
+  <link rel="stylesheet" href="./styles/gradient.css" />
   <link rel="stylesheet" href="./styles/motion.css" />
+  <link rel="stylesheet" href="./styles/holiday.css" />
+  <link rel="stylesheet" href="./styles/onboarding.css" />
 </head>
 <body id="korona">
   <div class="ambient ambient-a"></div>
@@ -170,7 +173,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><span class="eclipse-mark" aria-hidden="true" data-tauri-drag-region></span></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>9.0.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>10.0.0</span>
       </div>
       <button class="titlebar-search" id="titlebar-search" type="button" aria-label="Быстрый поиск" aria-keyshortcuts="Control+K">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
@@ -178,9 +181,9 @@
         <span class="titlebar-search-keys" id="titlebar-search-keys" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span>
       </button>
       <div class="window-actions">
-        <button class="titlebar-icon-button telegram-hub-trigger" id="open-telegram-hub" type="button" title="Открыть Telegram каналы" aria-label="Telegram каналы">
+        <button class="titlebar-icon-button telegram-hub-trigger" id="open-telegram-hub" type="button" title="Открыть соцсети" aria-label="Соцсети">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21.5 4.2-3.1 15.3c-.2 1-.9 1.3-1.7.8l-4.7-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.8 8.7-7.9c.4-.3-.1-.5-.6-.2L6.4 13.4l-4.6-1.4c-1-.3-1-1 .2-1.5L20.2 3.4c.8-.3 1.6.2 1.3.8z"/></svg>
-          <span class="k-sr">Telegram каналы</span>
+          <span class="k-sr">Соцсети</span>
         </button>
         <button class="window-button" id="window-minimize" aria-label="Свернуть">
           <svg viewBox="0 0 16 16"><path d="M3 8.5h10"/></svg>
@@ -259,7 +262,7 @@
           <div class="home-hero premium-panel">
             <div class="home-glow"></div>
             <div class="hero-copy">
-              <span class="hero-kicker">ECLIPSE STUDIO 9.0.0</span>
+              <span class="hero-kicker">ECLIPSE STUDIO 10.0.0</span>
               <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
               <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
             </div>
@@ -1021,13 +1024,13 @@
                 <svg viewBox="0 0 24 24"><path d="M12 2 3.5 6v6c0 5.5 3.8 10 8.5 11.5 4.7-1.5 8.5-6 8.5-11.5V6L12 2z"/><path d="M12 8v5m0 3h.01"/></svg>
               </div>
               <div class="vbs-uefi-copy">
-                <span class="coming-label danger-label">UEFI LOCK ОБНАРУЖЕН</span>
+                <span class="coming-label danger-label" id="vbs-uefi-label">UEFI LOCK ОБНАРУЖЕН</span>
                 <h3>Блокировка Device Guard в микрокоде UEFI</h3>
-                <p>Параметры изоляции ядра закреплены прошивкой. Автоматическое изменение EFI отключено: для него пока нет проверенного симметричного отката.</p>
+                <p id="vbs-uefi-detail">Параметры закреплены UEFI. Подготовка SecConfig требует отдельного согласия; исходные настройки и собственные EFI/BCD-объекты учитываются в журнале возврата.</p>
               </div>
               <button class="vbs-uefi-button" id="vbs-uefi-optout-btn" type="button">
                 <svg viewBox="0 0 20 20"><path d="M10 2 3.5 5v4.5c0 4.5 2.8 8 6.5 9.5 3.7-1.5 6.5-5 6.5-9.5V5L10 2z"/><path d="m8.5 10 3 3 5-5"/></svg>
-                <span>Почему изменение недоступно</span>
+                <span>Подготовить снятие UEFI Lock</span>
               </button>
             </section>
 
@@ -1379,6 +1382,44 @@
                 </div>
               </details>
 
+              <details class="settings-collapsible" id="collapse-gradient" open>
+                <summary class="settings-collapsible-summary">
+                  <div class="settings-collapsible-header">
+                    <span class="settings-collapsible-icon"><svg viewBox="0 0 20 20"><circle cx="7" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11 3a7 7 0 0 1 6 6M10 7a4 4 0 0 1 3 4M3 13a7 7 0 0 0 7 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+                    <div class="settings-collapsible-title"><strong>Градиент фона</strong><small>Один или два источника подсветки в выбранных точках окна</small></div>
+                  </div>
+                  <span class="settings-collapsible-chevron"><svg viewBox="0 0 16 16"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4"/></svg></span>
+                </summary>
+                <div class="settings-collapsible-content">
+                  <div class="gradient-modes" role="group" aria-label="Источники градиента">
+                    <button type="button" data-gradient-mode="theme" aria-pressed="true">Как в теме</button>
+                    <button type="button" data-gradient-mode="one" aria-pressed="false">Одна точка</button>
+                    <button type="button" data-gradient-mode="two" aria-pressed="false">Две точки</button>
+                  </div>
+                  <div id="gradient-controls" hidden>
+                    <div class="gradient-layout">
+                      <div class="gradient-map" id="gradient-map" aria-label="Положение подсветки на экране" aria-describedby="gradient-help">
+                        <div class="gradient-surface" id="gradient-surface">
+                          <button type="button" class="gradient-marker" data-gradient-marker="0" aria-label="Первая точка градиента" aria-describedby="gradient-help">1</button>
+                          <button type="button" class="gradient-marker" data-gradient-marker="1" aria-label="Вторая точка градиента" aria-describedby="gradient-help">2</button>
+                        </div>
+                      </div>
+                      <div class="gradient-position">
+                        <div class="gradient-points" role="group" aria-label="Редактируемая точка">
+                          <button type="button" data-gradient-point="0" aria-pressed="true">Точка 1</button>
+                          <button type="button" data-gradient-point="1" aria-pressed="false">Точка 2</button>
+                        </div>
+                        <label class="gradient-axis" for="gradient-x"><span><span>По горизонтали</span><output id="gradient-x-value" for="gradient-x">15%</output></span><input type="range" id="gradient-x" min="0" max="100" step="0.1" value="15" /></label>
+                        <label class="gradient-axis" for="gradient-y"><span><span>По вертикали</span><output id="gradient-y-value" for="gradient-y">0%</output></span><input type="range" id="gradient-y" min="0" max="100" step="0.1" value="0" /></label>
+                        <button type="button" id="gradient-reset">Сбросить градиент</button>
+                      </div>
+                    </div>
+                    <p class="gradient-help" id="gradient-help">Нажмите на миниатюру или перетащите точку. Стрелки сдвигают её на 1%, Shift + стрелки — на 10%. Цвет берётся из темы.</p>
+                  </div>
+                  <p id="gradient-note" role="status" hidden></p>
+                </div>
+              </details>
+
               <details class="settings-collapsible" id="collapse-accent" open>
                 <summary class="settings-collapsible-summary">
                   <div class="settings-collapsible-header">
@@ -1449,6 +1490,10 @@
                     <label class="pref-row" for="ui-glow">
                       <div><strong>Акцентное свечение</strong><small>Неоновый отблеск и тени в цвет выбранного акцента</small></div>
                       <span class="switch"><input type="checkbox" id="ui-glow" checked /><i></i></span>
+                    </label>
+                    <label class="pref-row" for="ui-holiday">
+                      <div><strong>Новогоднее оформление</strong><small>Снег и праздничные детали. Ваш стиль сохраняется.</small></div>
+                      <span class="switch"><input type="checkbox" id="ui-holiday" checked /><i></i></span>
                     </label>
                     <label class="pref-row">
                       <div><strong>Анимации интерфейса</strong><small>Плавное появление разделов, карточек и списков</small></div>
@@ -1807,8 +1852,16 @@
                         </select>
                       </div>
                     </div>
+                    <label class="pref-row" for="run-as-admin">
+                      <div>
+                        <strong>Запускать от имени администратора</strong>
+                        <small>Включено по умолчанию. Запрашивать права UAC при запуске; изменение действует со следующего запуска.</small>
+                      </div>
+                      <span class="switch"><input type="checkbox" id="run-as-admin" checked /><i></i></span>
+                    </label>
                   </div>
                   <p class="start-view-note" id="start-view-note" role="status" hidden></p>
+                  <p class="start-view-note" id="run-as-admin-note" role="status" hidden></p>
                 </div>
               </details>
 
@@ -2273,7 +2326,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">9.0.0</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">10.0.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -2302,7 +2355,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">9.0.0</b></div>
+                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">10.0.0</b></div>
                   <div class="about-row"><span>Версия Eclipse HV</span><b id="about-hv-version">Проверка…</b></div>
                   <div class="about-row"><span>Права доступа</span><b id="about-admin-rights">Проверка…</b></div>
                   <div class="about-row"><span>Путь к Steam</span><b id="about-steam-path" class="about-path">Определение…</b></div>
@@ -2399,6 +2452,22 @@
     </div>
   </div>
 
+  <!-- Модальное окно обновления DLL локального облака: встроенный CloudRedirect исправлен -->
+  <div class="modal-backdrop hidden" id="lc-update-backdrop">
+    <div class="modal premium-panel lc-update-modal" role="dialog" aria-modal="true" aria-labelledby="lc-update-title" aria-describedby="lc-update-description">
+      <span class="coming-label">CLOUDREDIRECT · LOCAL</span>
+      <h3 id="lc-update-title">Нужно обновить DLL локального облака</h3>
+      <p id="lc-update-description"></p>
+      <p class="lc-update-note" id="lc-update-note"></p>
+      <span class="lc-update-status" id="lc-update-status" role="status" aria-live="polite"></span>
+      <progress id="lc-update-progress" aria-label="Обновление DLL локального облака" hidden></progress>
+      <div class="modal-actions equal-button-group">
+        <button type="button" class="secondary-button" id="lc-update-later">Позже</button>
+        <button type="button" class="install-button" id="lc-update-install">Обновить DLL</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop hidden" id="telegram-hub-backdrop">
     <div class="telegram-hub-modal premium-panel">
       <button class="telegram-hub-close" id="telegram-hub-close" aria-label="Закрыть">
@@ -2409,8 +2478,8 @@
           <svg viewBox="0 0 24 24"><path d="M20.4 4.2L3.8 10.6c-1.1.4-1.1 1.1-.2 1.4l4.3 1.3 1.6 4.8c.2.6.1.8.7.8.5 0 .7-.2 1-.5l2.1-2 4.4 3.2c.8.4 1.4.2 1.6-.8l2.8-13.2c.3-1.2-.5-1.8-1.7-1.4z"/></svg>
         </div>
         <div>
-          <h3>Telegram каналы</h3>
-          <p>Официальные сообщества и контакты разработчиков</p>
+          <h3>Соцсети</h3>
+          <p>Будем на связи: новости программы, общение и наше сообщество</p>
         </div>
       </div>
       <div class="telegram-hub-list">
@@ -2452,6 +2521,20 @@
               <span class="telegram-badge community-badge">Сообщество</span>
             </div>
             <small>@piratestationn</small>
+          </div>
+          <svg class="channel-arrow" viewBox="0 0 20 20"><path d="M7 4l6 6-6 6"/></svg>
+        </button>
+
+        <button class="channel-card discord-channel telegram-hub-card" id="hub-channel-discord">
+          <span class="channel-icon">
+            <svg viewBox="0 0 24 24"><path d="M7 4 4 5C2 9 1 13 2 17l5 3 1.5-2C6 17 5 16 5 16c4 2 10 2 14 0 0 0-1 1-3.5 2L17 20l5-3c1-4 0-8-2-12l-3-1-1 2a17 17 0 0 0-8 0z"/><circle cx="8.5" cy="12" r="1.5"/><circle cx="15.5" cy="12" r="1.5"/></svg>
+          </span>
+          <div class="telegram-hub-info">
+            <div class="telegram-hub-title-row">
+              <strong>Наш Discord</strong>
+              <span class="telegram-badge">Автор</span>
+            </div>
+            <small>Crocodile Gena Studio</small>
           </div>
           <svg class="channel-arrow" viewBox="0 0 20 20"><path d="M7 4l6 6-6 6"/></svg>
         </button>
@@ -2598,6 +2681,30 @@
     </div>
   </div>
 
+  <dialog id="first-language-dialog" class="cgs-setup-dialog" aria-labelledby="first-language-title" aria-describedby="first-language-description" data-i18n-skip>
+    <span class="coming-label">ECLIPSE STUDIO</span>
+    <h2 id="first-language-title">Choose your language<br>Выберите язык</h2>
+    <p id="first-language-description">Choose once. You can change it later in Settings.<br>Выберите один раз. Позже язык можно изменить в настройках.</p>
+    <div class="setup-language-options">
+      <button type="button" data-first-language="en"><b>EN</b><span><strong>English</strong><small>Use the app in English</small></span></button>
+      <button type="button" data-first-language="ru"><b>RU</b><span><strong>Русский</strong><small>Интерфейс на русском</small></span></button>
+    </div>
+    <p id="first-language-error" class="setup-status" role="status"></p>
+  </dialog>
+  <dialog id="hv-protection-dialog" class="cgs-setup-dialog" aria-labelledby="hv-protection-title" aria-describedby="hv-protection-description">
+    <div class="setup-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6zM12 8v5M12 16h.01"/></svg></div>
+    <span class="coming-label">ECLIPSE-HV</span>
+    <h2 id="hv-protection-title"></h2>
+    <p id="hv-protection-description"></p>
+    <ul id="hv-protection-list" class="setup-components"></ul>
+    <p id="hv-protection-once" class="setup-note"></p>
+    <p id="hv-protection-restart-note"></p>
+    <p id="hv-protection-warnings" class="setup-status"></p>
+    <label id="hv-protection-consent-wrap" class="setup-consent" hidden><input type="checkbox" id="hv-protection-consent"><span id="hv-protection-consent-text"></span></label>
+    <p id="hv-protection-status" class="setup-status" role="status" aria-live="polite"></p>
+    <pre id="hv-protection-progress" class="setup-progress" hidden></pre>
+    <div class="setup-actions"><button type="button" id="hv-protection-later" class="secondary-button"></button><button type="button" id="hv-protection-accept" class="install-button"></button></div>
+  </dialog>
   <div class="toast-stack" id="toast-stack" role="status" aria-live="polite"></div>
   <script src="./core/loader.js"></script>
 </body>

@@ -1,6 +1,7 @@
 (() => {
   "use strict";
 
+  // files — Crack Vault: каталог, поиск, загрузка и установка в 1 клик
   const invoke = window.cgsApi?.invoke;
   const listen = window.__TAURI__?.event?.listen;
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -207,7 +208,7 @@
         path = await invoke("files_pick_download_dir");
       } catch (error) {
         if (!isMissingCommand(error)) throw error;
-        // Фоллбэк выбора папки для старых версий бэкенда
+        // Старый бэкенд без команды выбора папки
         path = await invoke("pick_game_directory");
       }
       if (path) {
@@ -234,7 +235,7 @@
       await invoke("files_open_download_dir", { path: readDownloadDir() || null });
     } catch (error) {
       if (!isMissingCommand(error)) { notify(String(error), true); return; }
-      // Фоллбэк открытия папки через последний файл
+      // Старый бэкенд: открываем папку через последний файл
       const last = [...state.downloads.values()].pop();
       if (last?.path) {
         try { await invoke("files_reveal", { path: last.path }); return; } catch (_) {}
@@ -325,7 +326,7 @@
     render();
   }
 
-  // Определение релиз-группы / взломщика из имени файла (как на сайте в docs/app.js)
+  // Релиз-группа из имени файла
   function parseCrackerGroup(file) {
     const base = String(file || "").replace(/(\.(rar|zip|7z|exe|dll|tar|gz))+$/i, "");
     const parts = base.split("-");
@@ -338,13 +339,13 @@
     return /^\p{L}[\p{L}\p{N}._]{1,23}$/u.test(group) ? group : "";
   }
 
-  // Определение номера билда Steam: «Build 18805095» -> 18805095
+  // Номер билда Steam: «Build 18805095» → 18805095
   function parseBuildNumber(build) {
     const match = String(build || "").match(/\d{6,}/);
     return match ? Number(match[0]) : 0;
   }
 
-  // Канонизация названий групп (регистр)
+  // Канонизация названий групп по регистру
   function normalizeCrackerGroups(files) {
     const counts = new Map();
     files.forEach((f) => {

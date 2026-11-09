@@ -1,6 +1,7 @@
 (() => {
   "use strict";
 
+  // anticheat — аудит анти-читов: таблица служб, резервные копии, удаление
   const invoke = window.cgsApi?.invoke;
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -20,7 +21,7 @@
     return invoke(command, args);
   }
 
-  // Переключение вкладок гипервизора с проверкой прав администратора для защищённых разделов
+  // Защищённые вкладки доступны только с правами администратора
   async function setTab(name) {
     if (name === "protections") {
       try {

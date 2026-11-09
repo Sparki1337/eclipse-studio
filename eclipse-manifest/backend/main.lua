@@ -53,23 +53,73 @@ end
 
 local function safe_manifest_name(value)
     local name = tostring(value or "")
-    if name == "" or fs.filename(name) ~= name or not name:lower():match("%.manifest$") then
-        return nil
-    end
+    if not name:match("^%d+_%d+%.manifest$") then return nil end
     return name
 end
 
-local function state_file()
-    local local_app_data = utils.getenv("LOCALAPPDATA")
-    if not local_app_data or local_app_data == "" then
-        return nil
-    end
-    local primary = fs.join(local_app_data, "EclipseManifest", "state.json")
-    local legacy = fs.join(local_app_data, "CrocodileManifest", "state.json")
-    if not fs.is_file(primary) and fs.is_file(legacy) then
-        return legacy
-    end
-    return primary
+-- Значения ключей идут только через приватный stdin/stdout PowerShell, не через
+-- аргументы, временный JSON, логи или localStorage. DPAPI привязан к пользователю.
+local state_revisions = setmetatable({}, { __mode = "k" })
+local function shell_path(path)
+    local value = tostring(path or "")
+    if value == "" or value:find('["%%\r\n]') then error("Недопустимый путь PowerShell") end
+    return '"' .. value .. '"'
+end
+
+local function helper_command(name)
+    local system_root = utils.getenv("SystemRoot") or "C:\\Windows"
+    local executable = fs.join(system_root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
+    local script = fs.join(millennium.steam_path(), "millennium", "plugins", "eclipse-manifest", "backend", name)
+    if not fs.is_file(script) then error("Компонент безопасного хранения не установлен: обновите плагин") end
+    return shell_path(executable) .. " -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File " .. shell_path(script)
+end
+
+local function ipc_directory()
+    local root = utils.getenv("LOCALAPPDATA")
+    if not root or root == "" then error("LOCALAPPDATA недоступна") end
+    local directory = fs.join(root, "EclipseManifest", "ipc")
+    local ok, err = fs.create_directories(directory)
+    if ok == nil then error("Не удалось подготовить обмен: " .. tostring(err)) end
+    return directory
+end
+
+-- Запросы файловой транзакции не содержат ключей. Результат не считается
+-- успешным, пока помощник не подтвердил атомарный commit или полный rollback.
+local function file_transaction(action, request)
+    local token = utils.uuid()
+    local directory = ipc_directory()
+    local input = fs.join(directory, token .. ".request.json")
+    local output = fs.join(directory, token .. ".reply.json")
+    local written, err = write_binary(input, json.encode(request))
+    if not written then return false, tostring(err) end
+    local command = helper_command("file-transaction.ps1") .. " -Action " .. action ..
+        " -RequestFile " .. shell_path(input) .. " -ReplyFile " .. shell_path(output) .. " 2>NUL"
+    local ran, run_err = pcall(utils.exec, command)
+    local content = read_binary(output)
+    fs.remove(input)
+    if fs.is_file(output) then fs.remove(output) end
+    local ok, result = pcall(json.decode, tostring(content or ""))
+    if not ok or type(result) ~= "table" then return false, "Помощник не подтвердил транзакцию; журнал сохранён" end
+    if result.success ~= true then return false, tostring(result.message or run_err or "Ошибка транзакции") end
+    if not ran then return false, "Транзакция не подтверждена" end
+    return true, result
+end
+
+-- Stream packages with a hard byte budget and cancellable deadline. Credentials
+-- use stdin only; the acknowledgement contains no private headers or response body.
+local function download_package(url, output, headers, timeout)
+    local acknowledgement = fs.join(ipc_directory(), utils.uuid() .. ".download-reply.json")
+    local command = helper_command("download-package.ps1") .. " -OutputFile " .. shell_path(output) ..
+        " -ReplyFile " .. shell_path(acknowledgement) .. " -TimeoutSeconds " .. tostring(timeout) .. " 2>NUL"
+    local pipe = io.popen(command, "w")
+    if not pipe then return nil, "Не удалось запустить безопасное скачивание" end
+    local wrote = pcall(function() pipe:write(json.encode({ url = url, headers = headers })) end)
+    pipe:close()
+    local content = read_binary(acknowledgement)
+    if fs.is_file(acknowledgement) then fs.remove(acknowledgement) end
+    local ok, result = pcall(json.decode, tostring(content or ""))
+    if not wrote or not ok or type(result) ~= "table" then return nil, "Скачивание не подтверждено" end
+    return result
 end
 
 local VALID_THEMES = {
@@ -92,59 +142,51 @@ local function default_state()
 end
 
 local function load_state()
-    local path = state_file()
-    if not path or not fs.is_file(path) then
-        return default_state()
+    if not io or type(io.popen) ~= "function" then error("Защищённое хранилище недоступно; состояние не изменено") end
+    local pipe = io.popen(helper_command("state-store.ps1") .. " -Action Read 2>NUL", "r")
+    if not pipe then error("Не удалось открыть защищённое хранилище") end
+    local content = pipe:read("*a")
+    pipe:close()
+    local ok, result = pcall(json.decode, tostring(content or ""))
+    if not ok or type(result) ~= "table" or result.success ~= true then
+        error("Состояние плагина не читается или повреждено. Оно сохранено без сброса; новые изменения запрещены.")
     end
-    local content = read_binary(path)
-    if not content or content == "" then
-        return default_state()
+    local decoded = result.exists and result.state or default_state()
+    if type(decoded) ~= "table" or type(result.revision) ~= "string" then error("Некорректное подтверждение состояния") end
+    for _, field in ipairs({ "history", "installedVersions", "installedGames" }) do
+        if decoded[field] == nil then decoded[field] = {} end
+        if type(decoded[field]) ~= "table" then error("Повреждена коллекция состояния: " .. field) end
     end
-    local ok, decoded = pcall(json.decode, content)
-    if not ok or type(decoded) ~= "table" then
-        logger:error("Eclipse Manifest state file is invalid")
-        return default_state()
-    end
-    if type(decoded.history) ~= "table" then
-        decoded.history = {}
-    end
-    if type(decoded.installedVersions) ~= "table" then
-        decoded.installedVersions = {}
-    end
-    if type(decoded.installedGames) ~= "table" then
-        decoded.installedGames = {}
+    for _, field in ipairs({ "ryuuKey", "hubcapKey" }) do
+        if decoded[field] == nil then decoded[field] = "" end
+        if type(decoded[field]) ~= "string" then error("Повреждён тип ключа; состояние не изменено") end
     end
     if decoded.cardMode ~= "full" and decoded.cardMode ~= "button" and decoded.cardMode ~= "crocodile" and decoded.cardMode ~= "eclipse" then
         decoded.cardMode = decoded.compactMode == true and "button" or "full"
     end
-    if type(decoded.theme) ~= "string" or not VALID_THEMES[decoded.theme] then
-        decoded.theme = "midnight"
-    end
-    if decoded.service ~= "ryuu" and decoded.service ~= "hubcap" then
-        decoded.service = "ryuu"
-    end
-    if type(decoded.ryuuKey) ~= "string" then
-        decoded.ryuuKey = ""
-    end
-    if type(decoded.hubcapKey) ~= "string" then
-        decoded.hubcapKey = ""
-    end
+    if not VALID_THEMES[decoded.theme] then decoded.theme = "midnight" end
+    if decoded.service ~= "ryuu" and decoded.service ~= "hubcap" then decoded.service = "ryuu" end
     decoded.compactMode = nil
+    state_revisions[decoded] = result.revision
     return decoded
 end
 
 local function save_state(state)
-    local local_app_data = utils.getenv("LOCALAPPDATA")
-    if not local_app_data or local_app_data == "" then
-        return false, "LOCALAPPDATA недоступна"
+    local revision = state_revisions[state]
+    if not revision then return false, "Неподтверждённое состояние: сначала перечитайте настройки" end
+    local output = fs.join(ipc_directory(), utils.uuid() .. ".reply.json")
+    local pipe = io.popen(helper_command("state-store.ps1") .. " -Action Write -ReplyPath " .. shell_path(output) .. " 2>NUL", "w")
+    if not pipe then return false, "Не удалось открыть защищённую запись" end
+    local written = pcall(function() pipe:write(json.encode({ revision = revision, state = state })) end)
+    pipe:close()
+    local content = read_binary(output)
+    if fs.is_file(output) then fs.remove(output) end
+    local ok, result = pcall(json.decode, tostring(content or ""))
+    if not written or not ok or type(result) ~= "table" or result.success ~= true or type(result.revision) ~= "string" then
+        return false, "Запись состояния не подтверждена; перечитайте настройки и повторите действие"
     end
-    local directory = fs.join(local_app_data, "EclipseManifest")
-    local created, create_err = fs.create_directories(directory)
-    if created == nil then
-        return false, tostring(create_err)
-    end
-    local path = fs.join(directory, "state.json")
-    return write_binary(path, json.encode(state))
+    state_revisions[state] = result.revision
+    return true
 end
 
 local function add_history(appid, name, status, message, extra)
@@ -183,8 +225,9 @@ local function add_history(appid, name, status, message, extra)
     end
     local ok, err = save_state(state)
     if not ok then
-        logger:error("Could not save Eclipse Manifest history: " .. tostring(err))
+        logger:error("Не удалось сохранить историю плагина")
     end
+    return ok, err
 end
 
 local function latest_history(state, appid)
@@ -281,68 +324,12 @@ end
 
 -- Синхронизация манифестов с depotcache
 local function sync_manifest_cache(steam_path, appid, manifest_files)
-    local result = {
-        expectedCount = #manifest_files,
-        missingBefore = 0,
-        restoredCount = 0,
-        missingCount = 0,
-        missingFiles = {}
-    }
-    if #manifest_files == 0 then
-        return result
+    local missing = 0
+    for _, name in ipairs(manifest_files or {}) do
+        local clean = safe_manifest_name(name)
+        if not clean or not fs.is_file(fs.join(steam_path, "depotcache", clean)) then missing = missing + 1 end
     end
-
-    local cache_dir = manifest_cache_directory(appid)
-    if not cache_dir then
-        result.missingCount = #manifest_files
-        result.missingFiles = manifest_files
-        return result
-    end
-    local created, create_err = fs.create_directories(cache_dir)
-    if created == nil then
-        logger:error("Could not prepare manifest cache: " .. tostring(create_err))
-    end
-
-    local depotcache = fs.join(steam_path, "depotcache")
-    fs.create_directories(depotcache)
-    for _, name in ipairs(manifest_files) do
-        local target = fs.join(depotcache, name)
-        local backup = fs.join(cache_dir, name)
-        if fs.is_file(target) then
-            if not fs.is_file(backup) then
-                local content, read_err = read_binary(target)
-                if content then
-                    local ok, write_err = write_binary(backup, content)
-                    if not ok then
-                        logger:error("Could not cache " .. name .. ": " .. tostring(write_err))
-                    end
-                else
-                    logger:error("Could not read " .. name .. " for cache: " .. tostring(read_err))
-                end
-            end
-        else
-            result.missingBefore = result.missingBefore + 1
-            if fs.is_file(backup) then
-                local content, read_err = read_binary(backup)
-                if content then
-                    local ok, write_err = write_binary(target, content)
-                    if ok then
-                        result.restoredCount = result.restoredCount + 1
-                        logger:info("Restored Steam manifest " .. name .. " for AppID " .. tostring(appid))
-                    else
-                        logger:error("Could not restore " .. name .. ": " .. tostring(write_err))
-                    end
-                else
-                    logger:error("Could not read cached " .. name .. ": " .. tostring(read_err))
-                end
-            end
-            if not fs.is_file(target) then
-                result.missingCount = result.missingCount + 1
-                table.insert(result.missingFiles, name)
-            end
-        end
-    end
-    return result
+    return { missingBefore = missing, missingCount = missing, restoredCount = 0, missingFiles = {} }
 end
 
 local function service_key(state, service)
@@ -526,20 +513,13 @@ local function legacy_manifests_match(appid, service, key, installed_game)
     local work_dir = fs.join(temp_root, "ryuu-version-check-" .. appid .. "-" .. token)
     local extract_dir = fs.join(work_dir, "package")
     local zip_path = fs.join(work_dir, appid .. "-manifests.zip")
-    local script_path = fs.join(work_dir, "extract.ps1")
-    local success_marker = fs.join(work_dir, "extracted.ok")
     local created = fs.create_directories(extract_dir)
     if created == nil then
         return nil
     end
 
-    local download = http.download(RYUU_DOWNLOAD_BASE .. appid .. "?file_type=manifest", zip_path, {
-        headers = request_headers(service, key),
-        timeout = 45,
-        follow_redirects = true,
-        verify_ssl = true,
-        user_agent = USER_AGENT
-    })
+    local download = download_package(RYUU_DOWNLOAD_BASE .. appid .. "?file_type=manifest", zip_path,
+        request_headers(service, key), 45)
     local status = download and (tonumber(download.status) or 0) or 0
     if not download or not download.success or status < 200
         or status >= 300 or (tonumber(download.bytes_written) or 0) < 4 then
@@ -547,20 +527,9 @@ local function legacy_manifests_match(appid, service, key, installed_game)
         return nil
     end
 
-    local script = "$ErrorActionPreference = 'Stop'\n" ..
-        "Add-Type -AssemblyName System.IO.Compression.FileSystem\n" ..
-        "[System.IO.Compression.ZipFile]::ExtractToDirectory(" ..
-        powershell_quote(zip_path) .. ", " .. powershell_quote(extract_dir) .. ")\n" ..
-        "Set-Content -LiteralPath " .. powershell_quote(success_marker) .. " -Value 'ok' -NoNewline\n"
-    local script_ok = write_binary(script_path, script)
-    local expanded = false
-    if script_ok then
-        expanded = run_powershell(script_path, success_marker)
-    end
-    if not script_ok or not expanded then
-        fs.remove_all(work_dir)
-        return nil
-    end
+    local expanded = file_transaction("Extract", { appid = appid, archive = zip_path,
+        destination = extract_dir, manifestsOnly = true })
+    if not expanded then fs.remove_all(work_dir); return nil end
 
     local entries = fs.list_recursive(extract_dir)
     if not entries then
@@ -624,8 +593,6 @@ local function install_package(appid, service, key)
     local work_dir = fs.join(temp_root, service .. "-manifest-" .. appid .. "-" .. token)
     local extract_dir = fs.join(work_dir, "package")
     local zip_path = fs.join(work_dir, appid .. ".zip")
-    local script_path = fs.join(work_dir, "extract.ps1")
-    local success_marker = fs.join(work_dir, "extracted.ok")
 
     local created, create_err = fs.create_directories(extract_dir)
     if created == nil then
@@ -638,13 +605,7 @@ local function install_package(appid, service, key)
         package_version = tostring(fetch_remote_version(appid, true, service, key) or "")
     end
 
-    local download, download_err = http.download(download_url, zip_path, {
-        headers = request_headers(service, key),
-        timeout = 90,
-        follow_redirects = true,
-        verify_ssl = true,
-        user_agent = USER_AGENT
-    })
+    local download, download_err = download_package(download_url, zip_path, request_headers(service, key), 90)
     if service == "hubcap" then
         hubcap_usage_cache = nil
     end
@@ -671,104 +632,23 @@ local function install_package(appid, service, key)
         end
     end
 
-    local script = "$ErrorActionPreference = 'Stop'\n" ..
-        "Add-Type -AssemblyName System.IO.Compression.FileSystem\n" ..
-        "[System.IO.Compression.ZipFile]::ExtractToDirectory(" ..
-        powershell_quote(zip_path) .. ", " .. powershell_quote(extract_dir) .. ")\n" ..
-        "Set-Content -LiteralPath " .. powershell_quote(success_marker) .. " -Value 'ok' -NoNewline\n"
-    local script_ok, script_err = write_binary(script_path, script)
-    local expanded, powershell_err = false, nil
-    if script_ok then
-        expanded, powershell_err = run_powershell(script_path, success_marker)
-    end
-    if not script_ok or not expanded then
-        fs.remove_all(work_dir)
-        return false,
-            "Не удалось распаковать пакет " .. service_name .. ": " ..
-            tostring(script_err or powershell_err or "ошибка PowerShell")
-    end
-
-    local lua_dir = fs.join(steam_path, "config", "lua")
-    local depotcache = fs.join(steam_path, "depotcache")
-    local manifest_cache = manifest_cache_directory(appid)
-    local lua_ok, lua_err = fs.create_directories(lua_dir)
-    local depot_ok, depot_err = fs.create_directories(depotcache)
-    if lua_ok == nil or depot_ok == nil then
-        fs.remove_all(work_dir)
-        return false,
-            "Не удалось подготовить папки Steam: " .. tostring(lua_err or depot_err)
-    end
-
-    local entries, list_err = fs.list_recursive(extract_dir)
-    if not entries then
-        fs.remove_all(work_dir)
-        return false, "Не удалось прочитать пакет: " .. tostring(list_err)
-    end
-
-    local lua_count = 0
-    local manifest_count = 0
-    local manifest_files = {}
-    local failures = {}
-    for _, entry in ipairs(entries) do
-        if entry.is_file then
-            local name = fs.filename(entry.path)
-            local lower = name:lower()
-            if lower:match("^%d+%.lua$") then
-                local content, read_err = read_binary(entry.path)
-                if content then
-                    local target = fs.join(lua_dir, name)
-                    local ok, err = write_binary(target, patch_lua(content))
-                    if ok then
-                        lua_count = lua_count + 1
-                    else
-                        table.insert(failures, name .. ": " .. tostring(err))
-                    end
-                else
-                    table.insert(failures, name .. ": " .. tostring(read_err))
-                end
-            elseif lower:match("%.manifest$") then
-                local content, read_err = read_binary(entry.path)
-                if content then
-                    local target = fs.join(depotcache, name)
-                    local ok, err = write_binary(target, content)
-                    if ok then
-                        manifest_count = manifest_count + 1
-                        table.insert(manifest_files, name)
-                        if manifest_cache then
-                            local cache_ok, cache_err = fs.create_directories(manifest_cache)
-                            if cache_ok ~= nil then
-                                local saved, save_err = write_binary(fs.join(manifest_cache, name), content)
-                                if not saved then
-                                    logger:error("Could not cache " .. name .. ": " .. tostring(save_err))
-                                end
-                            else
-                                logger:error("Could not prepare manifest cache: " .. tostring(cache_err))
-                            end
-                        end
-                    else
-                        table.insert(failures, name .. ": " .. tostring(err))
-                    end
-                else
-                    table.insert(failures, name .. ": " .. tostring(read_err))
-                end
-            end
-        end
-    end
-
+    local expanded, extract_result = file_transaction("Extract", {
+        appid = appid, archive = zip_path, destination = extract_dir
+    })
+    if not expanded then fs.remove_all(work_dir); return false, "Пакет отклонён: " .. tostring(extract_result) end
+    local lua_path = fs.join(extract_dir, appid .. ".lua")
+    local content, read_err = read_binary(lua_path)
+    if not content then fs.remove_all(work_dir); return false, tostring(read_err) end
+    local patched, patch_err = write_binary(lua_path, patch_lua(content))
+    if not patched then fs.remove_all(work_dir); return false, tostring(patch_err) end
+    local installed, result = file_transaction("Install", { appid = appid, steamRoot = steam_path, sourceRoot = extract_dir })
     fs.remove_all(work_dir)
-
-    if lua_count == 0 then
-        return false, "В пакете " .. service_name .. " не найден Lua-файл"
-    end
-    if #failures > 0 then
-        return false, "Часть файлов не установлена: " .. table.concat(failures, "; ")
-    end
-    return true, "Файлы автоматически размещены в папках Steam", {
-        luaCount = lua_count,
-        manifestCount = manifest_count,
-        manifestFiles = manifest_files,
-        service = service,
-        packageVersion = package_version
+    if not installed then return false, "Установка не завершена; исходные файлы и журнал сохранены: " .. tostring(result) end
+    -- Кеш содержит только копии подтверждённых манифестов. Не переписываем Steam
+    -- из устаревшего кеша и не считаем кеш доказательством владения.
+    return true, "Файлы установлены и подтверждены общим журналом транзакции", {
+        luaCount = result.luaCount, manifestCount = result.manifestCount,
+        manifestFiles = result.manifestFiles, service = service, packageVersion = package_version
     }
 end
 
@@ -817,7 +697,8 @@ function install_manifest(appid, name)
     end
     extra.repaired = repairing
     extra.pendingRestart = not repairing
-    add_history(clean, game_name, "success", message, extra)
+    local saved, save_err = add_history(clean, game_name, "success", message, extra)
+    if not saved then return reply(false, "Файлы установлены, но история не сохранена. Журнал владения сохранён; повторите действие: " .. tostring(save_err), extra) end
     logger:info("Eclipse Manifest installed data for AppID " .. clean)
     extra.configured = true
     return reply(true, message, extra)
@@ -862,9 +743,12 @@ function get_game_status(appid)
                     game_state = "update_available"
                     update_available = true
                 elseif matches == true then
-                    state.installedVersions[clean] = remote_version
-                    installed_game.packageVersion = remote_version
-                    save_state(state)
+                    if type(installed_game) == "table" then
+                        state.installedVersions[clean] = remote_version
+                        installed_game.packageVersion = remote_version
+                        local saved, save_err = save_state(state)
+                        if not saved then return reply(false, "Версия не сохранена: " .. tostring(save_err)) end
+                    end
                     game_state = "installed"
                 else
                     game_state = "installed"
@@ -876,6 +760,8 @@ function get_game_status(appid)
                 game_state = "installed"
             end
         end
+    elseif type(installed_game) == "table" then
+        game_state = configured and "repair_required" or "configuration_required"
     elseif configured and latest and latest.status == "error" then
         game_state = "error"
     end
@@ -935,8 +821,8 @@ function get_plugin_state()
     if steam_path and steam_path ~= "" then
         for _, entry in ipairs(state.history) do
             local appid = tostring(entry.appid or "")
-            if appid:match("^%d+$") and entry.status == "success" and not state.installedGames[appid]
-                and installed_lua_path(steam_path, appid) then
+            if appid:match("^%d+$") and entry.status == "success" and latest_history(state, appid) == entry
+                and not state.installedGames[appid] and installed_lua_path(steam_path, appid) then
                 state.installedGames[appid] = {
                     appid = appid,
                     name = tostring(entry.name or ("AppID " .. appid)),
@@ -954,19 +840,19 @@ function get_plugin_state()
 
     local installed_games = {}
     for appid, game in pairs(state.installedGames) do
-        if steam_path and installed_lua_path(steam_path, tostring(appid)) then
-            table.insert(installed_games, game)
-        else
-            state.installedGames[appid] = nil
-            state.installedVersions[appid] = nil
-            changed = true
-        end
+        if type(game) ~= "table" then error("Повреждена запись установки; данные сохранены") end
+        local displayed = {}
+        for key, value in pairs(game) do displayed[key] = value end
+        displayed.appid = tostring(appid)
+        displayed.missingLua = not (steam_path and installed_lua_path(steam_path, tostring(appid)))
+        table.insert(installed_games, displayed)
     end
     table.sort(installed_games, function(a, b)
         return tostring(a.name or a.appid):lower() < tostring(b.name or b.appid):lower()
     end)
     if changed then
-        save_state(state)
+        local saved, save_err = save_state(state)
+        if not saved then return reply(false, "Изменение состояния не подтверждено: " .. tostring(save_err)) end
     end
 
     return reply(true, "Состояние загружено", {
@@ -1080,94 +966,28 @@ function remove_manifest(appid)
     local installed_game = state.installedGames[clean]
     local game_name = installed_game and tostring(installed_game.name or "")
         or (latest and tostring(latest.name or "") or ("AppID " .. clean))
-    local config_lua = fs.join(steam_path, "config", "lua")
-    local stplugin = fs.join(steam_path, "config", "stplug-in")
-    local root_lua = fs.join(steam_path, "lua")
-    local depotcache = fs.join(steam_path, "depotcache")
-    local lua_paths = {
-        fs.join(config_lua, clean .. ".lua"),
-        fs.join(config_lua, clean .. ".lua.disabled"),
-        fs.join(stplugin, clean .. ".lua"),
-        fs.join(stplugin, clean .. ".lua.disabled"),
-        fs.join(root_lua, clean .. ".lua"),
-        fs.join(root_lua, clean .. ".lua.disabled")
-    }
-    local depot_ids = {}
-    local removed = 0
-    local failures = {}
-
-    for _, path in ipairs(lua_paths) do
-        if fs.is_file(path) then
-            local content = read_binary(path) or ""
-            for depot_id in content:gmatch("addappid%s*%(%s*(%d+)") do
-                depot_ids[depot_id] = true
-            end
-            local ok, err = fs.remove(path)
-            if ok then
-                removed = removed + 1
-            elseif err then
-                table.insert(failures, fs.filename(path) .. ": " .. tostring(err))
-            end
+    -- Сначала проверяем все имена из старого состояния, не удаляя ничего.
+    local recorded = installed_game and installed_game.manifestFiles or (latest and latest.manifestFiles)
+    if type(recorded) == "table" then
+        for _, name in pairs(recorded) do
+            if not safe_manifest_name(name) then return reply(false, "Некорректный путь в истории; файлы сохранены") end
         end
     end
-
-    local recorded_manifests = installed_game and installed_game.manifestFiles
-        or (latest and latest.manifestFiles)
-    if type(recorded_manifests) == "table" then
-        for _, name in ipairs(recorded_manifests) do
-            local path = fs.join(depotcache, tostring(name))
-            if fs.is_file(path) then
-                local ok, err = fs.remove(path)
-                if ok then
-                    removed = removed + 1
-                elseif err then
-                    table.insert(failures, tostring(name) .. ": " .. tostring(err))
-                end
-            end
-        end
+    local removed, result = file_transaction("Remove", { appid = clean, steamRoot = steam_path })
+    if not removed then
+        -- Не очищаем историю, кеш и список установки при частичном результате.
+        return reply(false, "Удаление не завершено; журнал и данные игры сохранены: " .. tostring(result))
     end
-
-    if fs.is_directory(depotcache) then
-        local entries = fs.list(depotcache)
-        if entries then
-            for _, entry in ipairs(entries) do
-                if entry.is_file then
-                    local depot_id = tostring(entry.name):match("^(%d+)_.*%.manifest$")
-                    if depot_id and depot_ids[depot_id] then
-                        local ok, err = fs.remove(entry.path)
-                        if ok then
-                            removed = removed + 1
-                        elseif err then
-                            table.insert(failures, tostring(entry.name) .. ": " .. tostring(err))
-                        end
-                    end
-                end
-            end
-        end
-    end
-
     state.installedVersions[clean] = nil
     state.installedGames[clean] = nil
-    local cache_dir = manifest_cache_directory(clean)
-    if cache_dir and fs.is_directory(cache_dir) then
-        local cache_ok, cache_err = fs.remove_all(cache_dir)
-        if cache_ok == nil and cache_err then
-            table.insert(failures, "резервная копия: " .. tostring(cache_err))
-        end
-    end
-    save_state(state)
-    version_cache[clean] = nil
-
-    if #failures > 0 then
-        local message = "Часть файлов не удалена: " .. table.concat(failures, "; ")
-        add_history(clean, game_name, "error", message)
-        return reply(false, message)
-    end
-    local message = removed > 0 and ("Удалено файлов: " .. tostring(removed)) or "Файлы игры уже отсутствуют"
-    add_history(clean, game_name, "removed", message)
-    return reply(true, message, {
-        removedCount = removed
-    })
+    local saved, save_err = save_state(state)
+    if not saved then return reply(false, "Файлы восстановлены, но состояние не сохранено: " .. tostring(save_err)) end
+    version_cache["ryuu:" .. clean] = nil
+    version_cache["hubcap:" .. clean] = nil
+    local message = "Файлы из подтверждённого журнала удалены либо восстановлены; общие манифесты других игр сохранены"
+    local history_ok, history_err = add_history(clean, game_name, "removed", message)
+    if not history_ok then return reply(false, "Удаление завершено, но запись истории не подтверждена: " .. tostring(history_err)) end
+    return reply(true, message, { removedCount = result.changedCount or 0 })
 end
 
 function clear_history()
@@ -1257,7 +1077,8 @@ local function on_load()
         end
     end
     if changed then
-        save_state(state)
+        local saved = save_state(state)
+        if not saved then logger:error("Eclipse Manifest: отметка перезапуска не сохранена; состояние не сброшено") end
     end
     local steam_path = millennium.steam_path()
     if steam_path and steam_path ~= "" then
@@ -1273,6 +1094,20 @@ end
 
 local function on_unload()
     logger:info("Eclipse Manifest unloaded")
+end
+
+-- Ошибки чтения/миграции не превращаются в запись пустого состояния.
+for _, name in ipairs({ "install_manifest", "get_game_status", "restore_manifest_cache", "get_plugin_state",
+    "set_service_settings", "set_card_mode", "set_theme", "remove_manifest", "clear_history", "restart_steam" }) do
+    local action = _G[name]
+    _G[name] = function(...)
+        local ok, result = pcall(action, ...)
+        if not ok then
+            logger:error("Eclipse Manifest: операция остановлена; сохранённые данные не сброшены")
+            return reply(false, "Операция остановлена: состояние или безопасный помощник недоступны. Данные не сброшены. Обновите плагин и проверьте хранилище.")
+        end
+        return result
+    end
 end
 
 return {

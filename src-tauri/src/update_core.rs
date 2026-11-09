@@ -1,7 +1,5 @@
-//! Ядро обновления внутри программы без зависимостей от Tauri.
-//! Разбор релиза GitHub с контрольными суммами, проверка нового EXE и помощник замены:
-//! копия текущей программы запускается из папки этапа, дожидается закрытия окна,
-//! заменяет EXE на месте и проверяет запуск новой версии, иначе возвращает прежнюю.
+//! Ядро обновления без Tauri: разбор релиза, проверка EXE и помощник замены на месте.
+//! Помощник дожидается закрытия окна, заменяет EXE и проверяет запуск новой версии, иначе откат.
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -32,9 +30,7 @@ pub const LOG: &str = "helper.log";
 pub const PLAN_SCHEMA: u32 = 1;
 pub const CANCELLED: &str = "Обновление отменено.";
 
-// ---------------------------------------------------------------------------
-// Версии
-// ---------------------------------------------------------------------------
+// ── Версии
 
 pub fn version_parts(version: &str) -> Option<Vec<u64>> {
     let trimmed = version.trim().trim_start_matches(['v', 'V']);
@@ -77,15 +73,12 @@ pub fn same_version(left: &str, right: &str) -> bool {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Файлы релиза и их SHA-256 со страницы expanded_assets
-// ---------------------------------------------------------------------------
+// ── Файлы релиза и их SHA-256 со страницы expanded_assets
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseAsset {
     pub name: String,
     pub url: String,
-    /// Контрольная сумма, опубликованная GitHub для файла релиза
     pub sha256: Option<String>,
 }
 
@@ -164,16 +157,13 @@ pub fn update_asset<'a>(assets: &'a [ReleaseAsset], version: &str) -> Option<&'a
         })
 }
 
-// ---------------------------------------------------------------------------
-// Проверка нового EXE: 64-битная оконная программа Windows с нужной версией
-// ---------------------------------------------------------------------------
+// ── Проверка нового EXE: 64-битная оконная программа Windows с нужной версией
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeInfo {
     pub x64: bool,
     pub executable: bool,
     pub gui: bool,
-    /// FILEVERSION из VS_FIXEDFILEINFO ресурса версии
     pub file_version: Option<[u16; 4]>,
 }
 
@@ -312,15 +302,12 @@ pub fn verify_payload(bytes: &[u8], version: &str) -> Result<(), String> {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Этап обновления: план, сигналы и итог
-// ---------------------------------------------------------------------------
+// ── Этап обновления: план, сигналы и итог
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Plan {
     pub schema: u32,
     pub nonce: String,
-    /// Заменяемый EXE: путь и имя сохраняются, поэтому ярлыки продолжают работать
     pub target: String,
     pub parent_pid: u32,
     pub old_hash: String,
@@ -446,7 +433,9 @@ pub fn remove_stage_when_done(stage: &Path, nonce: &str, timeout: Duration) -> b
     }
     let started = Instant::now();
     while started.elapsed() < timeout {
-        if stage.join(RESULT).exists() && fs::remove_dir_all(stage).is_ok() {
+        if read_outcome(stage, nonce).is_some_and(|outcome| outcome.success)
+            && fs::remove_dir_all(stage).is_ok()
+        {
             return true;
         }
         std::thread::sleep(Duration::from_millis(500));
@@ -480,25 +469,17 @@ pub fn cleanup_stale(
         let Ok(kind) = entry.file_type() else {
             continue;
         };
-        let done = if kind.is_dir() && rest.len() == 32 {
-            // Папку без итога удаляем только через 10 минут: помощник ещё может работать
-            let finished = path.join(RESULT).exists();
-            let old = entry
-                .metadata()
-                .and_then(|meta| meta.modified())
-                .ok()
-                .and_then(|time| time.elapsed().ok())
-                .is_some_and(|age| age > Duration::from_secs(600));
-            (finished || old) && fs::remove_dir_all(&path).is_ok()
-        } else if kind.is_file()
-            && [".old.exe", ".new.exe", ".failed.exe"]
-                .iter()
-                .any(|suffix| rest[32..].eq_ignore_ascii_case(suffix))
-        {
-            fs::remove_file(&path).is_ok()
-        } else {
-            false
-        };
+        // Не следуем ссылкам и не удаляем незавершённые либо чужие этапы.
+        // Отдельный *.old.exe может быть единственной рабочей копией: его имя
+        // не заменяет журнал успешно завершённой транзакции.
+        let done = kind.is_dir()
+            && !crate::safe_path::is_link(&match fs::symlink_metadata(&path) {
+                Ok(metadata) => metadata,
+                Err(_) => continue,
+            })
+            && rest.len() == 32
+            && read_outcome(&path, &nonce).is_some_and(|outcome| outcome.success)
+            && fs::remove_dir_all(&path).is_ok();
         if done {
             removed += 1;
         }
@@ -506,9 +487,7 @@ pub fn cleanup_stale(
     removed
 }
 
-// ---------------------------------------------------------------------------
-// Процессы
-// ---------------------------------------------------------------------------
+// ── Процессы
 
 #[cfg(windows)]
 pub fn process_alive(pid: u32) -> bool {
@@ -564,17 +543,12 @@ fn retry<T>(mut action: impl FnMut() -> std::io::Result<T>) -> std::io::Result<T
     }
 }
 
-// ---------------------------------------------------------------------------
-// Помощник замены EXE
-// ---------------------------------------------------------------------------
+// ── Помощник замены EXE
 
 #[derive(Debug, Clone)]
 pub struct HelperOptions {
-    /// Ожидание команды go/abort от программы
     pub decision_timeout: Duration,
-    /// Ожидание закрытия программы после go
     pub parent_timeout: Duration,
-    /// Ожидание подтверждения от новой версии
     pub health_timeout: Duration,
     pub poll: Duration,
 }
@@ -604,7 +578,6 @@ impl Log {
     }
 }
 
-/// Аргументы режима помощника, если программа запущена как помощник
 pub fn helper_request(args: &[String]) -> Option<(PathBuf, String)> {
     match args {
         [_, flag, stage, hash, ..] if flag == HELPER_ARG => {
@@ -645,7 +618,6 @@ fn load_plan(stage: &Path, plan_hash: &str) -> Result<Plan, String> {
 
 enum Relaunch {
     None,
-    /// Запуск восстановленной прежней версии с сообщением об откате
     Previous,
 }
 
@@ -992,6 +964,60 @@ mod tests {
         assert_eq!(helper_request(&args[..2]), None);
     }
 
+    #[test]
+    fn cleanup_requires_owned_matching_success_and_preserves_recovery_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let (done, nonce) = create_stage(temp.path()).unwrap();
+        let outcome = Outcome {
+            nonce: nonce.clone(),
+            success: true,
+            version: "9.1.0".into(),
+            message: String::new(),
+        };
+        crate::durable::write(&done.join(RESULT), &serde_json::to_vec(&outcome).unwrap()).unwrap();
+        let (active, active_nonce) = create_stage(temp.path()).unwrap();
+        let active_outcome = Outcome {
+            nonce: active_nonce.clone(),
+            ..outcome.clone()
+        };
+        crate::durable::write(
+            &active.join(RESULT),
+            &serde_json::to_vec(&active_outcome).unwrap(),
+        )
+        .unwrap();
+        let (failed, failed_nonce) = create_stage(temp.path()).unwrap();
+        let failed_outcome = Outcome {
+            nonce: failed_nonce,
+            success: false,
+            ..outcome.clone()
+        };
+        crate::durable::write(
+            &failed.join(RESULT),
+            &serde_json::to_vec(&failed_outcome).unwrap(),
+        )
+        .unwrap();
+        let (mismatch, _) = create_stage(temp.path()).unwrap();
+        crate::durable::write(
+            &mismatch.join(RESULT),
+            &serde_json::to_vec(&outcome).unwrap(),
+        )
+        .unwrap();
+        let unknown = temp.path().join(stage_name(&new_nonce()));
+        fs::create_dir(&unknown).unwrap();
+        crate::durable::write(
+            &unknown.join(RESULT),
+            &serde_json::to_vec(&outcome).unwrap(),
+        )
+        .unwrap();
+        let recovery = temp.path().join("Eclipse Studio-8.0.0.exe");
+        fs::write(&recovery, "last working version").unwrap();
+        assert_eq!(cleanup_stale(temp.path(), Some(&active_nonce), None), 1);
+        assert!(!done.exists());
+        for path in [active, failed, mismatch, unknown, recovery] {
+            assert!(path.exists(), "lost {}", path.display());
+        }
+    }
+
     #[cfg(unix)]
     mod helper {
         use super::super::*;
@@ -1210,7 +1236,7 @@ exit 0
         }
 
         #[test]
-        fn cleanup_keeps_active_stage_and_removes_leftovers() {
+        fn cleanup_keeps_active_stage_and_unverified_leftovers() {
             let setup = setup();
             let other = new_nonce();
             let leftover = setup.dir.join(stage_name(&other));
@@ -1219,9 +1245,9 @@ exit 0
             fs::write(backup_path(&setup.target, &other), "old").unwrap();
             fs::write(setup.dir.join(".eclipse-update-notes.txt"), "keep").unwrap();
             let removed = cleanup_stale(&setup.dir, Some(&setup.plan.nonce), Some(&setup.target));
-            assert_eq!(removed, 2);
+            assert_eq!(removed, 0);
             assert!(setup.stage.exists());
-            assert!(!leftover.exists());
+            assert!(leftover.exists());
             assert!(setup.dir.join(".eclipse-update-notes.txt").exists());
             assert!(confirm_probe(&setup.stage, &setup.plan.nonce).is_ok());
             assert!(confirm_probe(&setup.stage, &other).is_err());

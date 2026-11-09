@@ -1,4 +1,4 @@
-/* Темы, компактный режим и масштаб шрифта */
+/* themes.css — палитры тем и базовые CSS-переменные */
 :root {
   --fs: 1.2;
   --sp: 1;
@@ -131,7 +131,7 @@ html[data-theme="light"] .telegram-hub-card small { color: #64748b; }
 html[data-theme="light"] .telegram-hub-close { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.08); color: #475569; }
 html[data-theme="light"] .telegram-hub-close:hover { background: rgba(0,0,0,.08); color: #0f172a; }
 
-/* Высококонтрастная типографика и контролы светлой темы */
+/* ── Высококонтрастная типографика и контролы светлой темы */
 html[data-theme="light"] body { color: #050811; }
 html[data-theme="light"] .pref-row { background: #ffffff; border-color: rgba(0,0,0,.09); box-shadow: 0 1px 3px rgba(0,0,0,.03); }
 html[data-theme="light"] .pref-row:hover { border-color: rgba(var(--accent-rgb), .35); background: rgba(var(--accent-rgb), .035); }
@@ -234,9 +234,9 @@ html[data-theme="light"] .log-entry.system .log-icon { color: #2563eb; }
 html[data-theme="light"] .log-entry.info .log-msg { color: #1e293b; }
 html[data-theme="light"] .log-entry.info .log-icon { color: #64748b; }
 
-/* Адаптация модулей для светлой темы */
+/* ── Адаптация модулей для светлой темы */
 
-/* Online Fix: Зона сброса папки и карточка найденной игры */
+/* ── Online Fix: Зона сброса папки и карточка найденной игры */
 html[data-theme="light"] .drop-zone {
   background: #f8fafc !important;
   border: 1px dashed rgba(0, 0, 0, 0.16) !important;
@@ -275,7 +275,7 @@ html[data-theme="light"] .game-state {
   color: #0f172a !important;
 }
 
-/* DLC Unlocker: Кнопки, поиск, методы и карточки библиотеки */
+/* ── DLC Unlocker: Кнопки, поиск, методы и карточки библиотеки */
 html[data-theme="light"] .dlc-button {
   background: #ffffff !important;
   border: 1px solid rgba(0, 0, 0, 0.14) !important;
@@ -365,7 +365,7 @@ html[data-theme="light"] .dlc-destination strong {
   color: #0f172a !important;
 }
 
-/* Eclipse Manifest: Выпадающий список поиска, карточки игр и модальное окно деталей */
+/* ── Eclipse Manifest: Выпадающий список поиска, карточки игр и модальное окно деталей */
 html[data-theme="light"] .lua-search-dropdown {
   background: #ffffff !important;
   border-color: rgba(0, 0, 0, 0.12) !important;
@@ -426,7 +426,7 @@ html[data-theme="light"] .lua-detail-close:hover {
   color: #000000 !important;
 }
 
-/* Hypervisor: Журнал операций, сценарий запуска, карточки игр и профили */
+/* ── Hypervisor: Журнал операций, сценарий запуска, карточки игр и профили */
 html[data-theme="light"] .hv-log-panel {
   background: #ffffff !important;
   border-color: rgba(0, 0, 0, 0.09) !important;
@@ -549,7 +549,7 @@ html[data-theme="light"] .hv-chip small {
   color: #64748b !important;
 }
 
-/* Anticheat & VBS: Карточки компонентов и кнопки */
+/* ── Anticheat & VBS: Карточки компонентов и кнопки */
 html[data-theme="light"] .ac-item {
   background: #ffffff !important;
   border-color: rgba(0, 0, 0, 0.08) !important;
@@ -609,7 +609,7 @@ html[data-theme="light"] .vbs-disable-button {
   font-weight: 800 !important;
 }
 
-/* Кряки (Files / Cracks): Карточки сетки и списка, теги и заголовки */
+/* ── Кряки (Files / Cracks): Карточки сетки и списка, теги и заголовки */
 html[data-theme="light"] .file-card,
 html[data-theme="light"] .files-catalog.view-list .file-card {
   background: #ffffff !important;
@@ -644,7 +644,7 @@ html[data-theme="light"] .catalog-tag {
   color: #334155 !important;
 }
 
-/* Кряки: Авто-установка тумблер */
+/* ── Кряки: Авто-установка тумблер */
 html[data-theme="light"] .files-auto-install {
   background: #ffffff !important;
   border-color: rgba(0, 0, 0, 0.12) !important;
@@ -672,7 +672,7 @@ html[data-theme="light"] .files-auto-install input:checked + i::after {
   background: var(--accent) !important;
 }
 
-/* Уведомления (Toast) */
+/* ── Уведомления (Toast) */
 html[data-theme="light"] .toast {
   background: #ffffff !important;
   border-color: rgba(0, 0, 0, 0.12) !important;
@@ -691,7 +691,7 @@ html[data-theme="light"] .toast.error {
 }
 
 
-/* Настройки */
+/* ── Настройки */
 .settings-container {
   max-width: 840px;
   margin: 0 auto;
@@ -702,7 +702,7 @@ html[data-theme="light"] .toast.error {
   overflow-x: hidden;
 }
 
-/* Переключатель вкладок (Segmented Control / Tabs) */
+/* ── Переключатель вкладок (Segmented Control / Tabs) */
 .settings-segmented-tabs {
   display: flex;
   gap: 6px;
@@ -756,7 +756,7 @@ html[data-theme="light"] .toast.error {
   color: var(--accent);
 }
 
-/* Панели вкладок с плавной анимацией перехода */
+/* ── Панели вкладок с плавной анимацией перехода */
 .settings-tab-panel {
   display: none;
   flex-direction: column;
@@ -816,7 +816,7 @@ html.no-motion .settings-tab-panel {
   animation: none !important;
 }
 
-/* Карточки настроек */
+/* ── Карточки настроек */
 .settings-card {
   padding: 24px 28px;
   min-height: auto;
@@ -872,7 +872,7 @@ html.no-motion .settings-tab-panel {
 .theme-preview-cosmos   { --a:#180e30; --b:#090414; --s:#110924; --p:#28184e; }
 .theme-preview-rose     { --a:#260a22; --b:#0e030c; --s:#190616; --p:#381132; }
 
-/* Цвет акцента */
+/* ── Цвет акцента */
 .accent-picker {
   display: flex;
   flex-wrap: wrap;
@@ -927,7 +927,7 @@ html.no-motion .settings-tab-panel {
   transform: scale(1) !important;
 }
 
-/* Параметры интерфейса */
+/* ── Параметры интерфейса */
 .settings-group {
   margin-top: 10px;
   border: 1px solid var(--line);
@@ -989,7 +989,7 @@ html.no-motion .settings-tab-panel {
   cursor: default;
 }
 
-/* Упрощённый контрол размера шрифта (слайдер + проценты + кнопка сброса ↺) */
+/* ── Упрощённый контрол размера шрифта (слайдер + проценты + кнопка сброса ↺) */
 .font-size-control {
   display: flex;
   align-items: center;
@@ -1057,7 +1057,7 @@ html.no-motion .settings-tab-panel {
   transform: rotate(-45deg);
 }
 
-/* Сервис манифестов (CrocLua) */
+/* ── Сервис манифестов (CrocLua) */
 .svc-options {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1125,7 +1125,7 @@ html.no-motion .settings-tab-panel {
   transform: translate(1px, -1px);
 }
 
-/* HubCap API блок и плавное раскрытие */
+/* ── HubCap API блок и плавное раскрытие */
 .svc-key {
   margin-top: 18px;
   display: flex;
@@ -1204,7 +1204,7 @@ html.no-motion .settings-tab-panel {
   transform: translate(1px, -1px);
 }
 
-/* Источник ключа Ryuu: выбор не изменяет сохранённый личный ключ. */
+/* ── Источник ключа Ryuu: выбор не изменяет сохранённый личный ключ. */
 #ryuu-key-block {
   --ryuu-control-weight: 650;
   margin-top: calc(18px * var(--sp-k, 1));
@@ -1355,7 +1355,7 @@ html.no-motion .settings-tab-panel {
   padding: 0 !important;
 }
 
-/* Компактный инпут HubCap со встроенными кнопками */
+/* ── Компактный инпут HubCap со встроенными кнопками */
 .svc-input-box {
   position: relative;
   display: flex;
@@ -1411,7 +1411,7 @@ html.no-motion .settings-tab-panel {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* Компактная плашка лимитов с Progress Bar */
+/* ── Компактная плашка лимитов с Progress Bar */
 .hubcap-usage-card {
   display: flex;
   flex-direction: column;
@@ -1458,7 +1458,7 @@ html.no-motion .settings-tab-panel {
   transition: width 200ms ease;
 }
 
-/* Папка загрузки (Кряки) */
+/* ── Папка загрузки (Кряки) */
 .download-bar {
   display: flex;
   align-items: center;
@@ -1564,7 +1564,7 @@ html.no-motion .settings-tab-panel {
   display: none !important;
 }
 
-/* Адаптация светлой темы для настроек */
+/* ── Адаптация светлой темы для настроек */
 html[data-theme="light"] .settings-segmented-tabs {
   background: #f1f5f9;
   border-color: rgba(0, 0, 0, 0.1);
@@ -1635,7 +1635,7 @@ html[data-theme="light"] .personalization-segment button.active {
 }
 
 
-/* Светлая тема: акценты затемняются в bootstrap.js до контраста ≥ 4,5:1 */
+/* ── Светлая тема: акценты затемняются в bootstrap.js до контраста ≥ 4,5:1 */
 html[data-theme="light"] {
   --tone-ok: #047857;
   --tone-warn: #b45309;
@@ -1653,10 +1653,10 @@ html[data-theme="light"] .files-hero-stats strong { color: var(--accent); }
 html[data-theme="light"] .files-refresh { color: var(--accent); }
 html[data-theme="light"] .files-refresh:hover:not(:disabled) { color: var(--accent); }
 html[data-theme="light"] .utility-card-copy small { color: var(--accent); }
-/* Образцы акцента в светлой теме уже тёмные: рамка и подпись о затемнении */
+/* ── Образцы акцента в светлой теме уже тёмные: рамка и подпись о затемнении */
 html[data-theme="light"] .accent::before { border-color: rgba(0, 0, 0, .12); }
 .accent-light-note { display: none; margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
 html[data-theme="light"] .accent-light-note { display: block; }
-/* Приглушённые подписи, подобранные под тёмный фон, на белом были слишком бледными */
+/* ── Приглушённые подписи, подобранные под тёмный фон, на белом были слишком бледными */
 html[data-theme="light"] :is(.brand-caption, .loader-option small, .lua-autoupdate small) { color: #526071; }
 html[data-theme="light"] .millennium-plugin-badge:not(.ready, .warning, .error) { color: #526071; border-color: rgba(0, 0, 0, .1); background: rgba(0, 0, 0, .03); }

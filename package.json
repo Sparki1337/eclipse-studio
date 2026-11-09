@@ -1,13 +1,13 @@
 {
   "name": "eclipse-studio",
   "private": true,
-  "version": "9.0.0",
+  "version": "10.0.0",
   "description": "Eclipse Studio — premium Tauri desktop client",
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
-    "test": "node tests/contracts.cjs && node tests/ui.test.js",
+    "test": "node tests/contracts.cjs && node --test tests/regressions.cjs && node tests/ui.test.js",
     "test:ui": "node tests/ui.test.js",
     "test:contracts": "node tests/contracts.cjs",
     "test:secret-config": "python tests/ryuu_secret_test.py",
@@ -19,11 +19,19 @@
     "release": "python scripts/release.py",
     "ui:dev": "node scripts/ui_dev_server.js",
     "screenshots": "node scripts/capture_all_screenshots.js",
-    "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets"
+    "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets",
+    "test:regressions": "node --test tests/regressions.cjs",
+    "quality": "node scripts/quality.cjs",
+    "prebuild": "npm run quality",
+    "fix:integrity": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/fix_build_integrity.ps1",
+    "test:plugin-safety": "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/plugin-safety.ps1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.1",
     "playwright": "1.64.1",
     "puppeteer-core": "^25.14.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

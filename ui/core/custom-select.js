@@ -1,13 +1,12 @@
-// Выпадающие списки в стиле приложения
 (() => {
   "use strict";
 
+  // custom-select — выпадающие списки в стиле приложения вместо системных
   let activeDropdown = null;
   let activeTrigger = null;
   let activeSelect = null;
   let highlightedIndex = -1;
 
-  // Закрытие всех активных выпадающих списков
   function closeAll() {
     if (activeDropdown) {
       const dropdown = activeDropdown;
@@ -32,7 +31,7 @@
   }
 
   function handleWindowScroll(e) {
-    // Если скролл происходит внутри самого выпадающего списка, не закрываем
+    // Скролл внутри самого списка не закрывает его
     if (activeDropdown && activeDropdown.contains(e.target)) return;
     closeAll();
   }
@@ -41,7 +40,6 @@
     closeAll();
   }
 
-  // Обновление отображаемого текста на кнопке-триггере
   function updateTriggerLabel(select, trigger) {
     const selectedOpt = select.options[select.selectedIndex];
     const labelSpan = trigger.querySelector(".custom-select-label");
@@ -50,7 +48,6 @@
     }
   }
 
-  // Позиционирование выпадающего меню относительно кнопки-триггера
   function positionDropdown(trigger, dropdown) {
     const rect = trigger.getBoundingClientRect();
     const dropdownHeight = Math.min(dropdown.scrollHeight || 240, 260);
@@ -64,7 +61,7 @@
     dropdown.style.maxWidth = `${Math.max(rect.width, 320)}px`;
     dropdown.style.zIndex = "99999";
 
-    // Если снизу мало места, а сверху достаточно — открываем вверх
+    // Снизу мало места, сверху достаточно — открываем вверх
     if (spaceBelow < dropdownHeight + 12 && spaceAbove > dropdownHeight + 12) {
       dropdown.style.top = `${rect.top - dropdownHeight - 6}px`;
       dropdown.classList.add("opens-up");
@@ -74,7 +71,6 @@
     }
   }
 
-  // Навигация с клавиатуры внутри открытого списка
   function handleKeyNavigation(e) {
     if (!activeDropdown || !activeSelect) return;
     const options = Array.from(activeDropdown.querySelectorAll(".custom-select-option"));
@@ -109,13 +105,12 @@
     });
   }
 
-  // Построение списка опций внутри выпадающего меню
   function populateDropdownOptions(select, dropdown, trigger) {
     dropdown.innerHTML = "";
     const options = Array.from(select.options);
 
     options.forEach((opt, index) => {
-      // Проверка на разделитель (disabled опции или с тире)
+      // Disabled-опции и опции с тире превращаем в разделители
       const isSeparator = opt.disabled || opt.classList.contains("custom-sound-sep") || opt.classList.contains("separator");
       if (isSeparator) {
         const sep = document.createElement("div");
@@ -162,7 +157,6 @@
     });
   }
 
-  // Открытие выпадающего меню для селекта
   function openDropdown(select, trigger) {
     if (activeTrigger === trigger) {
       closeAll();
@@ -181,7 +175,6 @@
     document.body.appendChild(dropdown);
     positionDropdown(trigger, dropdown);
 
-    // Добавляем класс для плавной анимации появления
     requestAnimationFrame(() => {
       dropdown.classList.add("open");
       trigger.classList.add("open");
@@ -199,24 +192,22 @@
     window.addEventListener("resize", handleWindowResize, { passive: true });
     window.addEventListener("keydown", handleKeyNavigation);
 
-    // Прокрутка к выбранной опции
     const selectedItem = dropdown.querySelector(".custom-select-option.selected");
     if (selectedItem) {
       selectedItem.scrollIntoView({ block: "nearest" });
     }
   }
 
-  // Инициализация кастомного обёртывания для одиночного элемента <select>
   function enhanceSelect(select) {
     if (!select || select._customSelectEnhanced) return;
     select._customSelectEnhanced = true;
 
-    // Прячем оригинальный селект с сохранением доступности для событий
+    // Оригинальный селект скрыт, но продолжает генерировать события
     select.classList.add("custom-select-hidden");
     select.setAttribute("tabindex", "-1");
     select.setAttribute("aria-hidden", "true");
 
-    // Создаём кнопку-триггер
+    // Кнопка-триггер
     const trigger = document.createElement("div");
     trigger.className = "custom-select-trigger";
     trigger.setAttribute("role", "combobox");
@@ -224,7 +215,7 @@
     trigger.setAttribute("aria-expanded", "false");
     trigger.setAttribute("tabindex", "0");
 
-    // Копируем специфичные классы оформления
+    // Классы оформления из исходного селекта
     if (select.classList.contains("ui-audio-select")) trigger.classList.add("ui-audio-select-trigger");
     if (select.classList.contains("ui-font-select")) trigger.classList.add("ui-font-select-trigger");
 
@@ -239,10 +230,9 @@
 
     updateTriggerLabel(select, trigger);
 
-    // Вставляем триггер сразу после скрытого селекта
     select.parentNode.insertBefore(trigger, select.nextSibling);
 
-    // Предотвращаем срабатывание клика родительского <label>
+    // Клик не должен проваливаться в родительский <label>
     trigger.addEventListener("mousedown", (e) => {
       e.preventDefault();
     });
@@ -253,7 +243,6 @@
       openDropdown(select, trigger);
     });
 
-    // Навигация с клавиатуры
     trigger.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
         e.preventDefault();
@@ -263,13 +252,12 @@
       }
     });
 
-    // Функция синхронизации состояния
     select._customSelectUpdate = () => {
       updateTriggerLabel(select, trigger);
       trigger.classList.toggle("disabled", select.disabled);
     };
 
-    // Наблюдатель за изменениями опций (childList)
+    // Синхронизация при изменении опций
     const observer = new MutationObserver(() => {
       updateTriggerLabel(select, trigger);
       if (activeSelect === select && activeDropdown) {
@@ -279,21 +267,19 @@
     });
     observer.observe(select, { childList: true, subtree: true, characterData: true });
 
-    // Наблюдатель за изменением атрибута disabled
     const attrObserver = new MutationObserver(() => {
       trigger.classList.toggle("disabled", select.disabled);
     });
     attrObserver.observe(select, { attributes: true, attributeFilter: ["disabled"] });
   }
 
-  // Перехват клика вне селекта для закрытия
   document.addEventListener("click", (e) => {
     if (activeDropdown && !activeDropdown.contains(e.target) && (!activeTrigger || !activeTrigger.contains(e.target))) {
       closeAll();
     }
   }, { capture: true });
 
-  // Перехват свойства select.value для моментальной синхронизации метки триггера
+  // Перехват setter select.value — мгновенная синхронизация метки триггера
   try {
     const proto = HTMLSelectElement.prototype;
     const originalDescriptor = Object.getOwnPropertyDescriptor(proto, "value");
@@ -312,7 +298,6 @@
     }
   } catch (_) {}
 
-  // Поиск и улучшение всех тегов <select> на странице
   function initAll() {
     const selects = document.querySelectorAll("select");
     selects.forEach(enhanceSelect);
@@ -324,7 +309,6 @@
     initAll();
   }
 
-  // Экспорт в глобальное пространство Eclipse Studio
   window.cgsCustomSelect = {
     initAll,
     enhanceSelect,

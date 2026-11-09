@@ -1,1060 +1,836 @@
-// Автономный лаунчер Eclipse-HV с модулем drvloader
+//! Eclipse-HV — автономный лаунчер гипервизорного окружения.
+//! Конвейер из 7 шагов с журналированием; сбой формирует отчёт и восстанавливает состояние.
 
 #![windows_subsystem = "windows"]
 
-use serde::Serialize;
-use std::{
-    env, fs,
-    path::{Path, PathBuf},
-    process::{Command, Output},
-    thread,
-    time::Duration,
-};
+mod avcheck;
+mod avguard;
+mod cert;
+mod conflicts;
+mod dse;
+mod error;
+mod game;
+mod logging;
+mod offsets;
+mod preflight;
+mod process;
+mod rtcore;
+mod status;
+mod sys;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
-#[cfg(target_os = "windows")]
-use windows::{
-    core::{w, HSTRING, PCWSTR},
-    Win32::{
-        Storage::FileSystem::{
-            CreateFileW, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_SHARE_READ, FILE_SHARE_WRITE,
-            OPEN_EXISTING,
-        },
-        System::Console::{
-            AllocConsole, AttachConsole, SetStdHandle, ATTACH_PARENT_PROCESS, STD_ERROR_HANDLE,
-            STD_OUTPUT_HANDLE,
-        },
-        UI::{
-            Shell::ShellExecuteW,
-            WindowsAndMessaging::{
-                MessageBoxW, IDYES, MB_ICONERROR, MB_ICONWARNING, MB_OK, MB_YESNO, SW_SHOWNORMAL,
-            },
-        },
-    },
-};
-
-// Флаг создания процесса без создания отдельного окна консоли
-const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-// Вшитый в тело лаунчера исполняемый файл drvloader.exe (KernelResearchKit)
-const DRVLOADER_BYTES: &[u8] = include_bytes!("../resources/drvloader.exe");
-
-// Приоритетные имена исполняемых файлов гипервизорных загрузчиков
-const PRIORITY_LAUNCHER_NAMES: &[&str] = &[
-    "hv-startgame.exe",
-    "hypervisor-launcher.exe",
-    "steamclient_loader_x64.exe",
-    "launcher.exe",
-    "hypervisorlauncher.exe",
-];
-
-// Исключаемые из автопоиска служебные утилиты, краш-репортеры и установщики
-const EXCLUDED_EXE_PATTERNS: &[&str] = &[
-    "eclipse-hv",
-    "hv-launcher",
-    "hv-plugnplay",
-    "drvloader",
-    "kvc",
-    "7zr",
-    "7z",
-    "unitycrashhandler",
-    "crashreport",
-    "crash_report",
-    "crashreporter",
-    "werfault",
-    "unins",
-    "uninstall",
-    "setup.exe",
-    "installer.exe",
-    "vc_redist",
-    "dxsetup",
-    "epicgames",
-    "epicwebhelper",
-    "battleye",
-    "easyanticheat",
-];
-
-// Структура отчёта об ошибке для сериализации в JSON
-#[derive(Debug, Serialize)]
-struct JsonErrorReport {
-    timestamp: String,
-    version: String,
-    application: String,
-    status: String,
-    error_step: String,
-    error_message: String,
-    environment: EnvironmentInfo,
-    diagnostic_details: DiagnosticDetails,
+/// Макрос записи события в журнал: `hvlog!(Уровень, "категория", "текст")`.
+#[macro_export]
+macro_rules! hvlog {
+    ($level:ident, $category:expr, $($arg:tt)*) => {{
+        $crate::logging::log(
+            $crate::logging::Level::$level,
+            $category,
+            &format!($($arg)*),
+        );
+    }};
 }
 
-#[derive(Debug, Serialize)]
-struct EnvironmentInfo {
-    working_directory: String,
-    executable_path: String,
-    command_line_args: Vec<String>,
-    is_administrator: bool,
-    core_isolation_hvci_enabled: bool,
+use std::{env, path::PathBuf, process::Command};
+
+use error::{Diagnostics, HvError};
+
+const STEP_PRIVILEGES: &str = "Шаг 1/7: права администратора";
+const STEP_PREFLIGHT: &str = "Шаг 2/7: проверка системы";
+const STEP_CONFLICTS: &str = "Шаг 3/7: нейтрализация конфликтов";
+const STEP_LOADER: &str = "Шаг 4/7: подготовка окружения";
+const STEP_SEARCH: &str = "Шаг 5/7: поиск исполняемого файла игры";
+const STEP_LAUNCH: &str = "Шаг 6/7: запуск игры";
+const STEP_RESTORE: &str = "Шаг 7/7: восстановление и очистка";
+
+const HELP_TEXT: &str = "Eclipse-HV — автономный лаунчер гипервизорного окружения.
+
+Использование:
+  Eclipse-HV.exe [игра.exe] [ключи]
+
+Аргументы:
+  игра.exe      прямой путь к исполняемому файлу игры; без него файл
+                ищется автоматически рядом с лаунчером
+  --debug, -d   режим отладки: консоль с подробным журналом
+  --status      осмотр системы: защиты, службы, конфликты, сертификат,
+                антивирус (только чтение, настройки защиты не меняются)
+  cert <операция>  управление тестовым сертификатом подписи
+                    (install / remove / sign <файл> / status)
+  --help, -h    эта справка
+
+Порядок работы:
+  1. Запрос прав администратора
+  2. Проверка изоляции ядра (HVCI), VBS, фактического состояния защит,
+     состояния процессора и антивируса
+  3. Нейтрализация конфликтующих программ
+  4. Подготовка окружения: временный обход проверки подписей
+  5. Поиск и запуск игры
+  6. Восстановление защиты и автоперезапуск остановленных программ
+
+Журнал работы: Eclipse-HV.log (рядом с лаунчером)
+Отчёты: Eclipse-HV-error.json, Eclipse-HV-status.json
+
+Настройки антивируса: на время сессии лаунчер добавляет себя, свой каталог
+и временный каталог драйвера в исключения Защитника Windows, а при
+завершении снимает их. Исключения пользователя не изменяются; если сессию
+прервали принудительно, следы снимаются при следующем запуске.";
+
+const CERT_USAGE_TEXT: &str = "Управление тестовым сертификатом подписи кода.
+
+Использование:
+  Eclipse-HV.exe cert install       создать сертификат «Eclipse-HV Test CA»
+                                     и установить его в доверенные хранилища
+                                     (требуются права администратора)
+  Eclipse-HV.exe cert remove        удалить сертификат из всех хранилищ
+                                     (требуются права администратора)
+  Eclipse-HV.exe cert sign <файл>   подписать файл тестовым сертификатом
+  Eclipse-HV.exe cert status        показать состояние сертификата
+
+Сертификат работает в режиме тестовой подписи Windows.
+Включение: bcdedit /set testsigning on (затем перезагрузка)
+либо через Eclipse Studio, раздел «Гипервизор» → VBS 2.0.
+Выключение: bcdedit /set testsigning off.";
+
+/// Подкоманда лаунчера (не запускает конвейер игры).
+#[derive(Debug, Clone, PartialEq)]
+enum Subcommand {
+    Status,
+    Cert(cert::CertOp),
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct DiagnosticDetails {
-    target_executable: Option<String>,
-    candidate_count: usize,
-    vanguard_detected: bool,
-    msi_afterburner_detected: bool,
-    msi_relaunch_path: Option<String>,
-    drvloader_temp_path: Option<String>,
-    drvloader_bypass_exit_code: Option<i32>,
-    drvloader_restore_exit_code: Option<i32>,
+struct Args {
+    debug: bool,
+    help: bool,
+    subcommand: Option<Subcommand>,
+    cert_requested: bool,
+    explicit_target: Option<PathBuf>,
+    raw: Vec<String>,
 }
 
-// Состояние нейтрализованных конфликтов для последующего перезапуска
-#[derive(Debug, Clone, Default)]
-struct ConflictState {
-    vanguard_detected: bool,
-    msi_detected: bool,
-    msi_path: Option<PathBuf>,
+#[derive(Default)]
+struct Session {
+    diagnostics: Diagnostics,
+    dse: Option<dse::DseSession>,
+    conflict_state: conflicts::ConflictState,
+    av_guard: avguard::AvGuard,
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args = parse_args();
 
-    // Проверка аргументов отладки: поддерживаем варианты --debug, -debug, /debug, -d, /d
-    let debug_mode = args.iter().any(|arg| {
-        let lower = arg.trim().to_lowercase();
-        lower == "--debug" || lower == "-debug" || lower == "/debug" || lower == "-d" || lower == "/d"
-    });
-
-    // Запрашиваем UAC до создания консоли, чтобы не открывать два окна
-    if !is_admin() {
-        if let Err(err) = elevate_self(&args) {
-            let details = DiagnosticDetails {
-                target_executable: None,
-                candidate_count: 0,
-                vanguard_detected: false,
-                msi_afterburner_detected: false,
-                msi_relaunch_path: None,
-                drvloader_temp_path: None,
-                drvloader_bypass_exit_code: None,
-                drvloader_restore_exit_code: None,
-            };
-            write_and_show_error(
-                "UAC_ELEVATION",
-                &format!("Не удалось запросить повышение прав администратора: {err}"),
-                details,
-            );
-        }
+    if args.help {
+        sys::show_info_box(&format!("{} — справка", sys::APP_TITLE), HELP_TEXT);
         return;
     }
 
-    // Если запрошен режим отладки, инициализируем консольный вывод только в повышенном процессе
-    if debug_mode {
-        init_debug_console();
-        println!("============================================================");
-        println!("       Eclipse-HV v1.1.0 (Диагностический режим Debug)       ");
-        println!("============================================================");
-        println!("[OK] Права администратора подтверждены.");
+    // Подкоманда сертификата с нераспознанной операцией: справка и выход
+    if args.cert_requested && args.subcommand.is_none() {
+        sys::show_info_box(&format!("{} — сертификат", sys::APP_TITLE), CERT_USAGE_TEXT);
+        std::process::exit(1);
     }
 
-    // Проверка, передан ли прямой путь к исполняемому файлу через аргументы (например, Drag-and-Drop на exe)
-    let explicit_target = args.iter().skip(1).find_map(|arg| {
-        if arg.starts_with('-') || arg.starts_with('/') {
-            return None;
-        }
-        let p = PathBuf::from(arg);
-        if p.is_file() && p.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) {
-            Some(p)
-        } else {
-            None
-        }
-    });
+    let code = match &args.subcommand {
+        Some(Subcommand::Status) => run_status(&args),
+        Some(Subcommand::Cert(op)) => run_cert(&args, op),
+        None => launch(&args),
+    };
+    std::process::exit(code);
+}
 
-    // Определение базовой рабочей папки (каталог, где находится сам Eclipse-HV.exe)
+fn parse_args() -> Args {
+    parse_args_from(env::args().collect())
+}
+
+fn parse_args_from(raw: Vec<String>) -> Args {
+    let matches_flag = |names: &[&str], arg: &str| {
+        let value = arg.trim().to_lowercase();
+        names.contains(&value.as_str())
+    };
+
+    let debug = raw
+        .iter()
+        .skip(1)
+        .any(|arg| matches_flag(&["--debug", "-debug", "/debug", "-d", "/d"], arg));
+    let help = raw
+        .iter()
+        .skip(1)
+        .any(|arg| matches_flag(&["--help", "-help", "/help", "-h", "/h", "help", "?"], arg));
+
+    // Ключи — в любом месте, «голое» слово status — только первым,
+    // чтобы не конфликтовать с операцией «cert status»
+    let status_requested = raw
+        .iter()
+        .skip(1)
+        .any(|arg| matches_flag(&["--status", "-status", "/status"], arg))
+        || raw.get(1).is_some_and(|arg| matches_flag(&["status"], arg));
+
+    // Подкоманда сертификата: первый позиционный аргумент «cert» (приоритет выше)
+    let cert_requested = raw
+        .get(1)
+        .is_some_and(|arg| arg.trim().eq_ignore_ascii_case("cert"));
+
+    let subcommand = if cert_requested {
+        raw.get(2)
+            .map(|op| op.trim().to_lowercase())
+            .and_then(|op| match op.as_str() {
+                "install" => Some(Subcommand::Cert(cert::CertOp::Install)),
+                "remove" => Some(Subcommand::Cert(cert::CertOp::Remove)),
+                "status" => Some(Subcommand::Cert(cert::CertOp::Status)),
+                "sign" => raw
+                    .get(3)
+                    .map(|path| Subcommand::Cert(cert::CertOp::Sign(PathBuf::from(path)))),
+                _ => None,
+            })
+    } else if status_requested {
+        Some(Subcommand::Status)
+    } else {
+        None
+    };
+
+    // Явный путь к игре — существующий exe; в режимах подкоманд не интерпретируется
+    let explicit_target = if subcommand.is_some() || cert_requested {
+        None
+    } else {
+        raw.iter().skip(1).find_map(|arg| {
+            if arg.starts_with('-') || arg.starts_with('/') {
+                return None;
+            }
+            let path = PathBuf::from(arg);
+            if path.is_file() && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) {
+                Some(path)
+            } else {
+                None
+            }
+        })
+    };
+
+    Args {
+        debug,
+        help,
+        subcommand,
+        cert_requested,
+        explicit_target,
+        raw,
+    }
+}
+
+/// Инициализация: журнал, обработчик прерывания, рабочий каталог.
+fn bootstrap(args: &Args) -> PathBuf {
+    // Базовый каталог: папка, в которой размещён сам лаунчер
     let base_dir = env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .and_then(|path| path.parent().map(|path| path.to_path_buf()))
         .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
     let _ = env::set_current_dir(&base_dir);
 
-    // Проверка изоляции ядра (HVCI), строго по логике эталонного HV-PlugNPlay.bat
-    if check_core_isolation() {
-        let ask_msg = "В вашей системе Windows включена изоляция ядра (Memory Integrity / HVCI).\n\n\
-            Для работы гипервизора и запуска игр с обходом проверки цифровой подписи (DSE) эту защиту необходимо выключить.\n\n\
-            Отключить изоляцию ядра в реестре и перезагрузить компьютер прямо сейчас?";
+    logging::init(&base_dir);
+    sys::install_interrupt_handler();
 
-        #[cfg(target_os = "windows")]
-        if ask_user_yes_no("Eclipse-HV — Требуется отключение HVCI", ask_msg) {
-            if let Err(err) = disable_hvci_and_reboot() {
-                let details = DiagnosticDetails {
-                    target_executable: None,
-                    candidate_count: 0,
-                    vanguard_detected: false,
-                    msi_afterburner_detected: false,
-                    msi_relaunch_path: None,
-                    drvloader_temp_path: None,
-                    drvloader_bypass_exit_code: None,
-                    drvloader_restore_exit_code: None,
-                };
-                write_and_show_error(
-                    "HVCI_DISABLE_FAILED",
-                    &format!("Не удалось применить параметры отключения изоляции ядра: {err}"),
-                    details,
-                );
-            }
-            return;
-        }
+    hvlog!(
+        Info,
+        "старт",
+        "{} запущен (аргументы: {:?}), каталог: {}",
+        sys::app_name_with_version(),
+        args.raw.iter().skip(1).collect::<Vec<_>>(),
+        base_dir.display()
+    );
 
-        let details = DiagnosticDetails {
-            target_executable: None,
-            candidate_count: 0,
-            vanguard_detected: false,
-            msi_afterburner_detected: false,
-            msi_relaunch_path: None,
-            drvloader_temp_path: None,
-            drvloader_bypass_exit_code: None,
-            drvloader_restore_exit_code: None,
-        };
+    base_dir
+}
 
-        let msg = "Изоляция ядра (Memory Integrity / HVCI) осталась включённой в системе Windows.\n\n\
-            Для работы гипервизора отключите изоляцию ядра:\n\
-            1. В приложении Eclipse Studio (раздел «Гипервизор» -> «VBS 2.0» -> «Выключить визор»)\n\
-            2. Либо в «Безопасность Windows» -> «Безопасность устройства» -> «Изоляция ядра».\n\n\
-            После выключения перезагрузите компьютер и запустите игру повторно.";
-
-        write_and_show_error("CORE_ISOLATION_CHECK", msg, details);
-        return;
+/// Осмотр системы без изменений (`--status`).
+fn run_status(args: &Args) -> i32 {
+    let base_dir = bootstrap(args);
+    if args.debug {
+        sys::init_debug_console();
+        logging::enable_console();
     }
 
-    if debug_mode {
-        println!("[OK] Изоляция ядра (HVCI) отключена. Система готова.");
-    }
+    hvlog!(Info, "диагностика", "запрошен осмотр системы (--status)");
 
-    // Проверка совместимости XSAVE/XCR0 для современных процессоров (AVX-512 / Zen 4 / Intel 12+)
-    let xcr0 = read_xcr0();
-    if xcr0 > 7 {
-        if debug_mode {
-            println!("[WARN] Обнаружен XCR0 = {xcr0} (> 7). Требуется маскирование xsaveremovefeature.");
-        }
+    let status = status::collect();
+    status::log_summary(&status);
 
-        let ask_msg = "Обнаружен современный процессор с расширенными инструкциями (XCR0 > 7: AVX-512 / Zen 4 / Intel 12+).\n\n\
-            Для совместимости с гипервизорными играми и токенами Denuvo (Star Wars Galactic Racer, Planet Zoo, Phantom Blade и др.) \
-            требуется ограничить размер контекста процессора в BCD (xsaveremovefeature).\n\n\
-            Применить оптимизацию BCD и перезагрузить компьютер прямо сейчас?";
-
-        #[cfg(target_os = "windows")]
-        if ask_user_yes_no("Eclipse-HV — Оптимизация процессора для Denuvo", ask_msg) {
-            if let Err(err) = configure_xsave_and_reboot() {
-                let details = DiagnosticDetails {
-                    target_executable: None,
-                    candidate_count: 0,
-                    vanguard_detected: false,
-                    msi_afterburner_detected: false,
-                    msi_relaunch_path: None,
-                    drvloader_temp_path: None,
-                    drvloader_bypass_exit_code: None,
-                    drvloader_restore_exit_code: None,
-                };
-                write_and_show_error(
-                    "XCR0_OPTIMIZATION_FAILED",
-                    &format!("Не удалось применить оптимизацию BCD xsaveremovefeature: {err}"),
-                    details,
-                );
-            }
-            return;
-        }
-
-        if debug_mode {
-            println!("[WARN] Пользователь отклонил перезагрузку BCD. Продолжаем запуск на свой страх и риск.");
-        }
-    } else if debug_mode {
-        println!("[OK] Процессор совместим с гипервизором (XCR0 = {xcr0} <= 7).");
-    }
-
-    // Временная нейтрализация конфликтующих процессов (MSI Afterburner, RTSS, Vanguard) и очистка служб
-    let conflict_state = stop_conflicts(debug_mode);
-
-    // Извлечение встроенного drvloader.exe во временный каталог
-    let temp_dir = env::temp_dir().join(format!("Eclipse-HV-{}", std::process::id()));
-    if let Err(err) = fs::create_dir_all(&temp_dir) {
-        let details = DiagnosticDetails {
-            target_executable: None,
-            candidate_count: 0,
-            vanguard_detected: conflict_state.vanguard_detected,
-            msi_afterburner_detected: conflict_state.msi_detected,
-            msi_relaunch_path: conflict_state.msi_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-            drvloader_temp_path: None,
-            drvloader_bypass_exit_code: None,
-            drvloader_restore_exit_code: None,
-        };
-        write_and_show_error(
-            "TEMP_DIR_CREATION",
-            &format!("Не удалось создать временный каталог для drvloader: {err}"),
-            details,
-        );
-        return;
-    }
-
-    let drvloader_path = temp_dir.join("drvloader.exe");
-    if let Err(err) = fs::write(&drvloader_path, DRVLOADER_BYTES) {
-        let _ = fs::remove_dir_all(&temp_dir);
-        let details = DiagnosticDetails {
-            target_executable: None,
-            candidate_count: 0,
-            vanguard_detected: conflict_state.vanguard_detected,
-            msi_afterburner_detected: conflict_state.msi_detected,
-            msi_relaunch_path: conflict_state.msi_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-            drvloader_temp_path: None,
-            drvloader_bypass_exit_code: None,
-            drvloader_restore_exit_code: None,
-        };
-        write_and_show_error(
-            "DRVLOADER_EXTRACTION",
-            &format!("Не удалось извлечь drvloader.exe: {err}"),
-            details,
-        );
-        return;
-    }
-
-    if debug_mode {
-        println!("[OK] drvloader.exe подготовлен: {}", drvloader_path.display());
-        println!("[1/3] Driver Signature Enforcement: Временный BYPASS...");
-    }
-
-    // Выполнение обхода проверки цифровой подписи (drvloader bypass)
-    let bypass_output = run_command(&drvloader_path, &["bypass"]);
-    let bypass_code = bypass_output.as_ref().map(|o| o.status.code().unwrap_or(-1)).ok();
-
-    if let Ok(ref out) = bypass_output {
-        if debug_mode {
-            let out_str = String::from_utf8_lossy(&out.stdout);
-            let err_str = String::from_utf8_lossy(&out.stderr);
-            if !out_str.trim().is_empty() {
-                println!("{out_str}");
-            }
-            if !err_str.trim().is_empty() {
-                eprintln!("{err_str}");
-            }
-        }
-    }
-
-    if bypass_output.is_err() || bypass_code != Some(0) {
-        let err_text = match &bypass_output {
-            Ok(out) => {
-                let stdout = String::from_utf8_lossy(&out.stdout);
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                let combined = if stderr.trim().is_empty() {
-                    stdout.to_string()
-                } else if stdout.trim().is_empty() {
-                    stderr.to_string()
-                } else {
-                    format!("{}\n[Диагностика stderr]:\n{}", stdout.trim(), stderr.trim())
-                };
-                format!(
-                    "drvloader завершился с кодом {}. Вывод:\n{}",
-                    out.status.code().unwrap_or(-1),
-                    combined.trim()
-                )
-            }
-            Err(e) => format!("Не удалось выполнить drvloader bypass: {e}"),
-        };
-
-        let _ = fs::remove_dir_all(&temp_dir);
-
-        let details = DiagnosticDetails {
-            target_executable: None,
-            candidate_count: 0,
-            vanguard_detected: conflict_state.vanguard_detected,
-            msi_afterburner_detected: conflict_state.msi_detected,
-            msi_relaunch_path: conflict_state.msi_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-            drvloader_temp_path: Some(drvloader_path.to_string_lossy().to_string()),
-            drvloader_bypass_exit_code: bypass_code,
-            drvloader_restore_exit_code: None,
-        };
-
-        write_and_show_error("DSE_BYPASS", &err_text, details);
-        return;
-    }
-
-    if debug_mode {
-        println!("[OK] DSE успешно отключён в оперативной памяти.");
-        println!("[2/3] Поиск целевого исполняемого файла игры...");
-    }
-
-    // Интеллектуальный поиск исполняемого файла игры
-    let (target_game, candidate_count) = find_game_executable(&base_dir, explicit_target.as_ref(), debug_mode);
-    let (game_exe, game_dir) = match target_game {
+    let report_path = status::write_report(&status, &base_dir);
+    let mut text = status::summary(&status).join("\n");
+    match &report_path {
         Some(path) => {
-            let parent = path.parent().unwrap_or(&base_dir).to_path_buf();
-            (path, parent)
+            hvlog!(Info, "диагностика", "отчёт записан: {}", path.display());
+            text.push_str(&format!("\n\nПодробный отчёт: {}", path.display()));
         }
-        None => {
-            // Восстанавливаем DSE перед выходом при ошибке
-            let restore_res = run_command(&drvloader_path, &["restore"]);
-            let restore_code = restore_res.as_ref().map(|o| o.status.code().unwrap_or(-1)).ok();
-            cleanup_driver_services();
-            let _ = fs::remove_dir_all(&temp_dir);
-
-            let details = DiagnosticDetails {
-                target_executable: None,
-                candidate_count,
-                vanguard_detected: conflict_state.vanguard_detected,
-                msi_afterburner_detected: conflict_state.msi_detected,
-                msi_relaunch_path: conflict_state.msi_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-                drvloader_temp_path: Some(drvloader_path.to_string_lossy().to_string()),
-                drvloader_bypass_exit_code: bypass_code,
-                drvloader_restore_exit_code: restore_code,
-            };
-
-            write_and_show_error(
-                "GAME_NOT_FOUND",
-                &format!(
-                    "Не удалось обнаружить исполняемый файл игры в каталоге:\n{}\n\n\
-                    Поместите Eclipse-HV.exe в корневую директорию игры.",
-                    base_dir.display()
-                ),
-                details,
-            );
-            return;
-        }
-    };
-
-    if debug_mode {
-        println!("[OK] Найден исполняемый файл игры: {}", game_exe.display());
-        println!("[OK] Рабочая директория: {}", game_dir.display());
-        println!("[INFO] Запуск игрового процесса...");
+        None => text.push_str("\n\nНе удалось записать файл отчёта (подробности в журнале)."),
     }
 
-    // Запуск целевой игры в её рабочей директории
-    let launch_result = Command::new(&game_exe).current_dir(&game_dir).spawn();
-
-    if let Err(err) = launch_result {
-        let restore_res = run_command(&drvloader_path, &["restore"]);
-        let restore_code = restore_res.as_ref().map(|o| o.status.code().unwrap_or(-1)).ok();
-        cleanup_driver_services();
-        let _ = fs::remove_dir_all(&temp_dir);
-
-        let details = DiagnosticDetails {
-            target_executable: Some(game_exe.to_string_lossy().to_string()),
-            candidate_count,
-            vanguard_detected: conflict_state.vanguard_detected,
-            msi_afterburner_detected: conflict_state.msi_detected,
-            msi_relaunch_path: conflict_state.msi_path.as_ref().map(|p| p.to_string_lossy().to_string()),
-            drvloader_temp_path: Some(drvloader_path.to_string_lossy().to_string()),
-            drvloader_bypass_exit_code: bypass_code,
-            drvloader_restore_exit_code: restore_code,
-        };
-
-        write_and_show_error(
-            "GAME_LAUNCH",
-            &format!("Ошибка при запуске {}: {err}", game_exe.display()),
-            details,
-        );
-        return;
-    }
-
-    if debug_mode {
-        println!("[OK] Процесс игры запущен. Ожидание 5 сек для загрузки гипервизорного хука...");
-    }
-
-    // Ожидание инициализации гипервизорного драйвера игры
-    thread::sleep(Duration::from_secs(5));
-
-    if debug_mode {
-        println!("[3/3] Driver Signature Enforcement: Восстановление защиты (RESTORE)...");
-    }
-
-    // Восстановление исходного состояния проверки цифровых подписей (DSE Restore)
-    let restore_output = run_command(&drvloader_path, &["restore"]);
-    let restore_code = restore_output.as_ref().map(|o| o.status.code().unwrap_or(-1)).ok();
-
-    if debug_mode {
-        if restore_code == Some(0) {
-            println!("[OK] Безопасность DSE успешно восстановлена.");
-        } else {
-            println!("[WARN] Предупреждение при восстановлении DSE: {:?}", restore_code);
-        }
-    }
-
-    // Очистка временных служб драйвера RTCore64
-    cleanup_driver_services();
-
-    // Перезапуск MSI Afterburner, если он был предварительно закрыт
-    if let Some(path) = conflict_state.msi_path {
-        if debug_mode {
-            println!("[INFO] Перезапуск MSI Afterburner: {}", path.display());
-        }
-        let _ = Command::new(path).spawn();
-    }
-
-    // Очистка временных файлов
-    let _ = fs::remove_dir_all(&temp_dir);
-
-    if debug_mode {
-        println!("============================================================");
-        println!("[ГОТОВО] Игра успешно запущена. Eclipse-HV завершает работу.");
-        println!("============================================================");
-        thread::sleep(Duration::from_secs(3));
-    }
-}
-
-// Инициализация консоли в режиме отладки (--debug) с перенаправлением CONOUT$
-#[cfg(target_os = "windows")]
-fn init_debug_console() {
-    unsafe {
-        let attached = AttachConsole(ATTACH_PARENT_PROCESS).is_ok();
-        if !attached {
-            let _ = AllocConsole();
-        }
-
-        // Перенаправляем дескрипторы CONOUT$ для гарантированного вывода println! / eprintln!
-        let conout = CreateFileW(
-            w!("CONOUT$"),
-            FILE_GENERIC_READ.0 | FILE_GENERIC_WRITE.0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            None,
-            OPEN_EXISTING,
-            windows::Win32::Storage::FileSystem::FILE_FLAGS_AND_ATTRIBUTES(0),
-            None,
-        );
-        if let Ok(handle) = conout {
-            let _ = SetStdHandle(STD_OUTPUT_HANDLE, handle);
-            let _ = SetStdHandle(STD_ERROR_HANDLE, handle);
-        }
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn init_debug_console() {}
-
-// Проверка прав администратора через членство в группе Builtin Administrators
-fn is_admin() -> bool {
-    let output = run_command("net.exe", &["session"]);
-    output.is_ok_and(|o| o.status.success())
-}
-
-// Запрос прав администратора через ShellExecuteW с глаголом runas
-fn elevate_self(args: &[String]) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        let exe_path = env::current_exe()
-            .map_err(|e| format!("Не удалось определить путь к исполняемому файлу: {e}"))?;
-        let base_dir = exe_path
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-
-        let exe_hstring = HSTRING::from(exe_path.to_string_lossy().as_ref());
-        let dir_hstring = HSTRING::from(base_dir.to_string_lossy().as_ref());
-
-        // Передаём аргументы (включая --debug и переданные пути к играм)
-        let forward_args: Vec<String> = args
-            .iter()
-            .skip(1)
-            .map(|a| {
-                if a.contains(' ') {
-                    format!("\"{a}\"")
-                } else {
-                    a.clone()
-                }
-            })
-            .collect();
-        let args_str = forward_args.join(" ");
-        let args_hstring = HSTRING::from(args_str);
-
-        let result = ShellExecuteW(
-            None,
-            w!("runas"),
-            &exe_hstring,
-            if forward_args.is_empty() {
-                PCWSTR::null()
-            } else {
-                PCWSTR(args_hstring.as_ptr())
-            },
-            &dir_hstring,
-            SW_SHOWNORMAL,
-        );
-
-        if result.0 as usize > 32 {
-            Ok(())
-        } else {
-            Err(format!("ShellExecuteW вернул код ошибки: {}", result.0 as usize))
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    Err("Повышение привилегий поддерживается только на Windows".into())
-}
-
-// Проверка изоляции ядра (HVCI) по аналогии с эталонным HV-PlugNPlay.bat
-fn check_core_isolation() -> bool {
-    use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
-
-    let hvci_path = r"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity";
-    if let Ok(key) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(hvci_path) {
-        if let Ok(enabled) = key.get_value::<u32, _>("Enabled") {
-            return enabled == 1;
-        }
-    }
-    false
-}
-
-// Диалоговое окно подтверждения действия пользователя (Да / Нет)
-#[cfg(target_os = "windows")]
-fn ask_user_yes_no(title: &str, message: &str) -> bool {
-    unsafe {
-        let title_h = HSTRING::from(title);
-        let msg_h = HSTRING::from(message);
-        let result = MessageBoxW(
-            None,
-            PCWSTR(msg_h.as_ptr()),
-            PCWSTR(title_h.as_ptr()),
-            MB_YESNO | MB_ICONWARNING,
-        );
-        result == IDYES
-    }
-}
-
-// Отключение изоляции ядра (HVCI) и VBS в реестре с последующей перезагрузкой системы
-fn disable_hvci_and_reboot() -> Result<(), String> {
-    use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
-
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-
-    // Отключение HVCI (HypervisorEnforcedCodeIntegrity)
-    let hvci_path = r"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity";
-    if let Ok((key, _)) = hklm.create_subkey(hvci_path) {
-        let _ = key.set_value("Enabled", &0u32);
-        let _ = key.set_value("WasEnabledBy", &0u32);
-    }
-
-    // Отключение базового VBS (DeviceGuard)
-    let dg_path = r"SYSTEM\CurrentControlSet\Control\DeviceGuard";
-    if let Ok((key, _)) = hklm.create_subkey(dg_path) {
-        let _ = key.set_value("EnableVirtualizationBasedSecurity", &0u32);
-    }
-
-    // Отключение гипервизора в загрузчике Windows
-    let _ = run_command("bcdedit.exe", &["/set", "hypervisorlaunchtype", "off"]);
-
-    // Инициирование перезагрузки Windows через 5 секунд с системным уведомлением
-    run_command(
-        "shutdown.exe",
-        &[
-            "/r",
-            "/t",
-            "5",
-            "/c",
-            "Eclipse-HV: Перезагрузка компьютера для применения параметров отключения изоляции ядра (HVCI)...",
-        ],
-    )?;
-
-    Ok(())
-}
-
-// XCR0 > 7 требует xsaveremovefeature в BCD для совместимости с гипервизором
-#[cfg(all(windows, target_arch = "x86_64"))]
-fn read_xcr0() -> u32 {
-    unsafe {
-        let ptr = 0x7FFE03D8 as *const u32;
-        *ptr
-    }
-}
-
-#[cfg(not(all(windows, target_arch = "x86_64")))]
-fn read_xcr0() -> u32 {
+    sys::show_info_box(&format!("{} — состояние системы", sys::APP_TITLE), &text);
+    hvlog!(Info, "диагностика", "осмотр системы завершён");
     0
 }
 
-// Применение параметра xsaveremovefeature в BCD и перезагрузка для защиты от сбоев Denuvo
-fn configure_xsave_and_reboot() -> Result<(), String> {
-    // Установка BCD-параметра xsaveremovefeature
-    run_command(
-        "bcdedit.exe",
-        &["/set", "{current}", "xsaveremovefeature", "0xFFFFFFFFFFFFFFF8"],
-    )?;
+fn run_cert(args: &Args, op: &cert::CertOp) -> i32 {
+    let _base_dir = bootstrap(args);
+    if args.debug {
+        sys::init_debug_console();
+        logging::enable_console();
+    }
+    hvlog!(Info, "сертификат", "операция: {op:?}");
 
-    // Инициирование перезагрузки Windows через 5 секунд с системным уведомлением
-    run_command(
-        "shutdown.exe",
-        &[
-            "/r",
-            "/t",
-            "5",
-            "/c",
-            "Eclipse-HV: Перезагрузка компьютера для применения оптимизации процессора (xsaveremovefeature)...",
-        ],
-    )?;
+    let result = match op {
+        cert::CertOp::Install => cert::install().map(|thumbprint| {
+            format!(
+                "Тестовый сертификат «Eclipse-HV Test CA» создан и установлен.\n\
+                 Отпечаток: {thumbprint}\n\n\
+                 Сертификат работает в режиме тестовой подписи Windows:\n\
+                 bcdedit /set testsigning on и перезагрузка\n\
+                 (или раздел «Гипервизор» → VBS 2.0 в Eclipse Studio)."
+            )
+        }),
+        cert::CertOp::Remove => cert::remove().map(|count| {
+            format!("Тестовый сертификат удалён из хранилищ (записей: {count}).")
+        }),
+        cert::CertOp::Sign(path) => cert::sign(path).map(|()| {
+            format!("Файл подписан тестовым сертификатом:\n{}", path.display())
+        }),
+        cert::CertOp::Status => {
+            let state = cert::status();
+            if state.installed() {
+                Ok(format!(
+                    "Тестовый сертификат установлен.\nОтпечаток: {}\nХранилища: {}",
+                    state.thumbprint.unwrap_or_default(),
+                    state.stores.join(", ")
+                ))
+            } else {
+                Ok(
+                    "Тестовый сертификат не установлен.\nВыполните: Eclipse-HV.exe cert install"
+                        .to_string(),
+                )
+            }
+        }
+    };
 
+    match result {
+        Ok(message) => {
+            hvlog!(Info, "сертификат", "операция завершена успешно");
+            sys::show_info_box(&format!("{} — сертификат", sys::APP_TITLE), &message);
+            0
+        }
+        Err(cause) => HvError::new(
+            "Сертификат подписи",
+            cert_error_code(op),
+            "Не удалось выполнить операцию с тестовым сертификатом.",
+        )
+        .with_cause(cause)
+        .report(),
+    }
+}
+
+fn cert_error_code(op: &cert::CertOp) -> &'static str {
+    match op {
+        cert::CertOp::Install => "CERT_INSTALL",
+        cert::CertOp::Remove => "CERT_REMOVE",
+        cert::CertOp::Sign(_) => "CERT_SIGN",
+        cert::CertOp::Status => "CERT_STATUS",
+    }
+}
+
+fn launch(args: &Args) -> i32 {
+    let base_dir = bootstrap(args);
+
+    let mut session = Session::default();
+
+    let result = run(args, &base_dir, &mut session);
+
+    match result {
+        Ok(code) => {
+            hvlog!(Info, "старт", "сессия завершена успешно (код {code})");
+            code
+        }
+        Err(err) => {
+            // Аварийное восстановление состояния системы перед отчётом
+            emergency_cleanup(&mut session);
+            err.report()
+        }
+    }
+}
+
+fn run(args: &Args, base_dir: &std::path::Path, session: &mut Session) -> Result<i32, HvError> {
+    // ── Шаг 1: права администратора
+    hvlog!(Info, "старт", "── {STEP_PRIVILEGES} ──");
+    let elevated = sys::is_elevated().map_err(|cause| {
+        HvError::new(STEP_PRIVILEGES, "ADMIN_CHECK", "Не удалось проверить права администратора.")
+            .with_cause(cause)
+            .with_diagnostics(session.diagnostics.clone())
+    })?;
+
+    if !elevated {
+        hvlog!(Info, "старт", "права администратора отсутствуют, запрос повышения");
+        sys::elevate_self(&args.raw).map_err(|cause| {
+            HvError::new(
+                STEP_PRIVILEGES,
+                "UAC_ELEVATION",
+                "Не удалось запросить повышение прав администратора.",
+            )
+            .with_cause(cause)
+            .with_diagnostics(session.diagnostics.clone())
+        })?;
+        // Продолжает повышенный дочерний процесс; родитель завершается
+        hvlog!(Info, "старт", "повышенный процесс запущен, родительский завершается");
+        return Ok(0);
+    }
+    hvlog!(Info, "старт", "права администратора подтверждены");
+
+    // Консоль отладки создаётся только в повышенном процессе
+    if args.debug {
+        sys::init_debug_console();
+        logging::enable_console();
+        hvlog!(Info, "старт", "режим отладки: консольный вывод журнала включён");
+    }
+    session.diagnostics.steps_completed.push(STEP_PRIVILEGES.into());
+
+    // ── Шаг 2: проверка системы
+    hvlog!(Info, "среда", "── {STEP_PREFLIGHT} ──");
+    hvlog!(Info, "среда", "операционная система: {}", sys::os_description());
+    let summary = preflight::inspect();
+    session.diagnostics.hvci_enabled = Some(summary.hvci_running || summary.hvci_configured);
+    session.diagnostics.hvci_running = Some(summary.hvci_running);
+    session.diagnostics.vbs_running = Some(summary.vbs_running);
+    session.diagnostics.xcr0_value = Some(summary.xcr0);
+    hvlog!(Info, "среда", "регистр XCR0: {}", summary.xcr0);
+    for line in summary.summary_lines() {
+        hvlog!(Info, "среда", "{line}");
+    }
+
+    if summary.protections_require_action() {
+        let state = summary.summary_lines().join("\n");
+
+        // UEFI-блокировка и групповая политика перекрывают правку реестра — перезагрузка бессмысленна
+        if summary.hvci_locked || summary.policy_managed {
+            return Err(protections_locked_error(&summary, &state)
+                .with_diagnostics(session.diagnostics.clone()));
+        }
+
+        let question = format!(
+            "Защиты Windows несовместимы с гипервизорным окружением:\n\n{state}\n\n\
+             Отключить изоляцию ядра (HVCI) и виртуальную защиту (VBS), а также \
+             гипервизор Windows в загрузчике, и перезагрузить компьютер прямо сейчас?"
+        );
+
+        if sys::ask_user_yes_no(
+            &format!("{} — требуется отключение защит", sys::APP_TITLE),
+            &question,
+        ) {
+            preflight::disable_hvci_and_reboot().map_err(|cause| {
+                HvError::new(
+                    STEP_PREFLIGHT,
+                    "HVCI_DISABLE_FAILED",
+                    "Не удалось применить параметры отключения изоляции ядра и VBS.",
+                )
+                .with_cause(cause)
+                .with_diagnostics(session.diagnostics.clone())
+            })?;
+            hvlog!(Info, "среда", "параметры применены, ожидание перезагрузки");
+            return Ok(0);
+        }
+
+        return Err(HvError::new(
+            STEP_PREFLIGHT,
+            "CORE_ISOLATION_CHECK",
+            &format!(
+                "Защиты Windows остались включёнными.\n\n{state}\n\n\
+                 Для работы гипервизора отключите их одним из способов:\n\
+                 1. Eclipse Studio → «Гипервизор» → «VBS 2.0» → «Выключить визор»;\n\
+                 2. «Безопасность Windows» → «Безопасность устройства» → «Изоляция ядра»;\n\
+                 3. вручную: параметры DeviceGuard в реестре и bcdedit /set hypervisorlaunchtype off.\n\n\
+                 После отключения перезагрузите компьютер и запустите игру повторно."
+            ),
+        )
+        .with_diagnostics(session.diagnostics.clone()));
+    }
+
+    // Современные процессоры с расширенными состояниями (XCR0 > 7)
+    if summary.xcr0 > 7 {
+        hvlog!(Warn, "среда", "обнаружен XCR0 = {} (> 7), рекомендуется ограничение контекста", summary.xcr0);
+        let question = "Обнаружен современный процессор с расширенными инструкциями (XCR0 > 7: AVX-512 / Zen 4 / Intel 12+).\n\n\
+            Для совместимости с гипервизорным окружением требуется ограничить размер\
+            контекста процессора в BCD (xsaveremovefeature).\n\n\
+            Применить оптимизацию BCD и перезагрузить компьютер прямо сейчас?";
+
+        if sys::ask_user_yes_no(&format!("{} — оптимизация процессора", sys::APP_TITLE), question) {
+            preflight::configure_xsave_and_reboot().map_err(|cause| {
+                HvError::new(
+                    STEP_PREFLIGHT,
+                    "XCR0_OPTIMIZATION_FAILED",
+                    "Не удалось применить оптимизацию BCD xsaveremovefeature.",
+                )
+                .with_cause(cause)
+                .with_diagnostics(session.diagnostics.clone())
+            })?;
+            hvlog!(Info, "среда", "параметр BCD применён, ожидание перезагрузки");
+            return Ok(0);
+        }
+
+        hvlog!(Warn, "среда", "пользователь отклонил оптимизацию, продолжаем на свой риск");
+    }
+
+    session.diagnostics.steps_completed.push(STEP_PREFLIGHT.into());
+    check_interrupted(STEP_PREFLIGHT, session)?;
+
+    // ── Шаг 3: нейтрализация конфликтов
+    hvlog!(Info, "конфликты", "── {STEP_CONFLICTS} ──");
+
+    // Защита в реальном времени может блокировать запись драйвера: лаунчер добавляет свои пути
+    // в исключения на время сессии; исключения пользователя не трогаются.
+    let mut defender = avcheck::inspect(base_dir);
+    avcheck::log(&defender);
+
+    let guard = avguard::AvGuard::arm(&defender, &avguard::default_targets(base_dir));
+    if guard.active() {
+        let added = guard.added().to_vec();
+        // Каталог уже в исключениях (пользовательских или временных) — предупреждение не требуется
+        defender.launcher_excluded =
+            defender.launcher_excluded || avcheck::path_is_excluded(base_dir, &added);
+        defender.exclusions.extend(added.iter().cloned());
+        session.diagnostics.defender_exclusions = added;
+        hvlog!(Info, "антивирус", "временные исключения защиты добавлены на время сессии");
+    }
+    session.av_guard = guard;
+
+    if defender.should_warn() {
+        hvlog!(
+            Warn,
+            "антивирус",
+            "защита активна, добавить исключения автоматически не удалось: загрузка драйвера может быть заблокирована"
+        );
+        if sys::ask_user_yes_no(&format!("{} — антивирус", sys::APP_TITLE), avcheck::WARNING_TEXT) {
+            sys::open_uri(avcheck::SETTINGS_URI);
+            hvlog!(Info, "антивирус", "открыты настройки защиты по выбору пользователя");
+        }
+    }
+
+    session.conflict_state = conflicts::neutralize();
+    session.diagnostics.vanguard_detected = session.conflict_state.vanguard_detected;
+    session.diagnostics.msi_afterburner_detected = session.conflict_state.msi_detected;
+    session.diagnostics.msi_relaunch_path = session
+        .conflict_state
+        .msi_path
+        .as_ref()
+        .map(|path| path.to_string_lossy().to_string());
+    session.diagnostics.steps_completed.push(STEP_CONFLICTS.into());
+    check_interrupted(STEP_CONFLICTS, session)?;
+
+    // ── Шаг 4: подготовка окружения
+    hvlog!(Info, "dse", "── {STEP_LOADER} ──");
+    let mut dse_session = match dse::DseSession::prepare(base_dir) {
+        Ok(session) => session,
+        Err(dse::PrepareError::DriverBlocked(attempts)) => {
+            let products = defender.third_party_products();
+            hvlog!(
+                Error,
+                "антивирус",
+                "драйвер заблокирован защитой: {}",
+                rtcore::describe_attempts(&attempts)
+            );
+            return Err(driver_blocked_error(base_dir, &attempts, &products)
+                .with_diagnostics(session.diagnostics.clone()));
+        }
+        Err(dse::PrepareError::Other(cause)) => {
+            return Err(HvError::new(
+                STEP_LOADER,
+                "DSE_PREPARE",
+                "Не удалось подготовить обход проверки подписей: смещения ядра или доступ к памяти.",
+            )
+            .with_cause(cause)
+            .with_diagnostics(session.diagnostics.clone()));
+        }
+    };
+    session.diagnostics.driver_temp_path = Some(dse_session.driver_path().to_string_lossy().to_string());
+    session.diagnostics.dse_offsets_source = Some(dse_session.offsets.source.clone());
+    session.diagnostics.dse_kernel_base = Some(format!("0x{:X}", dse_session.offsets.se_ci_callbacks));
+
+    // Сессия DSE сохраняется для аварийной очистки независимо от исхода
+    if let Err(cause) = dse_session.bypass() {
+        session.dse = Some(dse_session);
+        session.diagnostics.dse_patched = Some(false);
+
+        // Причина блокировки поясняется в отчёте, а не выдаётся сырым кодом
+        let av_suspected = avcheck::looks_like_av_block(&cause);
+        let mut failure = HvError::new(
+            STEP_LOADER,
+            "DSE_BYPASS",
+            "Не удалось применить временный обход проверки подписей драйверов.",
+        )
+        .with_cause(cause);
+
+        if av_suspected {
+            let products = defender.third_party_products();
+            let products_text = if products.is_empty() {
+                String::new()
+            } else {
+                format!("Обнаружено: {}. ", products.join(", "))
+            };
+            failure = failure.with_cause(format!(
+                "Причина похожа на блокировку антивирусом: файл драйвера RTCore64.sys доступен, \
+                 но загрузку службы запрещает защита. {products_text}Добавьте каталог игры ({}) \
+                 в исключения антивируса и разрешите загрузку драйверов в правилах HIPS \
+                 (ESET: «Защита от вторжений»).",
+                base_dir.display()
+            ));
+            hvlog!(
+                Warn,
+                "антивирус",
+                "загрузку службы драйвера заблокировала защита: проверьте исключения и HIPS антивируса"
+            );
+        }
+
+        return Err(failure.with_diagnostics(session.diagnostics.clone()));
+    }
+    session.dse = Some(dse_session);
+    session.diagnostics.dse_patched = Some(true);
+    hvlog!(Info, "dse", "окружение подготовлено (обход проверки подписей применён)");
+    session.diagnostics.steps_completed.push(STEP_LOADER.into());
+    check_interrupted(STEP_LOADER, session)?;
+
+    // ── Шаг 5: поиск исполняемого файла игры
+    hvlog!(Info, "поиск", "── {STEP_SEARCH} ──");
+    let search = game::find_game_executable(base_dir, args.explicit_target.as_ref());
+    session.diagnostics.candidate_count = search.candidate_count;
+
+    let Some(game_exe) = search.exe else {
+        return Err(HvError::new(
+            STEP_SEARCH,
+            "GAME_NOT_FOUND",
+            &format!(
+                "Не удалось обнаружить исполняемый файл игры в каталоге:\n{}\n\n\
+                Поместите Eclipse-HV.exe в корневую директорию игры.",
+                base_dir.display()
+            ),
+        )
+        .with_diagnostics(session.diagnostics.clone()));
+    };
+
+    let game_dir = game_exe
+        .parent()
+        .unwrap_or(base_dir)
+        .to_path_buf();
+    session.diagnostics.target_executable = Some(game_exe.to_string_lossy().to_string());
+    hvlog!(Info, "поиск", "исполняемый файл: {}", game_exe.display());
+    hvlog!(Info, "поиск", "рабочая директория: {}", game_dir.display());
+    session.diagnostics.steps_completed.push(STEP_SEARCH.into());
+    check_interrupted(STEP_SEARCH, session)?;
+
+    // ── Шаг 6: запуск игры
+    hvlog!(Info, "запуск", "── {STEP_LAUNCH} ──");
+    hvlog!(Info, "запуск", "запуск игрового процесса: {}", game_exe.display());
+    let mut command = Command::new(&game_exe);
+    command.current_dir(&game_dir);
+    command
+        .spawn()
+        .map_err(|cause| {
+            HvError::new(
+                STEP_LAUNCH,
+                "GAME_LAUNCH",
+                format!("Ошибка при запуске {}: {cause}", game_exe.display()),
+            )
+            .with_diagnostics(session.diagnostics.clone())
+        })?;
+    hvlog!(Info, "запуск", "процесс игры запущен");
+
+    // Ожидание инициализации гипервизорного окружения игрой
+    hvlog!(Info, "запуск", "ожидание 5 секунд для инициализации окружения");
+    if !preflight::wait_interruptible(5) {
+        return Err(interrupted_error(STEP_LAUNCH, session));
+    }
+    session.diagnostics.steps_completed.push(STEP_LAUNCH.into());
+
+    // ── Шаг 7: восстановление и очистка
+    hvlog!(Info, "очистка", "── {STEP_RESTORE} ──");
+    finalize_session(session);
+
+    hvlog!(Info, "очистка", "игра запущена, состояние системы восстановлено, лаунчер завершает работу");
+    session.diagnostics.steps_completed.push(STEP_RESTORE.into());
+    Ok(0)
+}
+
+/// Восстановление защиты, очистка служб, автоперезапуск, удаление временных файлов.
+fn finalize_session(session: &mut Session) {
+    restore_and_cleanup_dse(session);
+    conflicts::cleanup_driver_services();
+    conflicts::restart_msi(&session.conflict_state);
+    // Временные исключения защиты снимаются последними: драйвер уже удалён
+    session.av_guard.disarm();
+}
+
+fn emergency_cleanup(session: &mut Session) {
+    hvlog!(Warn, "очистка", "выполняется аварийное восстановление состояния системы");
+    finalize_session(session);
+}
+
+fn restore_and_cleanup_dse(session: &mut Session) {
+    let Some(dse) = session.dse.as_mut() else {
+        return;
+    };
+
+    // Восстановление выполняется, только если bypass был успешен
+    if dse.bypassed {
+        match dse.restore() {
+            Ok(()) => {
+                hvlog!(Info, "dse", "проверка подписей успешно восстановлена");
+                session.diagnostics.dse_restored = Some(true);
+            }
+            Err(cause) => {
+                hvlog!(Error, "dse", "сбой восстановления проверки подписей: {cause}");
+                session.diagnostics.dse_restored = Some(false);
+            }
+        }
+    } else {
+        hvlog!(Debug, "dse", "обход не выполнялся, восстановление не требуется");
+    }
+
+    dse.cleanup();
+    session.dse = None;
+}
+
+fn interrupted_error(step: &'static str, session: &Session) -> HvError {
+    HvError::new(
+        step,
+        "INTERRUPTED",
+        "Работа прервана пользователем (Ctrl+C). Состояние системы восстановлено.",
+    )
+    .with_exit_code(130)
+    .with_diagnostics(session.diagnostics.clone())
+}
+
+fn check_interrupted(step: &'static str, session: &Session) -> Result<(), HvError> {
+    if sys::interrupted() {
+        return Err(interrupted_error(step, session));
+    }
     Ok(())
 }
 
-// Остановка и удаление зависших или старых служб RTCore
-fn cleanup_driver_services() {
-    let _ = run_command("sc.exe", &["stop", "RTCore64"]);
-    let _ = run_command("sc.exe", &["delete", "RTCore64"]);
-    let _ = run_command("sc.exe", &["stop", "RTCoreMini64"]);
-}
-
-// Нейтрализация сторонних конфликтов (Vanguard, MSI Afterburner, RTSS)
-fn stop_conflicts(debug_mode: bool) -> ConflictState {
-    let mut state = ConflictState::default();
-
-    // Остановка Vanguard во избежание BSOD
-    let _ = run_command("net.exe", &["stop", "vgc", "/y"]);
-    let _ = run_command("net.exe", &["stop", "vgk", "/y"]);
-    let kill_vg = run_command("taskkill.exe", &["/IM", "vgtray.exe", "/F"]);
-    if kill_vg.is_ok_and(|o| o.status.success()) {
-        state.vanguard_detected = true;
-        if debug_mode {
-            println!("[INFO] Трей Vanguard остановлен во избежание системного сбоя.");
-        }
-    }
-
-    // Проверка и завершение MSI Afterburner
-    let msi_running = process_is_running("MSIAfterburner.exe");
-    if msi_running {
-        state.msi_detected = true;
-        if debug_mode {
-            println!("[INFO] Обнаружен работающий MSI Afterburner. Определение пути и остановка...");
-        }
-
-        // Пытаемся динамически определить реальный путь к MSIAfterburner.exe
-        state.msi_path = detect_msi_afterburner_path();
-
-        // Завершаем процесс и ожидаем его полной выгрузки из оперативной памяти
-        terminate_process_and_wait("MSIAfterburner.exe", 3000);
-
-        if debug_mode {
-            if let Some(ref p) = state.msi_path {
-                println!("[OK] Путь MSI Afterburner сохранён для автоперезапуска: {}", p.display());
-            } else {
-                println!("[WARN] Путь к MSI Afterburner не удалось определить автоматически.");
-            }
-        }
-    }
-
-    // Завершение RivaTuner Statistics Server (RTSS) и связанных перехватчиков
-    terminate_process_and_wait("RTSS.exe", 2000);
-    terminate_process_and_wait("EncoderServer.exe", 1000);
-    terminate_process_and_wait("RTSSHooksLoader64.exe", 1000);
-
-    // Очистка служб драйверов для предотвращения конфликта блокировки RTCore64
-    cleanup_driver_services();
-
-    // Небольшая задержка, позволяющая ядру Windows окончательно освободить дескрипторы драйверов
-    thread::sleep(Duration::from_millis(500));
-
-    state
-}
-
-// Поиск пути к исполняемому файлу MSI Afterburner через процесс, реестр или стандартные пути
-fn detect_msi_afterburner_path() -> Option<PathBuf> {
-    // Попытка получить путь из активного процесса через PowerShell
-    let ps_cmd = "(Get-Process -Name 'MSIAfterburner' -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path)";
-    if let Ok(out) = run_command("powershell.exe", &["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd]) {
-        let path_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if !path_str.is_empty() {
-            let p = PathBuf::from(&path_str);
-            if p.is_file() {
-                return Some(p);
-            }
-        }
-    }
-
-    // Попытка прочесть путь установки из реестра Windows
-    use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let reg_paths = [
-        r"SOFTWARE\WOW6432Node\MSI\Afterburner",
-        r"SOFTWARE\MSI\Afterburner",
-        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\MSI Afterburner",
-        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MSI Afterburner",
-    ];
-
-    for rpath in reg_paths {
-        if let Ok(key) = hklm.open_subkey(rpath) {
-            if let Ok(val) = key.get_value::<String, _>("InstallPath") {
-                let p = PathBuf::from(val).join("MSIAfterburner.exe");
-                if p.is_file() {
-                    return Some(p);
-                }
-            }
-            if let Ok(val) = key.get_value::<String, _>("InstallLocation") {
-                let p = PathBuf::from(val).join("MSIAfterburner.exe");
-                if p.is_file() {
-                    return Some(p);
-                }
-            }
-        }
-    }
-
-    // Стандартные пути установки на дисках C:, D:, E:
-    let candidates = [
-        r"C:\Program Files (x86)\MSI Afterburner\MSIAfterburner.exe",
-        r"C:\Program Files\MSI Afterburner\MSIAfterburner.exe",
-        r"D:\Program Files (x86)\MSI Afterburner\MSIAfterburner.exe",
-        r"D:\MSI Afterburner\MSIAfterburner.exe",
-        r"E:\Program Files (x86)\MSI Afterburner\MSIAfterburner.exe",
-        r"E:\MSI Afterburner\MSIAfterburner.exe",
-    ];
-
-    for c in candidates {
-        let p = PathBuf::from(c);
-        if p.is_file() {
-            return Some(p);
-        }
-    }
-
-    None
-}
-
-// Принудительное завершение процесса с ожиданием исчезновения из таблицы процессов
-fn terminate_process_and_wait(image_name: &str, max_wait_ms: u64) {
-    let _ = run_command("taskkill.exe", &["/IM", image_name, "/F"]);
-    let start = std::time::Instant::now();
-    while start.elapsed().as_millis() < max_wait_ms as u128 {
-        if !process_is_running(image_name) {
-            break;
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
-}
-
-// Проверка активности процесса по имени
-fn process_is_running(image_name: &str) -> bool {
-    let target = image_name.to_lowercase();
-    let output = run_command("tasklist.exe", &["/FI", &format!("IMAGENAME eq {image_name}"), "/NH"]);
-    output.is_ok_and(|o| {
-        let stdout = String::from_utf8_lossy(&o.stdout);
-        stdout.lines().any(|line| {
-            let line_lower = line.trim().to_lowercase();
-            line_lower.starts_with(&target)
-        })
-    })
-}
-
-// Интеллектуальный поиск исполняемого файла игры без искусственных ограничений по размеру
-fn find_game_executable(
-    root: &Path,
-    explicit_target: Option<&PathBuf>,
-    debug_mode: bool,
-) -> (Option<PathBuf>, usize) {
-    // Если передан прямой путь (через аргументы или перетаскивание на файл)
-    if let Some(target) = explicit_target {
-        if target.is_file() {
-            if debug_mode {
-                println!("[FIND] Использован явно переданный исполняемый файл: {}", target.display());
-            }
-            return (Some(target.clone()), 1);
-        }
-    }
-
-    // Поиск приоритетных названий в корневом каталоге игры
-    for name in PRIORITY_LAUNCHER_NAMES {
-        let candidate = root.join(name);
-        if candidate.is_file() && !is_excluded_exe(&candidate) {
-            if debug_mode {
-                println!("[FIND] Найден приоритетный лаунчер в корне: {}", candidate.display());
-            }
-            return (Some(candidate), 1);
-        }
-    }
-
-    // Сканирование корневой папки и подпапок на глубину до 4 уровней
-    let mut all_exes = Vec::new();
-    scan_directory_recursive(root, 0, 4, &mut all_exes);
-
-    // Поиск приоритетных названий в подпапках
-    for path in &all_exes {
-        if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-            let lower = file_name.to_lowercase();
-            if PRIORITY_LAUNCHER_NAMES.contains(&lower.as_str()) && !is_excluded_exe(path) {
-                if debug_mode {
-                    println!("[FIND] Найден приоритетный лаунчер в подпапке: {}", path.display());
-                }
-                return (Some(path.clone()), all_exes.len());
-            }
-        }
-    }
-
-    // Фильтрация валидных файлов игр
-    let mut valid_candidates: Vec<(PathBuf, u64)> = Vec::new();
-
-    for path in all_exes {
-        if is_excluded_exe(&path) {
-            continue;
-        }
-
-        if let Ok(meta) = fs::metadata(&path) {
-            let size = meta.len();
-            if size > 0 {
-                valid_candidates.push((path, size));
-            }
-        }
-    }
-
-    let candidate_count = valid_candidates.len();
-
-    // Сортируем по убыванию размера
-    valid_candidates.sort_by(|a, b| b.1.cmp(&a.1));
-
-    if let Some((best_path, best_size)) = valid_candidates.into_iter().next() {
-        if debug_mode {
-            println!(
-                "[FIND] Выбран исполняемый файл игры по наибольшему размеру ({:.2} МБ): {}",
-                best_size as f64 / (1024.0 * 1024.0),
-                best_path.display()
-            );
-        }
-        return (Some(best_path), candidate_count);
-    }
-
-    (None, candidate_count)
-}
-
-// Рекурсивный обход директории с ограничением максимальной глубины
-fn scan_directory_recursive(dir: &Path, current_depth: usize, max_depth: usize, results: &mut Vec<PathBuf>) {
-    if current_depth > max_depth {
-        return;
-    }
-
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.is_file() {
-            if path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe")) {
-                results.push(path);
-            }
-        } else if path.is_dir() {
-            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_lowercase();
-            // Пропускаем служебные папки, бэкапы и системные каталоги
-            if !name.starts_with('.')
-                && name != "windows"
-                && name != "temp"
-                && name != "$recycle.bin"
-                && name != "_commonredist"
-                && name != "redist"
-                && name != "support"
-                && name != "installers"
-            {
-                scan_directory_recursive(&path, current_depth + 1, max_depth, results);
-            }
-        }
-    }
-}
-
-// Проверка, является ли файл исключаемой служебной утилитой
-fn is_excluded_exe(path: &Path) -> bool {
-    // Исключаем сам запущенный процесс Eclipse-HV вне зависимости от его имени
-    if let Ok(current_exe) = env::current_exe() {
-        if path == current_exe {
-            return true;
-        }
-    }
-
-    let name = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or_default()
-        .to_lowercase();
-
-    for pattern in EXCLUDED_EXE_PATTERNS {
-        if name.contains(pattern) {
-            return true;
-        }
-    }
-    false
-}
-
-// Вспомогательный запуск процесса без создания окна
-fn run_command(program: impl AsRef<Path>, args: &[&str]) -> Result<Output, String> {
-    let mut cmd = Command::new(program.as_ref());
-    cmd.args(args);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    cmd.output()
-        .map_err(|e| format!("Не удалось запустить {}: {e}", program.as_ref().display()))
-}
-
-// Запись отчёта об ошибке в JSON и его открытие в системном редакторе
-fn write_and_show_error(step: &str, message: &str, details: DiagnosticDetails) {
-    let base_dir = env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-
-    let exe_path = env::current_exe()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
-
-    let report = JsonErrorReport {
-        timestamp: current_timestamp(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        application: "Eclipse-HV".to_string(),
-        status: "ERROR".to_string(),
-        error_step: step.to_string(),
-        error_message: message.to_string(),
-        environment: EnvironmentInfo {
-            working_directory: base_dir.to_string_lossy().to_string(),
-            executable_path: exe_path,
-            command_line_args: env::args().collect(),
-            is_administrator: is_admin(),
-            core_isolation_hvci_enabled: check_core_isolation(),
-        },
-        diagnostic_details: details,
-    };
-
-    // Запись отчёта в Eclipse-HV-error.json рядом с лаунчером или во временной папке
-    let json_content = serde_json::to_string_pretty(&report).unwrap_or_else(|_| "{}".to_string());
-    let log_path = base_dir.join("Eclipse-HV-error.json");
-
-    let final_log_path = if fs::write(&log_path, &json_content).is_ok() {
-        log_path
-    } else {
-        let temp_log = env::temp_dir().join("Eclipse-HV-error.json");
-        let _ = fs::write(&temp_log, &json_content);
-        temp_log
-    };
-
-    // Отображение диалогового окна с ошибкой
-    #[cfg(target_os = "windows")]
-    unsafe {
-        let title = w!("Ошибка запуска Eclipse-HV");
-        let text_hstring = HSTRING::from(format!(
-            "{message}\n\nПодробный отчёт записан в файл:\n{}",
-            final_log_path.display()
-        ));
-
-        MessageBoxW(
-            None,
-            PCWSTR(text_hstring.as_ptr()),
-            title,
-            MB_ICONERROR | MB_OK,
-        );
-
-        // Открытие файла JSON в программе по умолчанию
-        let log_hstring = HSTRING::from(final_log_path.to_string_lossy().as_ref());
-        let _ = ShellExecuteW(
-            None,
-            w!("open"),
-            &log_hstring,
-            PCWSTR::null(),
-            PCWSTR::null(),
-            SW_SHOWNORMAL,
+/// Ошибка: защиты включены, но автоматически отключить их нельзя.
+fn protections_locked_error(
+    summary: &preflight::PreflightSummary,
+    state: &str,
+) -> HvError {
+    let mut reason = String::new();
+    if summary.hvci_locked {
+        reason.push_str(
+            "• параметры изоляции ядра защищены блокировкой UEFI (Locked=1): \
+             изменение реестра не применится после перезагрузки;\n",
         );
     }
+    if summary.policy_managed {
+        reason.push_str(
+            "• защиты заданы групповой политикой \
+             (HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceGuard): \
+             локальные параметры будут перезаписаны после перезагрузки;\n",
+        );
+    }
+
+    HvError::new(
+        STEP_PREFLIGHT,
+        "PROTECTIONS_LOCKED",
+        &format!(
+            "Защиты Windows включены, но автоматическое отключение невозможно:\n\
+             {reason}\nТекущее состояние:\n{state}\n\n\
+             Снимите блокировку или политику:\n\
+             • блокировка UEFI: Eclipse Studio → «Гипервизор» → «VBS 2.0» → UEFI opt-out \
+             (SecConfig.efi) либо сброс UEFI-переменных;\n\
+             • групповая политика: отключите политику Device Guard в редакторе групповых \
+             политик или Intune и перезагрузите компьютер.\n\n\
+             После этого запустите игру повторно."
+        ),
+    )
 }
 
-// Получение форматированного штампа времени
-fn current_timestamp() -> String {
-    use std::time::SystemTime;
-    let now = SystemTime::now();
-    let duration = now.duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
-    format!("{}.{:03}Z", duration.as_secs(), duration.subsec_millis())
+/// Ошибка: антивирус не даёт развернуть драйвер ни в одном каталоге.
+fn driver_blocked_error(
+    base_dir: &std::path::Path,
+    attempts: &[rtcore::DeployAttempt],
+    products: &[String],
+) -> HvError {
+    let mut text = String::from(
+        "Антивирус блокирует файл драйвера RTCore64.sys, поэтому обход проверки подписей \
+         невозможен.\n\nПроверенные каталоги:\n",
+    );
+    for attempt in attempts {
+        text.push_str(&format!("• {} — {}\n", attempt.dir.display(), attempt.reason));
+    }
+    if !products.is_empty() {
+        text.push_str(&format!("\nПродукты защиты: {}.\n", products.join(", ")));
+    }
+    text.push_str(&format!(
+        "\nДобавьте каталог игры в исключения антивируса:\n{}\n\n\
+         ESET: «Настройки» → «Защита от вирусов и угроз» → «Исключения» → «Добавить каталог».\n\
+         Kaspersky: «Настройки» → «Защита» → «Исключения».\n\
+         После добавления запустите игру повторно.",
+        base_dir.display()
+    ));
+
+    HvError::new(STEP_LOADER, "AV_DRIVER_BLOCKED", text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_args(list: &[&str]) -> Args {
+        parse_args_from(list.iter().map(|value| value.to_string()).collect())
+    }
+
+    #[test]
+    fn разбор_аргументов_запуска_игры() {
+        let parsed = build_args(&["Eclipse-HV.exe", "--debug"]);
+        assert!(parsed.debug);
+        assert!(!parsed.help);
+        assert!(parsed.subcommand.is_none());
+        assert!(parsed.explicit_target.is_none());
+    }
+
+    #[test]
+    fn разбор_аргументов_диагностики() {
+        for flag in ["--status", "-status", "/status", "status"] {
+            let parsed = build_args(&["Eclipse-HV.exe", flag]);
+            assert!(matches!(parsed.subcommand, Some(Subcommand::Status)), "флаг {flag}");
+            // Аргументы подкоманды не трактуются как путь к игре
+            assert!(parsed.explicit_target.is_none());
+        }
+    }
+
+    #[test]
+    fn разбор_подкоманд_сертификата() {
+        let parsed = build_args(&["Eclipse-HV.exe", "cert", "install"]);
+        assert_eq!(parsed.subcommand, Some(Subcommand::Cert(cert::CertOp::Install)));
+
+        let parsed = build_args(&["Eclipse-HV.exe", "cert", "remove"]);
+        assert_eq!(parsed.subcommand, Some(Subcommand::Cert(cert::CertOp::Remove)));
+
+        let parsed = build_args(&["Eclipse-HV.exe", "cert", "status"]);
+        assert_eq!(parsed.subcommand, Some(Subcommand::Cert(cert::CertOp::Status)));
+
+        let parsed = build_args(&["Eclipse-HV.exe", "cert", "sign", r"C:\Game\driver.sys"]);
+        assert_eq!(
+            parsed.subcommand,
+            Some(Subcommand::Cert(cert::CertOp::Sign(PathBuf::from(
+                r"C:\Game\driver.sys"
+            ))))
+        );
+
+        // Нераспознанная операция: справка будет показана вызывающим кодом
+        let parsed = build_args(&["Eclipse-HV.exe", "cert", "banan"]);
+        assert!(parsed.cert_requested);
+        assert!(parsed.subcommand.is_none());
+
+        // Отсутствие операции после «cert»
+        let parsed = build_args(&["Eclipse-HV.exe", "cert"]);
+        assert!(parsed.cert_requested);
+        assert!(parsed.subcommand.is_none());
+    }
+
+    #[test]
+    fn флаги_регистра_не_зависят_от_регистра_символов() {
+        let parsed = build_args(&["Eclipse-HV.exe", "--STATUS"]);
+        assert!(matches!(parsed.subcommand, Some(Subcommand::Status)));
+
+        let parsed = build_args(&["Eclipse-HV.exe", "CERT", "Install"]);
+        assert_eq!(parsed.subcommand, Some(Subcommand::Cert(cert::CertOp::Install)));
+    }
 }

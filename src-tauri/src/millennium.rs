@@ -1,3 +1,5 @@
+//! Менеджер плагина Millennium «Eclipse Manifest»: установка, обновление, миграция с CrocLua.
+
 use crate::{luatools::resolve_steam_path, models::OperationResult};
 use serde::Serialize;
 use std::{
@@ -64,6 +66,22 @@ const EMBEDDED_PLUGIN_FILES: &[(&str, &[u8])] = &[
     (
         "plugin.json",
         include_bytes!("../../eclipse-manifest/plugin.json"),
+    ),
+    (
+        "backend/safe-io.ps1",
+        include_bytes!("../../eclipse-manifest/backend/safe-io.ps1"),
+    ),
+    (
+        "backend/state-store.ps1",
+        include_bytes!("../../eclipse-manifest/backend/state-store.ps1"),
+    ),
+    (
+        "backend/file-transaction.ps1",
+        include_bytes!("../../eclipse-manifest/backend/file-transaction.ps1"),
+    ),
+    (
+        "backend/download-package.ps1",
+        include_bytes!("../../eclipse-manifest/backend/download-package.ps1"),
     ),
     (
         "backend/main.lua",
@@ -738,7 +756,6 @@ mod tests {
         assert_eq!(status.status, "croclua_detected");
         assert!(status.legacy_croclua_found);
 
-        // Выполняем миграцию
         let migration = millennium_migrate_from_croclua(Some(steam.display().to_string()));
         assert!(migration.success, "{}", migration.message);
         assert!(!legacy.exists(), "legacy plugin must be removed");

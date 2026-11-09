@@ -18,7 +18,7 @@ description: Сборка строго портативной версии Eclip
    - **СТРОГО** `C:\Users\Sparki\Desktop\Programms\Hypervisor` (папка Hypervisor).
    - Запрещено сохранять бинарники в другие папки или на рабочий стол напрямую.
 3. **Имя выходного файла**:
-   - **СТРОГО** `Eclipse-Studio-vX.X.X.exe` (где `X.X.X` — актуальная версия из `tauri.conf.json`, например `Eclipse-Studio-v9.0.0.exe`).
+   - **СТРОГО** `Eclipse-Studio-vX.X.X.exe` (где `X.X.X` — актуальная версия из `tauri.conf.json`, например `Eclipse-Studio-v10.0.0.exe`).
    - Запрещено использовать суффиксы `-Portable`, `-Setup` и любые другие.
 4. **Протокол безопасности Git**:
    - **НИКОГДА** не выполнять `git commit` или `git push` без явного подтверждения пользователя.
@@ -61,7 +61,7 @@ python scripts/release.py
    ```
 
 4. **Формирование релиза GitHub**:
-   - **Tag**: `X.X.X` (например `9.0.0`)
+   - **Tag**: `X.X.X` (например `10.0.0`)
    - **Title**: `Eclipse Studio - X.X.X`
    - **Release Notes**:
      ```markdown
@@ -71,8 +71,8 @@ python scripts/release.py
      * **Feature / Fix**: English description of changes
 
      ### Antivirus Verification
-     * **VirusTotal Report**: [Analysis Result 7\70](https://www.virustotal.com/)
-     * **Status**: Clean.
+     * **VirusTotal Report**: Not scanned. Add only a verified report for this exact SHA-256.
+     * **Status**: Not verified.
      * **SHA-256 (Portable)**: `<SHA256_HASH>`
 
      ---
@@ -82,8 +82,8 @@ python scripts/release.py
      * **Фича / Исправление**: Описание изменений на русском языке
 
      ### Проверка безопасности
-     * **Отчёт VirusTotal**: [Результат проверки 7\70](https://www.virustotal.com/)
-     * **Статус**: Чистый файл.
+     * **Отчёт VirusTotal**: Не проверено. Добавлять только подтверждённый отчёт для этого SHA-256.
+     * **Статус**: Не проверено.
      * **SHA-256 (Portable)**: `<SHA256_HASH>`
      ```
 

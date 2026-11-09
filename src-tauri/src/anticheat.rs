@@ -1,3 +1,5 @@
+//! Аудит и удаление остатков анти-читов: службы и драйверы с бэкапами до удаления.
+
 use serde::Serialize;
 use std::{
     collections::HashSet,
