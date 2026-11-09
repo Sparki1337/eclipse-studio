@@ -11,6 +11,7 @@ const offline = process.env.ECLIPSE_OFFLINE === '1' ? ['--offline'] : [];
 const steps = [
   ['node', ['scripts/plugin-integrity.cjs', 'check']],
   ['node', ['scripts/resource-integrity.cjs', 'check']],
+  ['node', ['tests/integrity-newlines.cjs']],
   ['node', ['scripts/check-deepmerge.cjs']],
   ['node', ['tests/csp.test.cjs']],
   [npm, ['--prefix', 'eclipse-manifest', 'run', 'typecheck']],
