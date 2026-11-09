@@ -646,8 +646,77 @@ pub fn backup(steam: &Path, snap: &Snapshot, now_unix: u64) -> Result<PathBuf, S
     Ok(folder)
 }
 
-/// Изменения применяются по очереди; при ошибке уже записанные файлы возвращаются из снимка
+/// При ошибке файлы восстанавливаются из снимка; ошибки отката перечисляются.
 pub fn apply(steam: &Path, snap: &Snapshot, changes: &[Change]) -> Result<(), String> {
+    apply_with_operations(
+        steam,
+        snap,
+        changes,
+        None,
+        crate::durable::write,
+        remove_cloud_file,
+    )
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ApplyTargetState {
+    Missing,
+    File(Vec<u8>),
+    Other,
+}
+
+fn apply_target_state(path: &Path) -> Option<ApplyTargetState> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if !metadata.is_file() || crate::safe_path::is_link(&metadata) => {
+            Some(ApplyTargetState::Other)
+        }
+        Ok(_) => fs::read(path).ok().map(ApplyTargetState::File),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Some(ApplyTargetState::Missing)
+        }
+        Err(_) => None,
+    }
+}
+
+fn apply_target_unchanged(
+    before: Option<ApplyTargetState>,
+    after: Option<ApplyTargetState>,
+) -> bool {
+    matches!((before, after), (Some(before), Some(after)) if before == after)
+}
+
+pub(crate) fn apply_with_backup(
+    steam: &Path,
+    snap: &Snapshot,
+    changes: &[Change],
+    backup_path: &Path,
+) -> Result<(), String> {
+    apply_with_operations(
+        steam,
+        snap,
+        changes,
+        Some(backup_path),
+        crate::durable::write,
+        remove_cloud_file,
+    )
+}
+
+fn remove_cloud_file(path: &Path) -> Result<(), String> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("Не удалось удалить {}: {error}", path.display())),
+    }
+}
+
+fn apply_with_operations(
+    steam: &Path,
+    snap: &Snapshot,
+    changes: &[Change],
+    backup_path: Option<&Path>,
+    mut write: impl FnMut(&Path, &[u8]) -> Result<(), String>,
+    mut remove: impl FnMut(&Path) -> Result<(), String>,
+) -> Result<(), String> {
     let original = |name: &str| -> Option<Option<Vec<u8>>> {
         match name {
             LOADER_CONFIG => Some(snap.config.clone()),
@@ -657,32 +726,48 @@ pub fn apply(steam: &Path, snap: &Snapshot, changes: &[Change]) -> Result<(), St
             _ => None,
         }
     };
-    let mut done: Vec<(&str, Option<Vec<u8>>)> = Vec::new();
+    let mut attempted: Vec<(&str, Option<Vec<u8>>)> = Vec::new();
     for (name, bytes) in changes {
         let target = steam_file(steam, name);
+        let before = apply_target_state(&target);
         let result = match bytes {
-            Some(bytes) => crate::durable::write(&target, bytes),
-            None => match fs::remove_file(&target) {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(format!("Не удалось удалить {}: {error}", target.display())),
-            },
+            Some(bytes) => write(&target, bytes),
+            None => remove(&target),
         };
         if let Err(error) = result {
-            for (written, previous) in done.into_iter().rev() {
+            // Ошибка до замены не должна превращать существовавший каталог в сбой отката.
+            if !apply_target_unchanged(before, apply_target_state(&target)) {
+                attempted.push((*name, None));
+            }
+            let mut rollback_failures = Vec::new();
+            for (written, previous) in attempted.into_iter().rev() {
                 let path = steam_file(steam, written);
                 let previous = original(written).flatten().or(previous);
-                let _ = match previous {
-                    Some(bytes) => crate::durable::write(&path, &bytes),
-                    None => fs::remove_file(&path).map_err(|e| e.to_string()),
+                let rollback = match previous {
+                    Some(bytes) => write(&path, &bytes),
+                    None => remove(&path),
                 };
+                if let Err(rollback_error) = rollback {
+                    rollback_failures.push(format!("{}: {rollback_error}", path.display()));
+                }
             }
-            return Err(format!(
-                "{}. Изменения отменены.",
-                error.trim_end_matches('.')
-            ));
+            let cause = error.trim_end_matches('.');
+            if rollback_failures.is_empty() {
+                return Err(format!("{cause}. Изменения отменены."));
+            }
+            let mut message = format!(
+                "{cause}. Не удалось полностью восстановить исходное состояние: {}.",
+                rollback_failures.join("; ")
+            );
+            if let Some(backup_path) = backup_path {
+                message.push_str(&format!(
+                    " Резервная копия исходных файлов: {}.",
+                    backup_path.display()
+                ));
+            }
+            return Err(message);
         }
-        done.push((name, None));
+        attempted.push((*name, None));
     }
     Ok(())
 }
@@ -789,23 +874,96 @@ pub fn ensure_writable(folder: &Path) -> Result<(), String> {
         })
 }
 
+fn path_is_present(path: &Path) -> Result<bool, String> {
+    match fs::metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!(
+            "Не удалось проверить доступность {}: {error}",
+            path.display()
+        )),
+    }
+}
+
+fn migration_path(root: &Path, relative: &Path) -> Result<PathBuf, String> {
+    let relative = relative.to_str().ok_or_else(|| {
+        format!(
+            "Некорректная кодировка пути сохранения: {}",
+            relative.display()
+        )
+    })?;
+    crate::safe_path::join(root, relative)
+}
+
+fn migration_destination_matches(
+    source: &Path,
+    destination: &Path,
+    relative: &Path,
+) -> Result<bool, String> {
+    match fs::symlink_metadata(destination) {
+        Ok(metadata) if crate::safe_path::is_link(&metadata) => Err(format!(
+            "Ссылка или junction запрещена: {}",
+            destination.display()
+        )),
+        Ok(metadata) if !metadata.is_file() => Err(format!(
+            "Путь назначения не является файлом: {}",
+            destination.display()
+        )),
+        Ok(_) => {
+            let same =
+                crate::durable::hash_file(destination)? == crate::durable::hash_file(source)?;
+            if same {
+                Ok(true)
+            } else {
+                Err(format!(
+                    "В новой папке уже есть другое сохранение: {}. Выберите пустую папку.",
+                    relative.display()
+                ))
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(format!(
+            "Не удалось проверить файл назначения {}: {error}",
+            destination.display()
+        )),
+    }
+}
+
 /// Данные провайдера folder: каталоги с числовыми именами (ID аккаунтов Steam)
-fn provider_entries(folder: &Path) -> Vec<PathBuf> {
-    let Ok(entries) = fs::read_dir(folder) else {
-        return Vec::new();
-    };
-    let mut result: Vec<PathBuf> = entries
-        .flatten()
-        .filter(|entry| {
-            entry.file_type().is_ok_and(|kind| kind.is_dir())
-                && entry.file_name().to_str().is_some_and(|name| {
-                    !name.is_empty() && name.bytes().all(|b| b.is_ascii_digit())
-                })
-        })
-        .map(|entry| entry.path())
-        .collect();
+fn provider_entries(folder: &Path) -> Result<Vec<PathBuf>, String> {
+    let entries = fs::read_dir(folder).map_err(|error| {
+        format!(
+            "Не удалось прочитать прежнюю папку облака {}: {error}",
+            folder.display()
+        )
+    })?;
+    let mut result = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|error| {
+            format!(
+                "Не удалось перечислить прежнюю папку облака {}: {error}",
+                folder.display()
+            )
+        })?;
+        let kind = entry.file_type().map_err(|error| {
+            format!(
+                "Не удалось определить тип элемента {}: {error}",
+                entry.path().display()
+            )
+        })?;
+        let file_name = entry.file_name();
+        let Some(name) = file_name.to_str() else {
+            continue;
+        };
+        if !name.is_empty() && name.bytes().all(|byte| byte.is_ascii_digit()) {
+            let path = crate::safe_path::join(folder, name)?;
+            if kind.is_dir() {
+                result.push(path);
+            }
+        }
+    }
     result.sort();
-    result
+    Ok(result)
 }
 
 /// Перенос сохранений в новую папку: копирование с проверкой, оригиналы остаются на месте
@@ -816,55 +974,80 @@ pub fn migrate_folder(old: &Path, new: &Path) -> Result<usize, String> {
     if nested(old, new) {
         return Err("Папки хранения не должны быть вложены друг в друга.".into());
     }
-    if !old.exists() {
-        // Диск отключён — перенос невозможен; сама папка могла быть ещё не создана
-        let drive_present = old
-            .ancestors()
-            .last()
-            .map(|root| root.as_os_str().is_empty() || root.exists())
-            .unwrap_or(true);
-        let root_present = old.components().take(2).collect::<PathBuf>().exists();
-        if !drive_present || !root_present {
-            return Err("Прежняя папка облака недоступна. Подключите диск перед переносом.".into());
+    let old_root = match fs::symlink_metadata(old) {
+        Ok(_) => crate::safe_path::resolve_root(old)
+            .map_err(|error| format!("Прежняя папка облака недоступна: {error}"))?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Диск отключён — перенос невозможен; сама папка могла быть ещё не создана
+            let drive_present = old
+                .ancestors()
+                .last()
+                .map(path_is_present)
+                .transpose()?
+                .unwrap_or(true);
+            let volume_root = old.components().take(2).collect::<PathBuf>();
+            let root_present = volume_root.as_os_str().is_empty() || path_is_present(&volume_root)?;
+            if !drive_present || !root_present {
+                return Err(
+                    "Прежняя папка облака недоступна. Подключите диск перед переносом.".into(),
+                );
+            }
+            let parent = old
+                .parent()
+                .ok_or("Не удалось определить родительскую папку облака")?;
+            let parent_metadata = fs::metadata(parent).map_err(|error| {
+                format!(
+                    "Прежняя папка облака недоступна: не удалось проверить родительский каталог {}: {error}",
+                    parent.display()
+                )
+            })?;
+            if !parent_metadata.is_dir() {
+                return Err(format!(
+                    "Прежняя папка облака недоступна: родительский путь {} не является каталогом.",
+                    parent.display()
+                ));
+            }
+            return Ok(0);
         }
-        return Ok(0);
-    }
+        Err(error) => {
+            return Err(format!(
+                "Не удалось проверить прежнюю папку облака {}: {error}",
+                old.display()
+            ))
+        }
+    };
+    let new_root = crate::safe_path::resolve_root(new)
+        .map_err(|error| format!("Новая папка облака недоступна: {error}"))?;
     let mut files = Vec::new();
-    for account in provider_entries(old) {
+    for account in provider_entries(&old_root)? {
         for entry in walkdir::WalkDir::new(&account).follow_links(false) {
             let entry = entry
                 .map_err(|error| format!("Не удалось прочитать прежнюю папку облака: {error}"))?;
+            let relative = entry
+                .path()
+                .strip_prefix(&old_root)
+                .map_err(|_| "Неверный путь в папке облака".to_string())?
+                .to_path_buf();
+            migration_path(&old_root, &relative)?;
             if entry.file_type().is_file() {
-                let relative = entry
-                    .path()
-                    .strip_prefix(old)
-                    .map_err(|_| "Неверный путь в папке облака".to_string())?
-                    .to_path_buf();
                 files.push(relative);
             }
         }
     }
     // Сначала проверяем конфликты, чтобы не оставить частичную копию
     for relative in &files {
-        let destination = new.join(relative);
-        if destination.exists() {
-            let same = crate::durable::hash_file(&destination)?
-                == crate::durable::hash_file(&old.join(relative))?;
-            if !same {
-                return Err(format!(
-                    "В новой папке уже есть другое сохранение: {}. Выберите пустую папку.",
-                    relative.display()
-                ));
-            }
-        }
+        let source = migration_path(&old_root, relative)?;
+        let destination = migration_path(&new_root, relative)?;
+        migration_destination_matches(&source, &destination, relative)?;
     }
     let mut copied = 0;
     for relative in &files {
-        let destination = new.join(relative);
-        if destination.exists() {
+        let source = migration_path(&old_root, relative)?;
+        let destination = migration_path(&new_root, relative)?;
+        if migration_destination_matches(&source, &destination, relative)? {
             continue;
         }
-        crate::durable::copy(&old.join(relative), &destination)?;
+        crate::durable::copy(&source, &destination)?;
         copied += 1;
     }
     Ok(copied)
@@ -1118,13 +1301,142 @@ mod tests {
         // Каталог на месте файла состояния делает последнюю запись невозможной
         fs::create_dir_all(steam_file(root, STATE_FILE).join("blocked")).unwrap();
         let plan = plan_enable(root, &snap, "D:\\S", EMBEDDED, 1).unwrap();
-        assert!(apply(root, &snap, &plan.changes).is_err());
+        let error = apply(root, &snap, &plan.changes).unwrap_err();
+        assert!(error.contains("Изменения отменены."));
         assert_eq!(
             fs::read_to_string(root.join(LOADER_CONFIG)).unwrap(),
             "[lua]\npaths = ['config/lua']\n"
         );
         assert!(!root.join(DLL_NAME).exists());
         assert!(!steam_file(root, PROVIDER_CONFIG).exists());
+    }
+
+    #[test]
+    fn failed_write_after_replacing_target_rolls_back_current_file() {
+        let steam = steam_with_loader();
+        let root = steam.path();
+        let original = b"[lua]\npaths = ['config/lua']\n";
+        let replacement = b"[lua]\npaths = ['replacement']\n";
+        let config_path = root.join(LOADER_CONFIG);
+        fs::write(&config_path, original).unwrap();
+        let snap = snapshot(root).unwrap();
+        let changes = [(LOADER_CONFIG, Some(replacement.to_vec()))];
+        let mut writes = 0;
+        let error = apply_with_operations(
+            root,
+            &snap,
+            &changes,
+            None,
+            |path, bytes| {
+                writes += 1;
+                crate::durable::write(path, bytes)?;
+                if writes == 1 {
+                    Err("Сбой после замены (тест)".into())
+                } else {
+                    Ok(())
+                }
+            },
+            remove_cloud_file,
+        )
+        .unwrap_err();
+
+        assert_eq!(writes, 2);
+        assert!(error.contains("Сбой после замены (тест)"));
+        assert!(error.contains("Изменения отменены."));
+        assert!(!error.contains("Не удалось полностью восстановить"));
+        assert_eq!(fs::read(config_path).unwrap(), original.to_vec());
+    }
+
+    #[test]
+    fn failed_rollback_of_replaced_target_reports_backup_path() {
+        let steam = steam_with_loader();
+        let root = steam.path();
+        let original = b"[lua]\npaths = ['config/lua']\n";
+        let replacement = b"[lua]\npaths = ['replacement']\n";
+        let config_path = root.join(LOADER_CONFIG);
+        fs::write(&config_path, original).unwrap();
+        let snap = snapshot(root).unwrap();
+        let backup_path = backup(root, &snap, 2).unwrap();
+        let changes = [(LOADER_CONFIG, Some(replacement.to_vec()))];
+        let mut writes = 0;
+        let error = apply_with_operations(
+            root,
+            &snap,
+            &changes,
+            Some(&backup_path),
+            |path, bytes| {
+                writes += 1;
+                if writes == 1 {
+                    crate::durable::write(path, bytes)?;
+                    Err("Сбой после замены (тест)".into())
+                } else {
+                    Err("Сбой отката текущего файла (тест)".into())
+                }
+            },
+            remove_cloud_file,
+        )
+        .unwrap_err();
+
+        assert_eq!(writes, 2);
+        assert!(error.contains("Не удалось полностью восстановить исходное состояние"));
+        assert!(error.contains("Сбой отката текущего файла (тест)"));
+        assert!(error.contains(&config_path.display().to_string()));
+        assert!(error.contains(&backup_path.display().to_string()));
+        assert!(!error.contains("Изменения отменены."));
+        assert_eq!(fs::read(config_path).unwrap(), replacement.to_vec());
+    }
+
+    #[test]
+    fn failed_apply_reports_incomplete_rollback_and_backup_path() {
+        let steam = steam_with_loader();
+        let root = steam.path();
+        fs::write(root.join(LOADER_CONFIG), "[lua]\npaths = ['config/lua']\n").unwrap();
+        let snap = snapshot(root).unwrap();
+        let backup_path = backup(root, &snap, 2).unwrap();
+        fs::create_dir_all(steam_file(root, STATE_FILE).join("blocked")).unwrap();
+        let plan = plan_enable(root, &snap, "D:\\S", EMBEDDED, 1).unwrap();
+        let config_path = root.join(LOADER_CONFIG);
+        let mut config_writes = 0;
+        let error = apply_with_operations(
+            root,
+            &snap,
+            &plan.changes,
+            Some(&backup_path),
+            |path, bytes| {
+                if path == config_path.as_path() {
+                    config_writes += 1;
+                    if config_writes == 2 {
+                        return Err("Сбой отката (тест)".into());
+                    }
+                }
+                crate::durable::write(path, bytes)
+            },
+            remove_cloud_file,
+        )
+        .unwrap_err();
+
+        assert!(error.contains("Не удалось полностью восстановить исходное состояние"));
+        assert!(error.contains("Сбой отката (тест)"));
+        assert!(error.contains(&config_path.display().to_string()));
+        assert!(error.contains(&backup_path.display().to_string()));
+        assert!(!error.contains("Изменения отменены."));
+        assert_ne!(fs::read(config_path).unwrap(), snap.config.unwrap());
+    }
+
+    #[test]
+    fn provider_enumeration_errors_abort_migration() {
+        let place = tempfile::tempdir().unwrap();
+        let old = place.path().join("not-a-folder");
+        let new = place.path().join("new");
+        fs::write(&old, b"not a directory").unwrap();
+
+        assert!(provider_entries(&old)
+            .unwrap_err()
+            .contains("Не удалось прочитать прежнюю папку облака"));
+        assert!(migrate_folder(&old, &new)
+            .unwrap_err()
+            .contains("Не удалось прочитать прежнюю папку облака"));
+        assert!(!new.exists());
     }
 
     #[test]
@@ -1172,6 +1484,65 @@ mod tests {
             migrate_folder(&place.path().join("missing"), &new).unwrap(),
             0
         );
+        assert!(migrate_folder(&place.path().join("missing-parent/missing"), &new).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn migration_allows_a_redirected_root() {
+        use std::os::unix::fs::symlink;
+
+        let place = tempfile::tempdir().unwrap();
+        let actual_old = place.path().join("actual-old");
+        let old_redirect = place.path().join("old-redirect");
+        let new = place.path().join("new");
+        fs::create_dir_all(actual_old.join("123/10")).unwrap();
+        fs::write(actual_old.join("123/10/save.dat"), b"slot").unwrap();
+        symlink(&actual_old, &old_redirect).unwrap();
+
+        assert_eq!(migrate_folder(&old_redirect, &new).unwrap(), 1);
+        assert_eq!(fs::read(new.join("123/10/save.dat")).unwrap(), b"slot");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn migration_rejects_symlinked_source_children() {
+        use std::os::unix::fs::symlink;
+
+        let place = tempfile::tempdir().unwrap();
+        let old = place.path().join("old");
+        let new = place.path().join("new");
+        let outside = place.path().join("outside");
+        fs::create_dir_all(old.join("123/10")).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("save.dat"), b"outside").unwrap();
+        symlink(&outside, old.join("123/10/linked")).unwrap();
+
+        assert!(migrate_folder(&old, &new)
+            .unwrap_err()
+            .contains("Ссылка или junction запрещена"));
+        assert!(!new.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn migration_rejects_symlinked_destination_children() {
+        use std::os::unix::fs::symlink;
+
+        let place = tempfile::tempdir().unwrap();
+        let old = place.path().join("old");
+        let new = place.path().join("new");
+        let outside = place.path().join("outside");
+        fs::create_dir_all(old.join("123/10")).unwrap();
+        fs::write(old.join("123/10/save.dat"), b"slot").unwrap();
+        fs::create_dir_all(&new).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        symlink(&outside, new.join("123")).unwrap();
+
+        assert!(migrate_folder(&old, &new)
+            .unwrap_err()
+            .contains("Ссылка или junction запрещена"));
+        assert!(!outside.join("10/save.dat").exists());
     }
 
     #[test]
