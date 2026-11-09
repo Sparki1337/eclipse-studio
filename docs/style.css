@@ -131,9 +131,8 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .grain {
   position: fixed; inset: -50%; z-index: 999; pointer-events: none; opacity: .05;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  animation: grain 1.2s steps(4) infinite;
+  /* Текстура статична: анимированное зерно прыгает и читается как мигание фона */
 }
-@keyframes grain { 0%{transform:translate(0,0)} 25%{transform:translate(-3%,2%)} 50%{transform:translate(2%,-3%)} 75%{transform:translate(-2%,-1%)} 100%{transform:translate(0,0)} }
 
 /* Шапка */
 .header {
@@ -216,33 +215,39 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .btn-block { width: 100%; }
 
 .btn-light {
-  background: var(--fg);
+  /* Градиент и в покое, и при наведении — одного вида: интерполяция плавная.
+     Смена «градиент → плоский цвет» переключается скачком и выглядела как мигание */
+  background: linear-gradient(180deg, #ffffff, #ececea) #ffffff;
   color: #000;
-  box-shadow: 0 2px 6px -2px rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 2px 6px -2px rgba(255, 255, 255, 0.12);
+  /* Пружинистый отскок: рост от центра не уводит кнопку из-под курсора */
+  transition: transform .5s cubic-bezier(.34, 1.56, .64, 1), box-shadow .3s ease, background .25s ease, color .2s ease, border-color .2s ease;
 }
 .btn-light:hover {
-  background: #ffffff;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 22px -4px rgba(255, 255, 255, 0.24), 0 2px 6px -1px rgba(0, 0, 0, 0.4);
+  background: linear-gradient(180deg, #ffffff, #f8f8f6) #ffffff;
+  transform: scale(1.03);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 12px 34px -8px rgba(255, 255, 255, .3), 0 2px 6px -1px rgba(0, 0, 0, 0.4);
 }
 .btn-light:active {
-  transform: translateY(0) scale(0.985);
-  box-shadow: 0 2px 6px -1px rgba(255, 255, 255, 0.1);
+  transform: scale(.97);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), 0 2px 6px -1px rgba(255, 255, 255, 0.1);
 }
 
 .btn-line {
   border: 1px solid var(--line-2);
   color: var(--fg);
   background: rgba(255, 255, 255, .01);
+  /* Тот же пружинистый отскок, что и у главной кнопки */
+  transition: transform .5s cubic-bezier(.34, 1.56, .64, 1), box-shadow .3s ease, background .25s ease, color .2s ease, border-color .25s ease;
 }
 .btn-line:hover {
   border-color: rgba(255, 255, 255, .4);
   background: rgba(255, 255, 255, .06);
-  transform: translateY(-2px);
+  transform: scale(1.02);
   box-shadow: 0 8px 22px -4px rgba(0, 0, 0, 0.4);
 }
 .btn-line:active {
-  transform: translateY(0) scale(0.985);
+  transform: scale(.97);
   box-shadow: none;
 }
 
@@ -295,15 +300,6 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 /* Первый экран */
 .hero { position: relative; min-height: 100vh; padding: 148px 0 0; overflow: hidden; }
 .hero-bg { position: absolute; inset: 0; pointer-events: none; }
-.hero-grid {
-  position: absolute; inset: 0;
-  background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: radial-gradient(ellipse 70% 55% at 50% 20%, #000 20%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse 70% 55% at 50% 20%, #000 20%, transparent 75%);
-  animation: grid-move 24s linear infinite;
-}
-@keyframes grid-move { to { background-position: 72px 72px; } }
 .hero-croc {
   position: absolute; right: -6%; top: 40px; width: min(62vw, 980px); height: auto;
   filter: grayscale(1) contrast(1.25) brightness(.9);
@@ -1297,6 +1293,8 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background: linear-gradient(105deg, transparent 35%, rgba(0, 0, 0, .075) 50%, transparent 65%);
   transform: translateX(-110%);
+  /* Обратный ход тоже плавный: без перехода блик «телепортируется» и выглядит как мигание */
+  transition: transform .5s var(--ease-io);
 }
 .btn-light:hover::after { transform: translateX(110%); transition: transform .9s var(--ease); }
 
@@ -1483,3 +1481,160 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 
 [data-version], .badge { text-transform: none; }
 .scroll-hint.gone { opacity: 0; pointer-events: none; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ПОЛИРОВКА v2 «OBSIDIAN AURORA»
+   Глубокая визуальная полировка поверх базовых правил: атмосферный
+   свет первого экрана, живые детали карточек, ювелирные свечения.
+   Монохромная гамма и все существующие механики сохранены.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Первый экран: сияние за заголовком ──
+   Статично: пульсирующий круг света над крокодилом выглядел как мигание */
+.hero-aurora {
+  position: absolute; left: 50%; top: -14%; width: 135%; height: 78%;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(46% 52% at 32% 42%, rgba(255, 255, 255, .055), transparent 72%),
+    radial-gradient(40% 46% at 68% 58%, rgba(255, 255, 255, .04), transparent 72%);
+}
+
+/* ── Звёздная пыль: два слоя разной глубины, бесшовный листопад ──
+   Каждый слой смещается ровно на свой тайл — стык незаметен.
+   Дополнительный параллакс при прокрутке берётся из --ho. */
+.hero-stars {
+  position: absolute; inset: 0;
+  transform: translate3d(0, calc(var(--ho, 0) * 70px), 0);
+  -webkit-mask-image: radial-gradient(ellipse 85% 72% at 50% 34%, #000 26%, transparent 82%);
+  mask-image: radial-gradient(ellipse 85% 72% at 50% 34%, #000 26%, transparent 82%);
+}
+.hero-stars i {
+  position: absolute; inset: -440px 0; display: block;
+  background-repeat: repeat;
+}
+.hero-stars i:first-child {
+  background-image:
+    radial-gradient(1px 1px at 22px 34px, rgba(255,255,255,.6), transparent),
+    radial-gradient(1.5px 1.5px at 140px 18px, rgba(255,255,255,.45), transparent),
+    radial-gradient(1px 1px at 250px 80px, rgba(255,255,255,.55), transparent),
+    radial-gradient(2px 2px at 60px 120px, rgba(255,255,255,.3), transparent),
+    radial-gradient(1px 1px at 200px 160px, rgba(255,255,255,.5), transparent),
+    radial-gradient(1.5px 1.5px at 30px 210px, rgba(255,255,255,.4), transparent),
+    radial-gradient(1px 1px at 120px 250px, rgba(255,255,255,.5), transparent),
+    radial-gradient(2px 2px at 255px 235px, rgba(255,255,255,.25), transparent);
+  background-size: 280px 280px;
+  /* Мерцание убрано: кружочки-звёзды не пульсируют, только едва дрейфуют */
+  opacity: .8;
+  animation: stars-drift-a 110s linear infinite;
+}
+.hero-stars i:last-child {
+  background-image:
+    radial-gradient(1.5px 1.5px at 80px 60px, rgba(255,255,255,.35), transparent),
+    radial-gradient(2px 2px at 300px 140px, rgba(255,255,255,.25), transparent),
+    radial-gradient(1.5px 1.5px at 180px 280px, rgba(255,255,255,.3), transparent),
+    radial-gradient(2px 2px at 390px 350px, rgba(255,255,255,.2), transparent),
+    radial-gradient(1.5px 1.5px at 60px 380px, rgba(255,255,255,.3), transparent);
+  background-size: 420px 420px;
+  opacity: .5;
+  animation: stars-drift-b 190s linear infinite;
+}
+@keyframes stars-drift-a { to { transform: translate3d(0, 280px, 0); } }
+@keyframes stars-drift-b { to { transform: translate3d(0, 420px, 0); } }
+
+/* ── Заголовок героя: чуть заметнее объёмное свечение ── */
+.hero-title { filter: drop-shadow(0 10px 46px rgba(255, 255, 255, .1)); }
+
+/* ── Бейдж первого экрана: стеклянная глубина ── */
+.hero-tag {
+  border-color: rgba(255, 255, 255, .2);
+  background: rgba(255, 255, 255, .03);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .4), 0 8px 30px -10px rgba(0, 0, 0, .6);
+}
+
+/* ── Окно приложения: верхняя световая кромка и мягкий ореол ── */
+.window {
+  box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 40px 120px -20px rgba(0,0,0,.9), 0 0 100px -40px rgba(255,255,255,.08);
+}
+.window::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 1px; z-index: 4; pointer-events: none;
+  background: linear-gradient(90deg, transparent 10%, rgba(255,255,255,.3) 50%, transparent 90%);
+}
+
+/* ── Бегущая строка: медленно вращающиеся ромбы-разделители ── */
+.marquee i { animation: spin 9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Тонкая световая линия-разделитель у каждой секции ── */
+.section::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent 18%, rgba(255,255,255,.08) 50%, transparent 82%);
+}
+
+/* ── Факты: цифры с тем же серебряным градиентом, что и заголовки ── */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .fact-v {
+    background: linear-gradient(180deg, #ffffff 18%, #b4b4b2 96%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+}
+
+/* ── Витрина: внутренняя виньетка кадра для глубины ── */
+.showcase-frames::after {
+  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, .38);
+}
+/* Подсказка зума поднимается над виньеткой */
+.zoom-hint { z-index: 4; }
+
+/* ── Сравнение: ореол блока, ярче рукоять, пульс кольца на ручке ── */
+.compare-box { box-shadow: 0 28px 80px -28px rgba(0, 0, 0, .8); }
+.compare-handle { box-shadow: 0 0 22px rgba(255,255,255,.65), 0 0 70px rgba(255,255,255,.22); }
+.compare-knob::after {
+  content: ""; position: absolute; inset: -7px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.4);
+  animation: ping 2.6s var(--ease) infinite;
+}
+
+/* ── Колонка Eclipse в сравнении: едва заметная подсветка сверху ── */
+.diff-col { position: relative; }
+.diff-col.is-new {
+  background: linear-gradient(180deg, #111111, #0c0c0c);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.diff-col.is-new::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 1px;
+  background: linear-gradient(90deg, transparent 6%, rgba(255,255,255,.5) 50%, transparent 94%);
+}
+
+/* ── Рекомендуемая карточка: пробегающий по кромке комет-блик ── */
+.dl-card.is-main { box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+.dl-card.is-main::after {
+  width: 45%; left: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.75) 50%, transparent);
+  animation: top-comet 6.5s var(--ease-io) infinite;
+}
+@keyframes top-comet {
+  0%   { transform: translateX(-110%); opacity: 0; }
+  14%  { opacity: 1; }
+  58%  { opacity: 1; }
+  72%  { transform: translateX(245%); opacity: 0; }
+  100% { transform: translateX(245%); opacity: 0; }
+}
+
+/* ── Акцентный бейдж «Рекомендуем» со свечением ── */
+.badge-accent { box-shadow: 0 0 18px rgba(255, 255, 255, .22); }
+
+/* ── Благодарность: иконка оригинала мягко светится при наведении ── */
+.tribute-icon { transition: box-shadow .5s ease, border-color .5s ease; }
+.tribute-card:hover .tribute-icon {
+  border-color: rgba(255, 255, 255, .3);
+  box-shadow: 0 0 36px -8px rgba(255, 255, 255, .16);
+}
+
+/* ── Скроллбар страницы в тон монохромной гамме ── */
+html { scrollbar-color: #232323 #050505; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: #050505; }
+::-webkit-scrollbar-thumb { background: #1f1f1f; border-radius: 99px; border: 2px solid #050505; }
+::-webkit-scrollbar-thumb:hover { background: #2c2c2c; }
