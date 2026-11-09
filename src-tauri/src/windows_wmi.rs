@@ -107,8 +107,9 @@ impl Value {
     fn number(value: u32) -> Self {
         let mut result = Self::default();
         unsafe {
-            (*result.0.Anonymous.Anonymous).vt = VT_UI4;
-            (*result.0.Anonymous.Anonymous).Anonymous.ulVal = value;
+            // WMI-канон 32-битных целых (включая uint32) — VT_I4; VT_UI4 в Put() → Type Mismatch.
+            (*result.0.Anonymous.Anonymous).vt = VT_I4;
+            (*result.0.Anonymous.Anonymous).Anonymous.lVal = value as i32;
         }
         result
     }
@@ -478,6 +479,8 @@ mod tests {
             "Русский путь \\ игры"
         );
         assert_eq!(Value::number(u32::MAX).unsigned().unwrap(), u32::MAX);
+        // WMI-канон 32-битных целых — VT_I4: VT_UI4 ломает Put() параметров методов (0x80041005).
+        assert_eq!(Value::number(0).tag(), VT_I4);
         assert!(Value::number(1).boolean().is_err());
         assert!(Value::text("1").unsigned().is_err());
     }
