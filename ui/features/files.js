@@ -35,6 +35,7 @@
 
   let defaultDownloadDir = "";
   let catalogActive = false;
+  let activeCatalogRequest = null;
 
   function readPaused() { try { const value = JSON.parse(window.cgsStorage.getItem(PAUSED_KEY) || "[]"); return Array.isArray(value) ? value : []; } catch (_) { return []; } }
   function rememberDownload(item, targetDir) {
@@ -670,9 +671,22 @@
   }
 
   async function loadCatalog(force = false, silent = false) {
-    if (state.refreshing || (state.loaded && !force)) return;
+    if (state.refreshing) {
+      if (!silent && activeCatalogRequest && !activeCatalogRequest.visible) {
+        activeCatalogRequest.visible = true;
+        state.loading = true;
+        state.page = 1;
+        state.error = "";
+        $("#files-status").textContent = "Загрузка списка из Gist…";
+        render();
+      }
+      return;
+    }
+    if (state.loaded && !force) return;
+    const request = { visible: !silent };
+    activeCatalogRequest = request;
     state.refreshing = true;
-    state.loading = !silent;
+    state.loading = request.visible;
     state.error = "";
     if (!silent) $("#files-status").textContent = "Загрузка списка из Gist…";
     $("#files-refresh").disabled = true;
@@ -687,7 +701,7 @@
       state.cached = Boolean(catalog?.cached);
       state.error = "";
       state.loaded = true;
-      if (!silent) state.page = 1;
+      if (request.visible) state.page = 1;
 
       if (!state.files.some((f) => f.name.toLowerCase() === "eclipse studio")) {
         try {
@@ -703,7 +717,7 @@
         } catch (_) {}
       }
     } catch (error) {
-      if (!silent) {
+      if (request.visible) {
         state.files = [];
         state.loaded = false;
         state.error = `Не удалось получить каталог: ${String(error)}`;
@@ -711,6 +725,7 @@
     } finally {
       state.loading = false;
       state.refreshing = false;
+      activeCatalogRequest = null;
       $("#files-refresh").disabled = false;
       render();
     }
