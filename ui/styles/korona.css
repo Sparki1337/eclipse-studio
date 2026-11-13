@@ -2332,8 +2332,6 @@ html[data-theme="light"] #korona .app-splash { --ks-sun: #121216; --ks-glow: 18,
   box-shadow: 0 0 40px 8px rgba(var(--ks-glow), .32), 0 0 120px 34px rgba(var(--ks-glow), .1);
 }
 #korona .app-splash .k-moon { width: 126px; height: 126px; margin: -63px 0 0 -63px; background: var(--k-bg); transform: translate(-150px, 6px); }
-#korona .app-splash .k-ring { width: 240px; height: 240px; margin: -120px 0 0 -120px; border: 1.5px solid rgba(var(--ks-glow), .42); opacity: 0; transform: scale(.82); }
-#korona .app-splash .k-ring-2 { border-color: rgba(var(--ks-glow), .2); }
 #korona .k-splash-copy { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 13px; margin-top: -50px; text-align: center; }
 #korona .k-splash-copy strong { font: 800 25px/1.2 var(--k-font); letter-spacing: -.01em; color: var(--ks-text); }
 #korona .k-splash-copy span { font: 600 13px/1.3 var(--k-font); letter-spacing: .01em; color: var(--ks-sub); }
@@ -2343,8 +2341,6 @@ html[data-theme="light"] #korona .app-splash { --ks-sun: #121216; --ks-glow: 18,
 #korona .app-splash.k-play .k-sun { animation: k-splash-sun var(--k-splash-dur, 1400ms) cubic-bezier(.2, .8, .2, 1) both; }
 #korona .app-splash.k-play .k-sun::after { animation: k-splash-glow var(--k-splash-dur, 1400ms) ease-out both; }
 #korona .app-splash.k-play .k-moon { animation: k-splash-moon var(--k-splash-dur, 1400ms) cubic-bezier(.3, .7, .2, 1) both; }
-#korona .app-splash.k-play .k-ring { animation: k-splash-ring var(--k-splash-dur, 1400ms) ease-out both; }
-#korona .app-splash.k-play .k-ring-2 { animation-delay: calc(var(--k-splash-dur, 1400ms) * .14); }
 #korona .app-splash.k-play .k-splash-copy strong { animation: k-splash-title var(--k-splash-dur, 1400ms) cubic-bezier(.2, .8, .2, 1) both; }
 #korona .app-splash.k-play .k-splash-copy span { animation: k-splash-sub var(--k-splash-dur, 1400ms) cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes k-splash-sun {
@@ -2359,11 +2355,6 @@ html[data-theme="light"] #korona .app-splash { --ks-sun: #121216; --ks-glow: 18,
   0%, 8% { transform: translate(-150px, 6px); }
   52% { transform: translate(-17px, -13px); }
   100% { transform: translate(-14px, -12px); }
-}
-@keyframes k-splash-ring {
-  0%, 48% { opacity: 0; transform: scale(.82); }
-  64% { opacity: .9; transform: scale(.95); }
-  100% { opacity: 0; transform: scale(1.3); }
 }
 @keyframes k-splash-title {
   0%, 30% { opacity: 0; transform: translateY(8px); }
@@ -2866,9 +2857,21 @@ html.no-motion #korona .ac-item.detected .ac-state::before { animation: none; }
 }
 html.k-search-open #korona .titlebar-search { opacity: 0; }
 @media (max-width: 1040px) { #korona .titlebar-search { width: clamp(180px, 30vw, 300px); } }
+/* ── Размеры строки поиска: обычный — базовый, компактный и широкий — модификаторы */
+html.search-size-compact #korona .titlebar-search { width: clamp(150px, 20vw, 250px); }
+html.search-size-wide #korona .titlebar-search { width: clamp(300px, 48vw, 680px); }
+@media (max-width: 1040px) {
+  html.search-size-compact #korona .titlebar-search { width: clamp(130px, 24vw, 210px); }
+  html.search-size-wide #korona .titlebar-search { width: clamp(200px, 36vw, 420px); }
+}
+/* ── В режиме «На лету» строка поиска намекает пунктиром и курсором, что её можно схватить */
+html.sidebar-live-edit #korona .titlebar-search { border-style: dashed; cursor: grab; }
 @media (max-width: 860px) {
   #korona .titlebar-search { width: 34px; padding: 0; justify-content: center; }
   #korona :is(.titlebar-search-text, .titlebar-search-keys) { display: none; }
+  /* На узком окне строка всегда сворачивается в иконку, размер не важен */
+  html.search-size-compact #korona .titlebar-search,
+  html.search-size-wide #korona .titlebar-search { width: 34px; }
 }
 
 /* ── Палитра */
@@ -2950,14 +2953,37 @@ html[data-theme="light"] #korona .k-search-backdrop { background: rgba(225, 228,
   scrollbar-width: thin;
 }
 #korona .k-search-group {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: calc(8px * var(--sp-k, 1));
   padding: calc(12px * var(--sp-k, 1)) calc(12px * var(--sp-k, 1)) calc(6px * var(--sp-k, 1));
+  background: var(--k-solid);
   color: var(--k-muted);
   font-size: calc(var(--ku) * 11.5);
   font-weight: 650;
   letter-spacing: .06em;
   text-transform: uppercase;
 }
+/* Количество пунктов группы рисуется по атрибуту — текст заголовка не меняется */
+#korona .k-search-group::after {
+  content: attr(data-count);
+  display: inline-grid;
+  place-items: center;
+  min-width: 19px;
+  height: 18px;
+  padding: 0 calc(6px * var(--sp-k, 1));
+  border: 1px solid var(--k-border);
+  border-radius: 999px;
+  background: var(--k-chip);
+  color: var(--k-muted);
+  font-size: calc(var(--ku) * 10.5);
+  letter-spacing: 0;
+}
 #korona .k-search-item {
+  position: relative;
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto 18px;
   align-items: center;
@@ -2967,8 +2993,23 @@ html[data-theme="light"] #korona .k-search-backdrop { background: rgba(225, 228,
   border-radius: var(--k-r-ctl);
   color: var(--k-text-2);
   cursor: pointer;
+  transition: background .14s ease, color .14s ease;
 }
-#korona .k-search-item.active { background: var(--k-panel-2); color: var(--k-text); }
+#korona .k-search-item.active {
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), .16), var(--k-panel-2) 62%);
+  color: var(--k-text);
+}
+/* Акцентная полоса слева ведёт глаз по выбранному пункту */
+#korona .k-search-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: calc(9px * var(--sp-k, 1));
+  bottom: calc(9px * var(--sp-k, 1));
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
 #korona .k-search-icon {
   display: grid;
   place-items: center;
@@ -2991,10 +3032,11 @@ html[data-theme="light"] #korona .k-search-backdrop { background: rgba(225, 228,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-#korona .k-search-title mark {
-  padding: 0 1px;
-  border-radius: 3px;
-  background: rgba(var(--accent-rgb), .22);
+#korona :is(.k-search-title, .k-search-sub) mark {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: rgba(var(--accent-rgb), .2);
+  box-shadow: inset 0 -1px 0 rgba(var(--accent-rgb), .65);
   color: inherit;
 }
 #korona .k-search-sub {
@@ -3013,6 +3055,14 @@ html[data-theme="light"] #korona .k-search-backdrop { background: rgba(225, 228,
   font-weight: 600;
   white-space: nowrap;
 }
+/* Оттенок плашки по типу пункта: действия и игры отличаются с одного взгляда */
+#korona .k-search-badge[data-kind="action"] { border-color: rgba(var(--accent-rgb), .38); background: rgba(var(--accent-rgb), .08); color: var(--accent); }
+#korona .k-search-badge[data-kind="view"],
+#korona .k-search-badge[data-kind="tab"] { border-color: rgba(var(--accent-rgb), .28); color: var(--k-text-2); }
+#korona .k-search-badge[data-kind="game"],
+#korona .k-search-badge[data-kind="hv"],
+#korona .k-search-badge[data-kind="steam"],
+#korona .k-search-badge[data-kind="manifest"] { border-color: rgba(var(--k-ok-rgb), .3); color: var(--k-ok); }
 #korona .k-search-enter { color: var(--k-muted-2); font-size: calc(var(--ku) * 14); opacity: 0; text-align: center; }
 #korona .k-search-item.active .k-search-enter { opacity: 1; }
 #korona .k-search-empty {
@@ -3038,23 +3088,24 @@ html[data-theme="light"] #korona .k-search-backdrop { background: rgba(225, 228,
 #korona .k-search-footer em { margin-left: calc(3px * var(--sp-k, 1)); font-style: normal; }
 #korona .k-search-footer kbd { min-width: 22px; height: 20px; padding: 0 calc(6px * var(--sp-k, 1)); }
 
-/* ── Подсветка результата мягко затухает без рамки */
+/* ── Подсветка результата держится, чтобы элемент успели найти, и плавно затухает без рамки */
 #korona .k-search-flash {
   position: fixed;
   z-index: 80;
   border: 0;
   outline: 0;
   border-radius: var(--k-r-ctl);
-  background: linear-gradient(100deg, rgba(var(--accent-rgb), .14), rgba(var(--accent-rgb), .04));
+  background: linear-gradient(100deg, rgba(var(--accent-rgb), .16), rgba(var(--accent-rgb), .05));
   box-shadow: none;
   pointer-events: none;
-  animation: k-search-flash 1s ease-out both;
+  animation: k-search-flash 2.4s ease-out both;
 }
 @keyframes k-search-flash {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  0%, 60% { opacity: 1; }
+  100% { opacity: 0; }
 }
-html.no-motion #korona .k-search-flash { animation: none; }
+/* Без анимаций подсветка не мигает: ровный полупрозрачный тон до конца */
+html.no-motion #korona .k-search-flash { animation: none; opacity: .55; }
 
 /* ── Настройки: сочетание клавиш */
 #korona .search-hotkey-controls { display: flex; flex: none; align-items: center; gap: calc(8px * var(--sp-k, 1)); }
@@ -3393,10 +3444,9 @@ html.sidebar-horizontal:not(.sidebar-compact) #korona .sidebar .navigation.fit-t
 html.sidebar-horizontal #korona .sidebar .navigation.fit-icons .nav-item:not(.active) { padding: 0 calc(12px * var(--sp-f, 1)) !important; }
 html.sidebar-horizontal #korona .sidebar .navigation.fit-icons .nav-item:not(.active) > span:not(.channel-icon) { display: none !important; }
 
-/* ── Перетаскивание рейки за свободное место */
-#korona .sidebar, #korona .sidebar .navigation { cursor: grab; }
+/* ── Перетаскивание рейки за свободное место: только в режиме «На лету» */
+html.sidebar-live-edit #korona .sidebar, html.sidebar-live-edit #korona .sidebar .navigation { cursor: grab; }
 #korona .sidebar .nav-item { cursor: pointer; }
-html.sidebar-live-edit #korona .sidebar .nav-item { cursor: grab; }
 #korona .sidebar { --k-drag-x: 0px; --k-drag-y: 0px; }
 html.k-rail-dragging, html.k-rail-dragging * { cursor: grabbing !important; user-select: none !important; }
 html.k-rail-dragging #korona .sidebar {
@@ -3465,6 +3515,8 @@ html.k-search-dragging #korona .titlebar-search {
 }
 html[data-theme="light"].k-search-dragging #korona .titlebar-search { background: #ffffff; }
 html.k-search-returning #korona .titlebar-search { transition: transform .24s var(--k-ease), border-color .18s ease, box-shadow .18s ease; }
+
+/* Слот-призрак: место в заголовке, куда встанет строка */
 #korona .k-search-slot {
   position: absolute;
   top: 50%;
@@ -3583,6 +3635,7 @@ html[data-theme="light"] #korona .dock-row + .dock-row { border-top-color: rgba(
 #korona [data-sidebar-dock="top"] .dock-preview::after { left: 6px; right: 6px; top: 33px; bottom: 6px; }
 #korona [data-sidebar-dock="bottom"] .dock-preview::before { left: 6px; right: 6px; bottom: 6px; height: 9px; }
 #korona [data-sidebar-dock="bottom"] .dock-preview::after { left: 6px; right: 6px; top: 19px; bottom: 20px; }
+/* Превью положения строки поиска — полоска в выбранном месте заголовка */
 #korona [data-search-dock] .dock-preview::before { top: 4px; width: 34%; height: 6px; border-radius: 999px; }
 #korona [data-search-dock] .dock-preview::after { left: 6px; right: 6px; top: 19px; bottom: 6px; }
 #korona [data-search-dock="left"] .dock-preview::before { left: 16%; }

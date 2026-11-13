@@ -9,6 +9,8 @@ mod backup;
 mod durable;
 #[path = "../../../src-tauri/src/safe_path.rs"]
 mod safe_path;
+#[path = "../../../src-tauri/src/save_safety.rs"]
+mod save_safety;
 
 #[path = "../../../src-tauri/src/resource_lock.rs"]
 mod resource_lock;

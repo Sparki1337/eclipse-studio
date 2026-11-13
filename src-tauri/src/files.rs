@@ -496,7 +496,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/10.0.0")
+        .user_agent("EclipseStudio/10.1.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -537,6 +537,23 @@ fn parse_head_revision(advertisement: &str) -> Option<&str> {
         .then_some(revision)
 }
 
+// Названия приходят из внешнего Gist, поэтому известные устаревшие варианты
+// исправляем у себя: сравнение идёт без регистра и знаков пунктуации.
+fn canonical_game_name(name: &str) -> String {
+    let key = name
+        .chars()
+        .map(|character| if character.is_alphanumeric() { character } else { ' ' })
+        .collect::<String>()
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    match key.as_str() {
+        "call of duty 4 modern warfare" => "Call of Duty Modern Warfare 4".into(),
+        _ => name.to_string(),
+    }
+}
+
 fn parse_catalog(content: &str, cached: bool) -> Result<FilesCatalog, String> {
     let remote: RemoteCatalog = serde_json::from_str(content)
         .map_err(|error| format!("Некорректный cracks.json: {error}"))?;
@@ -545,7 +562,7 @@ fn parse_catalog(content: &str, cached: bool) -> Result<FilesCatalog, String> {
         .cracks
         .into_iter()
         .filter_map(|item| {
-            let name = item.name.trim().to_string();
+            let name = canonical_game_name(item.name.trim());
             let url = item.url.trim().to_string();
             if name.is_empty() || !url.starts_with("https://") {
                 return None;
@@ -1000,6 +1017,30 @@ mod tests {
         let detected = super::detect_crack_source_dir(&temp);
         assert_eq!(detected, artifact);
         let _ = std::fs::remove_dir_all(&temp);
+    }
+
+    #[test]
+    fn fixes_outdated_catalog_names() {
+        for source in [
+            "Call of Duty 4: Modern Warfare",
+            "call of duty 4 modern warfare",
+            "CALL OF DUTY 4 — MODERN WARFARE",
+        ] {
+            assert_eq!(
+                super::canonical_game_name(source),
+                "Call of Duty Modern Warfare 4",
+                "название не исправлено: {source}"
+            );
+        }
+        // Остальные названия каталога не меняются
+        assert_eq!(
+            super::canonical_game_name("Call of Duty: Black Ops 7"),
+            "Call of Duty: Black Ops 7"
+        );
+        assert_eq!(
+            super::canonical_game_name("Sonic Origins"),
+            "Sonic Origins"
+        );
     }
 
     #[test]

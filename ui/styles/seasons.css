@@ -1,0 +1,161 @@
+/* seasons.css — сезонное оформление: зимой шарики на главной, погода (снег, дождь, лепестки, блики) */
+.season-weather,
+.season-scene { display: none; }
+html[data-seasonal="on"] .season-weather { display: block; }
+html[data-seasonal="on"] .season-scene { display: block; }
+/* ── В авто-режиме летом атрибут сезона становится «off» и ничего не показывается */
+
+/* ── Погода: фиксированный canvas ниже заголовка окна */
+.season-weather {
+  position: fixed;
+  inset: 52px 0 0;
+  width: 100%;
+  height: calc(100% - 52px);
+  z-index: 25;
+  pointer-events: none;
+}
+/* ── Погода не рисуется без движения и при высокой контрастности */
+html.no-motion .season-weather,
+html[data-contrast="high"] .season-weather { display: none !important; }
+
+/* ── Сцена внутри приветственного блока главной: под текстом, но над артом */
+.season-scene {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* ── Мягкое свечение по краям баннера; базовая гамма — зимняя */
+.season-bokeh {
+  position: absolute;
+  inset: -12%;
+  background:
+    radial-gradient(circle at 84% 16%, rgba(230, 189, 125, .20), transparent 17%),
+    radial-gradient(circle at 94% 48%, rgba(var(--accent-rgb), .16), transparent 15%),
+    radial-gradient(circle at 64% 86%, rgba(168, 214, 245, .10), transparent 20%),
+    radial-gradient(circle at 16% 20%, rgba(230, 189, 125, .10), transparent 22%);
+  filter: blur(14px);
+  opacity: .8;
+}
+html[data-season="autumn"] .season-bokeh {
+  background:
+    radial-gradient(circle at 84% 16%, rgba(217, 134, 63, .20), transparent 17%),
+    radial-gradient(circle at 94% 48%, rgba(var(--accent-rgb), .14), transparent 15%),
+    radial-gradient(circle at 64% 86%, rgba(192, 86, 46, .12), transparent 20%),
+    radial-gradient(circle at 16% 20%, rgba(202, 162, 61, .12), transparent 22%);
+}
+html[data-season="spring"] .season-bokeh {
+  background:
+    radial-gradient(circle at 84% 16%, rgba(242, 196, 206, .20), transparent 17%),
+    radial-gradient(circle at 94% 48%, rgba(var(--accent-rgb), .14), transparent 15%),
+    radial-gradient(circle at 64% 86%, rgba(168, 214, 170, .12), transparent 20%),
+    radial-gradient(circle at 16% 20%, rgba(232, 167, 187, .12), transparent 22%);
+}
+html[data-season="summer"] .season-bokeh {
+  background:
+    radial-gradient(circle at 84% 16%, rgba(255, 217, 138, .22), transparent 17%),
+    radial-gradient(circle at 94% 48%, rgba(var(--accent-rgb), .14), transparent 15%),
+    radial-gradient(circle at 64% 86%, rgba(125, 200, 240, .12), transparent 20%),
+    radial-gradient(circle at 16% 20%, rgba(230, 189, 125, .12), transparent 22%);
+}
+
+/* ── Зима: ёлочные шары на золотых нитях (как в новогоднем оформлении) */
+.season-ornaments { position: absolute; right: 14px; top: 0; width: 272px; height: 233px; overflow: visible; }
+.season-string { fill: none; stroke: #c9a86c; stroke-width: .9; opacity: .5; }
+.season-cap { fill: #c5a971; }
+.season-ball-detail { fill: none; stroke: #f7ecd2; stroke-width: .8; opacity: .55; }
+html[data-glow="on"] .season-ornament > circle { filter: drop-shadow(0 0 7px rgba(230, 189, 125, .28)); }
+
+/* ── Подсветка баннера строго под сезон; лету не соответствует ничего */
+html[data-seasonal="on"][data-season="winter"] .home-hero { border-color: rgba(213, 172, 103, .26); }
+html[data-seasonal="on"][data-season="winter"] .home-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 100% 0, rgba(230, 189, 125, .12), transparent 52%),
+    radial-gradient(ellipse at 0 100%, rgba(94, 165, 140, .10), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, .05), transparent 20%);
+  pointer-events: none;
+}
+html[data-seasonal="on"][data-season="autumn"] .home-hero { border-color: rgba(217, 134, 63, .30); }
+html[data-seasonal="on"][data-season="autumn"] .home-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 100% 0, rgba(217, 134, 63, .13), transparent 52%),
+    radial-gradient(ellipse at 0 100%, rgba(202, 162, 61, .11), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, .05), transparent 20%);
+  pointer-events: none;
+}
+html[data-seasonal="on"][data-season="spring"] .home-hero { border-color: rgba(226, 156, 189, .30); }
+html[data-seasonal="on"][data-season="spring"] .home-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 100% 0, rgba(242, 196, 206, .14), transparent 52%),
+    radial-gradient(ellipse at 0 100%, rgba(150, 200, 155, .12), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, .05), transparent 20%);
+  pointer-events: none;
+}
+html[data-seasonal="on"][data-season="summer"] .home-hero { border-color: rgba(230, 189, 125, .32); }
+html[data-seasonal="on"][data-season="summer"] .home-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at 100% 0, rgba(255, 217, 138, .14), transparent 52%),
+    radial-gradient(ellipse at 0 100%, rgba(125, 200, 240, .11), transparent 55%),
+    linear-gradient(180deg, rgba(255, 255, 255, .05), transparent 20%);
+  pointer-events: none;
+}
+
+/* ── Настройки: сегмент выбора сезона переносится на узких панелях */
+.personalization-segment.season-mode-segment { flex-wrap: wrap; justify-content: flex-end; max-width: 352px; }
+
+/* ── Анимации только при включённом движении */
+html:not(.no-motion) .season-ornament { transform-origin: top center; animation: season-sway 8s ease-in-out infinite alternate; }
+html:not(.no-motion) .season-ornament-one { animation-duration: 7s; }
+html:not(.no-motion) .season-ornament-two { animation-duration: 9.5s; animation-delay: -3s; }
+html:not(.no-motion) .season-ornament-three { animation-duration: 6.2s; animation-delay: -1.5s; }
+html:not(.no-motion) .season-bokeh { animation: season-bokeh 16s ease-in-out infinite alternate; }
+
+@keyframes season-sway { from { transform: rotate(-1.4deg); } to { transform: rotate(1.4deg); } }
+@keyframes season-bokeh { from { opacity: .55; transform: scale(1); } to { opacity: .95; transform: scale(1.05); } }
+
+/* ── Сцена подстраивается под узкий баннер */
+@media (max-width: 1050px) {
+  .season-ornaments { width: 204px; height: 175px; right: 6px; }
+}
+@media (max-width: 760px) {
+  .season-ornaments { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .season-weather { display: none !important; }
+  .season-ornament,
+  .season-bokeh { animation: none !important; }
+}
+
+/* ── Высокая контрастность: убираем мягкие эффекты, оставляя чёткие украшения */
+html[data-contrast="high"] .season-bokeh { display: none; }
+html[data-contrast="high"] .season-ornament { animation: none; }
+
+/* ── Принудительные цвета системы: декоративные слои не мешают интерфейсу */
+@media (forced-colors: active) {
+  html[data-seasonal="on"] .season-scene,
+  html[data-seasonal="on"] .season-weather { display: none !important; }
+}

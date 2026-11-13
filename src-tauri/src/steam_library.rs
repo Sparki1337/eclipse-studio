@@ -7,6 +7,8 @@ use std::{
     collections::BTreeMap,
     fs,
     path::{Component, Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
+    time::SystemTime,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -559,16 +561,35 @@ fn parse_appinfo(bytes: &[u8]) -> Result<BTreeMap<u64, Value>, String> {
     Ok(apps)
 }
 
-pub(crate) fn read_appinfo(steam: &Path) -> Result<BTreeMap<u64, Value>, String> {
+// Разбор appinfo.vdf дорогой, поэтому результат кэшируется до изменения файла:
+// библиотека и каталог DLC читают один и тот же разобранный словарь
+pub(crate) fn read_appinfo(steam: &Path) -> Result<Arc<BTreeMap<u64, Value>>, String> {
     let path = steam.join("appcache/appinfo.vdf");
-    if fs::metadata(&path)
-        .map_err(|error| error.to_string())?
-        .len()
-        > 256 * 1024 * 1024
-    {
+    let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
+    if metadata.len() > 256 * 1024 * 1024 {
         return Err("appinfo.vdf слишком большой".into());
     }
-    parse_appinfo(&fs::read(path).map_err(|error| error.to_string())?)
+    let stamp = (metadata.len(), metadata.modified().ok());
+
+    type AppInfoCache = Option<(PathBuf, (u64, Option<SystemTime>), Arc<BTreeMap<u64, Value>>)>;
+    static CACHE: OnceLock<Mutex<AppInfoCache>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(None));
+
+    if let Ok(guard) = cache.lock() {
+        if let Some((cached_path, cached_stamp, parsed)) = guard.as_ref() {
+            if cached_path == &path && cached_stamp == &stamp {
+                return Ok(Arc::clone(parsed));
+            }
+        }
+    }
+
+    let parsed = Arc::new(parse_appinfo(
+        &fs::read(&path).map_err(|error| error.to_string())?,
+    )?);
+    if let Ok(mut guard) = cache.lock() {
+        *guard = Some((path, stamp, Arc::clone(&parsed)));
+    }
+    Ok(parsed)
 }
 
 pub(crate) fn cached_dlc_names(

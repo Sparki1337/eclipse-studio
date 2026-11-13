@@ -31,17 +31,84 @@
     }
   }
 
-  function saveStoredLuaCover(appid, url) {
-    if (!appid || !url) return;
+  // Ссылки на обложки пишем пачкой: при большой библиотеке их приходят десятки подряд
+  const luaCoverWrites = new Map();
+  let luaCoverWriteTimer = null;
+
+  function flushLuaCoverWrites() {
+    luaCoverWriteTimer = null;
+    if (!luaCoverWrites.size) return;
     try {
       const data = loadStoredLuaCovers();
-      data[String(appid)] = url;
+      for (const [appid, url] of luaCoverWrites) if (url) data[appid] = url;
+      luaCoverWrites.clear();
       window.cgsStorage.setItem(LUA_COVERS_STORAGE_KEY, JSON.stringify(data));
+    } catch (_) {
+      luaCoverWrites.clear();
+    }
+  }
+
+  function saveStoredLuaCover(appid, url) {
+    if (!appid || !url) return;
+    luaCoverWrites.set(String(appid), url);
+    clearTimeout(luaCoverWriteTimer);
+    luaCoverWriteTimer = setTimeout(flushLuaCoverWrites, 600);
+  }
+
+  // Кэш названий и последнего статуса: вкладка открывается сразу из него,
+  // а свежие данные догружаются в фоне
+  const LUA_NAMES_STORAGE_KEY = "cgs-lua-names";
+  const LUA_STATUS_STORAGE_KEY = "cgs-lua-status";
+  const LUA_STATUS_TTL_MS = 10000;
+  let luaStatusFetchedAt = 0;
+  let luaStatusInFlight = null;
+
+  function loadStoredLuaNames() {
+    try {
+      const data = JSON.parse(window.cgsStorage.getItem(LUA_NAMES_STORAGE_KEY) || "{}");
+      return typeof data === "object" && data !== null ? data : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  function saveStoredLuaNames(names) {
+    try {
+      window.cgsStorage.setItem(LUA_NAMES_STORAGE_KEY, JSON.stringify(names || {}));
+    } catch (_) {}
+  }
+
+  function loadStoredLuaStatus() {
+    try {
+      const data = JSON.parse(window.cgsStorage.getItem(LUA_STATUS_STORAGE_KEY) || "null");
+      return data && typeof data === "object" && Array.isArray(data.games) ? data : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveStoredLuaStatus(status) {
+    if (!status) return;
+    try {
+      window.cgsStorage.setItem(LUA_STATUS_STORAGE_KEY, JSON.stringify({
+        steamPath: status.steamPath || "",
+        luaFolder: status.luaFolder || "",
+        steamDetected: Boolean(status.steamDetected),
+        steamExe: Boolean(status.steamExe),
+        pluginFolder: Boolean(status.pluginFolder),
+        loaderStatus: status.loaderStatus || "",
+        loaderName: status.loaderName || "",
+        loaderIssue: status.loaderIssue || "",
+        luaCount: Number(status.luaCount) || 0,
+        externalCount: Number(status.externalCount) || 0,
+        games: status.games || [],
+        savedAt: Date.now(),
+      }));
     } catch (_) {}
   }
 
   const state = {
-    version: "10.0.0",
+    version: "10.1.0",
     gameDir: "",
     appid: null,
     gameName: "",
@@ -93,7 +160,11 @@
       loaderName: "",
       loaderIssue: "",
       games: [],
-      names: {},
+      // Галочка «Сторонние добавления»: игры, добавленные LuaTools и другими
+      // Сторонние добавления включены по умолчанию, выключение запоминается
+      showExternal: window.cgsStorage.getItem("cgs-lua-external") !== "0",
+      externalCount: 0,
+      names: loadStoredLuaNames(),
       headers: loadStoredLuaCovers(),
       loaded: false,
       service: "ryuu",
@@ -247,6 +318,7 @@
   }
 
   function switchView(name) {
+    window.cgsPerf?.setPhase("вкладка " + name);
     // Во время обновления доступен только раздел настроек с ходом установки
     if (state.updates.installing && name !== "settings") return;
     if (!viewMeta[name]) return;
@@ -255,7 +327,12 @@
     $("#page-eyebrow").textContent = viewMeta[name][0];
     $("#page-title").textContent = viewMeta[name][1];
     if (name === "lua" || name === "settings") {
-      luaRefresh();
+      if (name === "lua") {
+        window.cgsPerf?.mark("lua-open");
+        primeLuaFromCache();
+      }
+      // Автоматический переход не сканирует диск, если данные свежие
+      luaRefresh({ force: false });
       updateAboutInfo();
     }
     window.dispatchEvent(new CustomEvent("cgs:view-changed", { detail: name }));
@@ -785,6 +862,7 @@
   }
 
   function loadCover(cover, img, appid) {
+    window.cgsPerf?.setPhase("обложки");
     const key = String(appid);
     const cached = state.lua.headers[key];
     if (cached) {
@@ -824,118 +902,358 @@
     }
   }
 
+  // Обложки грузятся только рядом с видимой областью: большой список не шлёт сотни запросов
+  function ensureLuaCoverObserver() {
+    if (luaCoverObserver || !("IntersectionObserver" in window)) return luaCoverObserver;
+    const root = document.querySelector(".main-area");
+    luaCoverObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        luaCoverObserver.unobserve(entry.target);
+        const cover = entry.target;
+        if (!cover.isConnected) return;
+        const appid = cover.dataset.appid;
+        const image = cover.querySelector("img");
+        if (appid && image && !image.getAttribute("src")) loadCover(cover, image, appid);
+      });
+    }, { root: root || null, rootMargin: "320px 0px" });
+    return luaCoverObserver;
+  }
+
+  function observeLuaCover(cover, appid) {
+    const observer = ensureLuaCoverObserver();
+    cover.dataset.appid = String(appid);
+    if (!observer) {
+      const image = cover.querySelector("img");
+      if (image) loadCover(cover, image, appid);
+      return;
+    }
+    observer.observe(cover);
+  }
+
+  // В русском интерфейсе обход карточки ради перевода только замедляет список
+  function translateLuaCard(card) {
+    if (window.cgsI18n?.language === "en") window.cgsI18n?.translate(card);
+  }
+
+  // Карточка создаётся один раз; дальше её обновляют, не трогая DOM целиком
+  function createLuaGameCard(game) {
+    const card = document.createElement("div");
+    card.dataset.appid = String(game.appid);
+
+    const cover = document.createElement("div");
+    cover.className = "lua-game-cover";
+    const img = document.createElement("img");
+    // Обложка скрыта стилями до загрузки, поэтому loading="lazy" её не грузит
+    img.decoding = "async";
+    const fallback = document.createElement("span");
+    fallback.className = "lua-cover-fallback";
+    fallback.textContent = game.appid;
+    cover.append(img, fallback);
+    const knownHeader = state.lua.headers[String(game.appid)];
+    if (knownHeader) {
+      card.dataset.cover = knownHeader;
+      loadCover(cover, img, game.appid);
+    } else {
+      observeLuaCover(cover, game.appid);
+    }
+    cover.style.cursor = "pointer";
+    cover.title = "Подробнее";
+    cover.addEventListener("click", () => luaOpenDetail(card.dataset.appid));
+
+    const info = document.createElement("div");
+    info.className = "lua-game-info";
+    const nameLine = document.createElement("div");
+    nameLine.className = "lua-game-name";
+    nameLine.append(document.createElement("strong"));
+    const meta = document.createElement("div");
+    meta.className = "lua-game-meta";
+    const status = document.createElement("span");
+    status.className = "lua-game-status";
+    meta.append(status);
+    if (game.external) {
+      const mark = document.createElement("span");
+      mark.className = "lua-external-badge";
+      mark.textContent = "Сторонняя";
+      mark.title = "Добавлена другим инструментом";
+      meta.append(mark);
+    }
+    info.append(nameLine, meta);
+    const actions = document.createElement("div");
+    actions.className = "lua-game-actions";
+    const details = document.createElement("button");
+    details.className = "ghost-button lua-action-btn lua-action-details";
+    details.textContent = "Подробнее";
+    details.addEventListener("click", () => luaOpenDetail(card.dataset.appid));
+    const toggle = document.createElement("button");
+    toggle.className = "ghost-button lua-action-btn lua-action-toggle";
+    toggle.addEventListener("click", () => luaToggle(card.dataset.appid, card.dataset.enabled !== "1"));
+    // Перекачивает манифесты игры по сервису и ключу, выбранным в настройках
+    const refresh = document.createElement("button");
+    refresh.className = "ghost-button lua-action-btn lua-action-refresh";
+    refresh.textContent = "Обновить манифесты";
+    refresh.title = "Перекачать манифесты по выбранному сервису и ключу";
+    refresh.addEventListener("click", () => luaRefreshManifests(card.dataset.appid, refresh));
+    const remove = document.createElement("button");
+    remove.className = "ghost-button danger-ghost lua-action-btn lua-action-remove";
+    remove.textContent = "Удалить";
+    remove.addEventListener("click", () => luaRemove(card.dataset.appid, card.dataset.external === "1"));
+    actions.append(details, toggle, refresh, remove);
+
+    card.append(cover, info, actions);
+    updateLuaGameCard(card, game);
+    return card;
+  }
+
+  function luaStatusText(game) {
+    const key = game.status || (game.enabled ? "ready" : "disabled");
+    if (key === "missing_manifests") {
+      return {
+        key,
+        text: `Нет manifest: ${game.missingManifestCount || 0}`,
+        title: `Установлено: ${game.manifestCount || 0}. Отсутствует: ${game.missingManifestCount || 0}.`,
+      };
+    }
+    if (key === "invalid_lua") {
+      return {
+        key,
+        text: "Lua повреждён",
+        title: "Lua-файл пустой, недоступен или не содержит addappid",
+      };
+    }
+    if (key === "disabled") return { key, text: "Отключена", title: "" };
+    return {
+      key,
+      text: game.manifestCount ? `Готова · ${game.manifestCount} manifest` : "Готова",
+      title: "",
+    };
+  }
+
+  // Обновляет карточку на месте и сообщает, изменился ли текст
+  function updateLuaGameCard(card, game) {
+    let changed = false;
+    const needsAttention = game.status === "missing_manifests" || game.status === "invalid_lua";
+    const className = `lua-game${game.enabled ? "" : " disabled"}${needsAttention ? " needs-attention" : ""}`;
+    if (card.className !== className) card.className = className;
+    card.dataset.enabled = game.enabled ? "1" : "0";
+    card.dataset.external = game.external ? "1" : "0";
+
+    const title = card.querySelector(".lua-game-name strong");
+    const name = state.lua.names[game.appid] || `AppID ${game.appid}`;
+    if (title && title.textContent !== name) {
+      title.textContent = name;
+      title.title = name;
+      changed = true;
+    }
+
+    const status = card.querySelector(".lua-game-status");
+    const info = luaStatusText(game);
+    if (status) {
+      const statusClass = `lua-game-status ${info.key}`;
+      if (status.className !== statusClass) status.className = statusClass;
+      if (status.textContent !== info.text) {
+        status.textContent = info.text;
+        changed = true;
+      }
+      if (status.title !== info.title) status.title = info.title;
+    }
+
+    const toggle = card.querySelector(".lua-action-toggle");
+    if (toggle) {
+      const label = game.enabled ? "Отключить" : "Включить";
+      if (toggle.textContent !== label) {
+        toggle.textContent = label;
+        changed = true;
+      }
+      toggle.classList.toggle("is-disabled", !game.enabled);
+    }
+    const remove = card.querySelector(".lua-action-remove");
+    if (remove) {
+      remove.title = game.external
+        ? "Удалить игру, добавленную другим инструментом"
+        : "Удалить игру из загрузчика";
+    }
+
+    // Обложка: подставляем URL, когда он пришёл из Steam позже самой карточки.
+    // Уже показанную обложку не перезагружаем, иначе карточка визуально мигает.
+    const header = state.lua.headers[String(game.appid)];
+    if (header && card.dataset.cover !== header) {
+      const cover = card.querySelector(".lua-game-cover");
+      const image = cover?.querySelector("img");
+      if (cover && image) {
+        luaCoverObserver?.unobserve(cover);
+        card.dataset.cover = header;
+        if (!cover.classList.contains("loaded")) loadCover(cover, image, game.appid);
+      }
+    }
+
+    return changed;
+  }
+
   function renderLuaGames() {
+    window.cgsPerf?.mark("lua-render");
+    window.cgsPerf?.setPhase("рендер списка игр");
     const container = $("#lua-games");
     const empty = $("#lua-empty");
     const games = state.lua.games;
-    const renderId = ++luaDrmRenderId;
-    luaDrmObserver?.disconnect();
-    luaDrmQueue.clear();
-    clearTimeout(luaDrmQueueTimer);
-    container.replaceChildren();
     container.classList.toggle("hidden", games.length === 0);
     empty.classList.toggle("hidden", games.length > 0);
-    if (!games.length) return;
+    // Счётчик сторонних добавлений виден и при выключенной галочке
+    const externalCount = Number(state.lua.externalCount) || 0;
+    const counter = $("#lua-external-count");
+    if (counter) {
+      counter.textContent = String(externalCount);
+      counter.classList.toggle("hidden", externalCount === 0);
+    }
+    $("#lua-empty-external")?.classList.toggle("hidden", !(games.length === 0 && externalCount > 0));
+    if (!games.length) {
+      luaRenderInProgress = false;
+      luaRenderPending = false;
+      container.replaceChildren();
+      container.dataset.signature = "";
+      window.cgsPerf?.measure("Отрисовка списка игр", "lua-render");
+      return;
+    }
 
-    luaDrmObserver = "IntersectionObserver" in window
-      ? new IntersectionObserver((entries) => {
-          entries.forEach((entry) => {
-            if (!entry.isIntersecting) return;
-            luaDrmObserver?.unobserve(entry.target);
-            const badge = entry.target.querySelector(".lua-drm-badge");
-            if (badge) queueDrmBadge(entry.target.dataset.appid, badge, renderId);
-          });
-        }, { root: null, rootMargin: "120px 0px" })
-      : null;
+    // Отрисовка ещё идёт: запомним запрос и обновим подписи сразу после неё.
+    // Иначе список обнуляется и все карточки мигают заново.
+    if (luaRenderInProgress) {
+      luaRenderPending = true;
+      window.cgsPerf?.log("Список игр: обновление отложено до конца отрисовки");
+      return;
+    }
 
-    games.forEach((game) => {
-      const card = document.createElement("div");
-      const needsAttention = game.status === "missing_manifests" || game.status === "invalid_lua";
-      card.className = `lua-game${game.enabled ? "" : " disabled"}${needsAttention ? " needs-attention" : ""}`;
-      card.dataset.appid = String(game.appid);
+    // Состав игр изменился: добавляем и убираем только нужные карточки.
+    // Полная пересборка списка заставляла игры мигать при прокрутке.
+    const signature = games.map((game) => `${game.appid}|${game.external ? "e" : "i"}`).join(",");
+    container.dataset.signature = signature;
+    if (container.childElementCount) {
+      syncLuaCards(container, games);
+      window.cgsPerf?.measure("Отрисовка списка игр", "lua-render");
+      return;
+    }
 
-      const cover = document.createElement("div");
-      cover.className = "lua-game-cover";
-      const img = document.createElement("img");
-      const fallback = document.createElement("span");
-      fallback.className = "lua-cover-fallback";
-      fallback.textContent = game.appid;
-      cover.append(img, fallback);
-      loadCover(cover, img, game.appid);
-      cover.style.cursor = "pointer";
-      cover.title = "Подробнее";
-      cover.addEventListener("click", () => luaOpenDetail(game.appid));
-
-      const info = document.createElement("div");
-      info.className = "lua-game-info";
-      const title = document.createElement("strong");
-      title.textContent = state.lua.names[game.appid] || `AppID ${game.appid}`;
-      title.title = title.textContent;
-      const status = document.createElement("span");
-      const statusKey = game.status || (game.enabled ? "ready" : "disabled");
-      status.className = `lua-game-status ${statusKey}`;
-      if (statusKey === "missing_manifests") {
-        status.textContent = `Нет manifest: ${game.missingManifestCount || 0}`;
-        status.title = `Установлено: ${game.manifestCount || 0}. Отсутствует: ${game.missingManifestCount || 0}.`;
-      } else if (statusKey === "invalid_lua") {
-        status.textContent = "Lua повреждён";
-        status.title = "Lua-файл пустой, недоступен или не содержит addappid";
-      } else if (statusKey === "disabled") {
-        status.textContent = "Отключена";
-      } else {
-        status.textContent = game.manifestCount ? `Готова · ${game.manifestCount} manifest` : "Готова";
-      }
-      const infoMain = document.createElement("div");
-      infoMain.className = "lua-game-info-main";
-      infoMain.append(title, status);
-      const drmBadge = document.createElement("span");
-      drmBadge.className = "lua-drm-badge loading";
-      drmBadge.textContent = "Защита…";
-      drmBadge.title = "Получаем сведения о защите из Steam";
-      info.append(infoMain, drmBadge);
-
-      const actions = document.createElement("div");
-      actions.className = "lua-game-actions";
-      const details = document.createElement("button");
-      details.className = "ghost-button lua-action-btn lua-action-details";
-      details.textContent = "Подробнее";
-      details.addEventListener("click", () => luaOpenDetail(game.appid));
-      const toggle = document.createElement("button");
-      toggle.className = `ghost-button lua-action-btn lua-action-toggle${game.enabled ? "" : " is-disabled"}`;
-      toggle.textContent = game.enabled ? "Отключить" : "Включить";
-      toggle.addEventListener("click", () => luaToggle(game.appid, !game.enabled));
-      const remove = document.createElement("button");
-      remove.className = "ghost-button danger-ghost lua-action-btn lua-action-remove";
-      remove.textContent = "Удалить";
-      remove.addEventListener("click", () => luaRemove(game.appid));
-      actions.append(details, toggle, remove);
-
-      card.append(cover, info, actions);
-      container.appendChild(card);
-      const cachedDrm = luaDrmCache.get(String(game.appid));
-      if (cachedDrm) applyDrmBadge(drmBadge, cachedDrm);
-      else if (luaDrmObserver) luaDrmObserver.observe(card);
-      else queueDrmBadge(game.appid, drmBadge, renderId);
-    });
+    renderLuaCardsInChunks(container, games);
   }
 
-  async function luaLoadNames() {
+  // Точечная синхронизация: существующие карточки не пересоздаются,
+  // поэтому прокрутка и загруженные обложки сохраняются.
+  function syncLuaCards(container, games) {
+    const cards = new Map([...container.children].map((node) => [String(node.dataset.appid), node]));
+    const wanted = new Set(games.map((game) => String(game.appid)));
+    for (const [appid, card] of cards) {
+      if (wanted.has(appid)) continue;
+      luaCoverObserver?.unobserve(card.querySelector(".lua-game-cover"));
+      card.remove();
+      cards.delete(appid);
+    }
+
+    const order = games.map((game) => String(game.appid));
+    const added = [];
+    const changed = [];
+    games.forEach((game, index) => {
+      const appid = String(game.appid);
+      const existing = cards.get(appid);
+      if (existing) {
+        if (updateLuaGameCard(existing, game)) changed.push(existing);
+        return;
+      }
+      const card = createLuaGameCard(game);
+      cards.set(appid, card);
+      // Новая карточка встаёт на своё место, а не в конец списка
+      const next = order.slice(index + 1).map((id) => cards.get(id)).find(Boolean) || null;
+      container.insertBefore(card, next);
+      added.push(card);
+    });
+
+    added.forEach(translateLuaCard);
+    changed.forEach(translateLuaCard);
+  }
+
+  // Карточки рисуем порциями: длинный список не блокирует поток одним куском
+  function renderLuaCardsInChunks(container, games) {
+    const token = ++luaRenderToken;
+    const chunkSize = 24;
+    let index = 0;
+    let firstScreen = false;
+    luaRenderInProgress = true;
+    luaRenderPending = false;
+    window.cgsPerf?.mark("lua-first-screen");
+    window.cgsPerf?.log(`Список игр: полная отрисовка ${games.length} карточек`);
+    // Контейнер пуст: очистка здесь не нужна, иначе карточки мигают
+    const finish = () => {
+      luaRenderInProgress = false;
+      window.cgsPerf?.measure("Отрисовка списка игр", "lua-render");
+      // Пока рисовали, пришли новые данные — обновляем подписи без пересборки
+      if (luaRenderPending) {
+        luaRenderPending = false;
+        renderLuaGames();
+      }
+    };
+    const step = () => {
+      if (token !== luaRenderToken) return;
+      try {
+        const fragment = document.createDocumentFragment();
+        const cards = [];
+        const end = Math.min(index + chunkSize, games.length);
+        for (; index < end; index += 1) {
+          const card = createLuaGameCard(games[index]);
+          cards.push(card);
+          fragment.append(card);
+        }
+        container.append(fragment);
+        // Переводим только новые карточки, не весь документ
+        cards.forEach(translateLuaCard);
+      } catch (error) {
+        // Сломанная карточка не должна навсегда оставить список пустым
+        luaRenderInProgress = false;
+        luaRenderPending = false;
+        log(`Не удалось показать список игр: ${errorText(error)}`, "error");
+        return;
+      }
+      if (!firstScreen) {
+        firstScreen = true;
+        window.cgsPerf?.measure("Первый экран списка игр", "lua-first-screen");
+      }
+      if (index < games.length) {
+        (window.requestAnimationFrame || ((callback) => setTimeout(callback, 16)))(step);
+      } else {
+        finish();
+      }
+    };
+    step();
+  }
+
+  let luaNamesInFlight = null;
+  function luaLoadNames() {
+    if (luaNamesInFlight) return luaNamesInFlight;
+    luaNamesInFlight = loadLuaNames().finally(() => {
+      luaNamesInFlight = null;
+    });
+    return luaNamesInFlight;
+  }
+
+  async function loadLuaNames() {
     const missingNames = state.lua.games.map((g) => g.appid).filter((id) => !state.lua.names[id]);
     const missingHeaders = state.lua.games.map((g) => g.appid).filter((id) => !state.lua.headers[id]);
     if (!missingNames.length && !missingHeaders.length) return;
+    window.cgsPerf?.mark("lua-names");
+    window.cgsPerf?.setPhase("названия и обложки");
     try {
       const [names, headers] = await Promise.all([
         missingNames.length ? call("luatools_names", { appids: missingNames.map(Number) }) : null,
         missingHeaders.length ? call("luatools_headers", { appids: missingHeaders.map(Number) }) : null,
       ]);
-      if (names) Object.assign(state.lua.names, names);
+      window.cgsPerf?.measure("Названия и обложки из Steam", "lua-names");
+      if (names && Object.keys(names).length) {
+        Object.assign(state.lua.names, names);
+        // Названия переживают перезапуск: сеть нужна только для новых игр
+        saveStoredLuaNames(state.lua.names);
+      }
       if (headers) {
         Object.assign(state.lua.headers, headers);
-        try {
-          const stored = loadStoredLuaCovers();
-          Object.assign(stored, headers);
-          window.cgsStorage.setItem(LUA_COVERS_STORAGE_KEY, JSON.stringify(stored));
-        } catch (_) {}
+        // Ссылки на обложки попали в готовую карточку через updateLuaGameCard
+        Object.entries(headers).forEach(([appid, url]) => saveStoredLuaCover(appid, url));
       }
       renderLuaGames();
     } catch (error) {
@@ -977,12 +1295,43 @@
     });
   }
 
+  let luaDetailDrmToken = 0;
+
+  // Защита загружается только в карточке игры, а не при прокрутке списка
+  async function loadLuaDetailDrm(appid) {
+    const badge = $("#lua-detail-drm");
+    if (!badge) return;
+    const token = ++luaDetailDrmToken;
+    badge.hidden = false;
+    badge.className = "lua-drm-badge loading";
+    badge.textContent = "Защита…";
+    badge.title = "Получаем сведения о защите из Steam";
+    try {
+      const infos = await call("steam_drm_info", { appids: [String(appid)] });
+      if (token !== luaDetailDrmToken) return;
+      const info = Array.isArray(infos) ? infos[0] : null;
+      applyDrmBadge(badge, info || {
+        label: "Нет данных",
+        kind: "unknown",
+        notice: "Не удалось получить сведения о защите из Steam. Повторите позже.",
+      });
+    } catch {
+      if (token !== luaDetailDrmToken) return;
+      applyDrmBadge(badge, {
+        label: "Нет данных",
+        kind: "unknown",
+        notice: "Не удалось получить сведения о защите из Steam. Повторите позже.",
+      });
+    }
+  }
+
   async function luaOpenDetail(appid) {
     const backdrop = $("#lua-detail-backdrop");
     $("#lua-detail-name").textContent = state.lua.names[appid] || `AppID ${appid}`;
     $("#lua-detail-appid").textContent = appid;
     $("#lua-detail-added").textContent = "";
     $("#lua-detail-released").textContent = "";
+    loadLuaDetailDrm(appid);
     $("#lua-detail-fallback").textContent = appid;
     const banner = $("#lua-detail-banner");
     banner.removeAttribute("src");
@@ -1661,29 +2010,61 @@
     }
   }
 
-  async function luaRefresh() {
+  // Мгновенный показ последнего известного списка, пока идёт свежий запрос
+  function primeLuaFromCache() {
+    if (state.lua.loaded) return;
+    const cached = loadStoredLuaStatus();
+    if (!cached) return;
+    applyLuaStatus(cached, { fromCache: true });
+    luaLoadNames();
+  }
+
+  function applyLuaStatus(status, { fromCache = false, render = true } = {}) {
+    if (!status) return;
+    state.lua.steamPath = status.steamPath || state.lua.steamPath || "";
+    state.lua.luaFolder = status.luaFolder || "";
+    state.lua.loaderStatus = status.loaderStatus || "unknown";
+    state.lua.loaderName = status.loaderName || "";
+    state.lua.loaderIssue = status.loaderIssue || "";
+    state.lua.games = Array.isArray(status.games) ? status.games : [];
+    state.lua.externalCount = Number(status.externalCount) || 0;
+    state.lua.loaded = true;
+    if (state.lua.steamPath) window.cgsStorage.setItem("luaSteamPath", state.lua.steamPath);
+    if (render) renderLuaStatus();
+    if (fromCache) window.cgsPerf?.log("Список игр показан из кэша");
+  }
+
+  async function fetchLuaStatus() {
+    window.cgsPerf?.mark("lua-status");
+    window.cgsPerf?.setPhase("запрос статуса");
     try {
       const [status, millennium, loaderInfo] = await Promise.all([
-        call("luatools_status", { steamPath: state.lua.steamPath || null }),
+        call("luatools_status", { steamPath: state.lua.steamPath || null, includeExternal: state.lua.showExternal }),
         call("millennium_plugin_status", { steamPath: state.lua.steamPath || null }),
         call("luatools_get_loader_info", { steamPath: state.lua.steamPath || null }).catch(() => null),
       ]);
-      state.lua.steamPath = status.steamPath || state.lua.steamPath || "";
-      state.lua.luaFolder = status.luaFolder || "";
-      state.lua.loaderStatus = status.loaderStatus || "unknown";
-      state.lua.loaderName = status.loaderName || "";
-      state.lua.loaderIssue = status.loaderIssue || "";
-      state.lua.games = status.games || [];
+      window.cgsPerf?.measure("Статус: три команды", "lua-status");
+      if (window.cgsPerf?.enabled) {
+        window.cgsPerf.log(`luatools_status на бэкенде: ${Number(status?.elapsedMs) || 0} мс`);
+      }
+      applyLuaStatus(status, { render: false });
       state.lua.millennium = millennium || state.lua.millennium;
       if (loaderInfo) {
         state.lua.loaderInfo = loaderInfo;
         state.lua.loaderSource = loaderInfo.loaderSource || state.lua.loaderSource;
       }
-      state.lua.loaded = true;
-      if (state.lua.steamPath) window.cgsStorage.setItem("luaSteamPath", state.lua.steamPath);
+      saveStoredLuaStatus(status);
+      luaStatusFetchedAt = performance.now();
+      // Один рендер после применения статуса, Millennium и сведений о загрузчике
       renderLuaStatus();
-      renderLoaderInfo();
       luaLoadNames();
+      window.cgsPerf?.measure("Открытие вкладки Eclipse Manifest", "lua-open");
+      if (window.cgsPerf?.enabled) {
+        window.cgsPerf.log(`Игр в списке: ${state.lua.games.length}, сторонних: ${state.lua.externalCount}`);
+        window.cgsPerf.report().slice(0, 5).forEach((entry) => {
+          window.cgsPerf.log(`Команда ${entry.command}: ${entry.avg} мс (макс ${entry.max}, вызовов ${entry.count})`);
+        });
+      }
       if (millennium?.status === "millennium_missing" && !state.lua.millenniumPrompted) {
         state.lua.millenniumPrompted = true;
         await offerMillenniumInstall();
@@ -1696,6 +2077,21 @@
     } catch (error) {
       log(`LuaTools: ошибка статуса — ${errorText(error)}`, "error");
     }
+  }
+
+  async function luaRefresh(options = {}) {
+    // Автоматическое переключение вкладки не чаще раза в 10 секунд,
+    // явные действия (кнопки, установка) всегда обновляют список
+    const force = options?.force !== false;
+    if (!force && state.lua.loaded && performance.now() - luaStatusFetchedAt < LUA_STATUS_TTL_MS) {
+      window.cgsPerf?.log("Статус пропущен: данные свежие");
+      return;
+    }
+    if (luaStatusInFlight) return luaStatusInFlight;
+    luaStatusInFlight = fetchLuaStatus().finally(() => {
+      luaStatusInFlight = null;
+    });
+    return luaStatusInFlight;
   }
 
   let millenniumStatusRefreshing = false;
@@ -1756,8 +2152,10 @@
     }
   }
 
-  async function luaRemove(appid) {
-    const accepted = await showModal("Удалить игру из загрузчика?", `Файл lua для AppID ${appid} будет удалён. После этого перезапустите Steam.`, { confirm: true, confirmText: "Удалить", symbol: "↺" });
+  async function luaRemove(appid, external = false) {
+    // Для сторонней игры предупреждаем, что файл положил другой инструмент
+    const note = external ? " Игра добавлена сторонним инструментом — Steam перестанет её видеть." : "";
+    const accepted = await showModal("Удалить игру из загрузчика?", `Файл lua для AppID ${appid} будет удалён.${note} После этого перезапустите Steam.`, { confirm: true, confirmText: "Удалить", symbol: "↺" });
     if (!accepted) return;
     try {
       const result = await call("luatools_remove", { appid, steamPath: state.lua.steamPath || null });
@@ -1863,71 +2261,48 @@
     }
   };
   let hubcapKeyTimer = null;
-  let luaDrmRenderId = 0;
-  let luaDrmObserver = null;
-  let luaDrmQueueTimer = null;
-  const luaDrmCache = new Map();
-  const luaDrmQueue = new Map();
+  let luaCoverObserver = null;
+  let luaRenderToken = 0;
+  // Пока список рисуется порциями, новый проход не должен начинать всё заново
+  let luaRenderInProgress = false;
+  let luaRenderPending = false;
 
   function applyDrmBadge(badge, info) {
     const allowedKinds = new Set(["denuvo", "launcher", "steam", "third-party", "unknown"]);
     const kind = allowedKinds.has(info?.kind) ? info.kind : "unknown";
     badge.className = `lua-drm-badge ${kind}`;
-    badge.textContent = info?.label || "Не указано";
-    badge.title = info?.notice || "Steam не указывает сведения о защите для этой игры.";
+    const text = drmText(info);
+    badge.textContent = text.label;
+    badge.title = text.notice;
+    // Бейдж живёт в списке с data-i18n-skip, поэтому переводим его точечно
+    window.cgsI18n?.translate(badge);
   }
 
-  async function flushDrmQueue() {
-    luaDrmQueueTimer = null;
-    const entries = [...luaDrmQueue.values()];
-    luaDrmQueue.clear();
-    const active = entries.filter((entry) => entry.badge.isConnected);
-    if (!active.length) return;
-    const appids = [...new Set(active.map((entry) => entry.appid))];
-    try {
-      const batches = [];
-      for (let index = 0; index < appids.length; index += 12) {
-        batches.push(appids.slice(index, index + 12));
-      }
-      const infos = (await Promise.all(
-        batches.map((batch) => call("steam_drm_info", { appids: batch }))
-      )).flat();
-      const byAppid = new Map();
-      (infos || []).forEach((info) => {
-        const appid = String(info.appid);
-        luaDrmCache.set(appid, info);
-        byAppid.set(appid, info);
-      });
-      active.forEach((entry) => {
-        if (!entry.badge.isConnected || entry.renderId !== luaDrmRenderId) return;
-        applyDrmBadge(entry.badge, byAppid.get(entry.appid) || {
-          label: "Нет данных",
-          kind: "unknown",
-          notice: "Не удалось получить сведения о защите из Steam. Они появятся при следующем обновлении списка.",
-        });
-      });
-    } catch {
-      active.forEach((entry) => {
-        if (!entry.badge.isConnected || entry.renderId !== luaDrmRenderId) return;
-        applyDrmBadge(entry.badge, {
-          label: "Нет данных",
-          kind: "unknown",
-          notice: "Не удалось получить сведения о защите из Steam. Они появятся при следующем обновлении списка.",
-        });
-      });
-    }
-  }
+  // Подписи и подсказки собираем на русском: английский вариант подставит i18n
+  const DRM_FEATURES = {
+    denuvo: { label: "Denuvo", notice: "В игре используется защита Denuvo." },
+    ea_app: { label: "EA App", notice: "Для запуска требуется приложение EA app." },
+    ea_account: { label: "Аккаунт EA", notice: "Для запуска требуется аккаунт EA." },
+    ubisoft: { label: "Ubisoft Connect", notice: "Для запуска требуется Ubisoft Connect." },
+    rockstar: { label: "Rockstar", notice: "Для запуска требуется аккаунт Rockstar Games." },
+    steam_drm: { label: "Steam DRM", notice: "В игре используется защита Steam DRM." },
+    third_party_drm: { label: "Сторонняя DRM", notice: "Steam сообщает о сторонней защите без подробностей." },
+    third_party_account: { label: "Сторонний аккаунт", notice: "Для запуска требуется сторонний аккаунт." },
+  };
 
-  function queueDrmBadge(appid, badge, renderId) {
-    const normalized = String(appid);
-    const cached = luaDrmCache.get(normalized);
-    if (cached) {
-      applyDrmBadge(badge, cached);
-      return;
+  // Метки защиты приходят кодами, поэтому подсказка остаётся на выбранном языке
+  function drmText(info) {
+    const codes = Array.isArray(info?.features) ? info.features.filter((code) => DRM_FEATURES[code]) : [];
+    if (!codes.length) {
+      return {
+        label: info?.label || "Не указано",
+        notice: info?.notice || "Steam не указывает сведения о защите для этой игры.",
+      };
     }
-    luaDrmQueue.set(normalized, { appid: normalized, badge, renderId });
-    clearTimeout(luaDrmQueueTimer);
-    luaDrmQueueTimer = setTimeout(flushDrmQueue, 90);
+    return {
+      label: codes.map((code) => DRM_FEATURES[code].label).join(" + "),
+      notice: [...new Set(codes.map((code) => DRM_FEATURES[code].notice))].join(" "),
+    };
   }
 
   function renderSearchDropdown(results) {
@@ -2013,12 +2388,14 @@
     }
   }
 
-  async function luaGet(appid, name) {
+  async function luaGet(appid, name, options = {}) {
+    // refresh — перекачать манифесты уже добавленной игры по выбранному сервису
+    const refresh = Boolean(options.refresh);
     $("#lua-search-dropdown").classList.add("hidden");
     const label = name || `AppID ${appid}`;
     const hubcap = state.lua.service === "hubcap";
-    log(`Получение из ${hubcap ? "HubCap" : "генератора"}: ${label} (${appid})`, "system");
-    toast("Загрузка манифестов…");
+    log(`${refresh ? "Обновление манифестов" : "Получение"} из ${hubcap ? "HubCap" : "генератора"}: ${label} (${appid})`, "system");
+    toast(refresh ? "Обновляем манифесты…" : "Загрузка манифестов…");
     try {
       const result = hubcap
         ? await call("hubcap_get", {
@@ -2034,13 +2411,29 @@
       if (consumeResult(result)) {
         if (!state.lua.names[appid] && name) state.lua.names[appid] = name;
         await luaRefresh();
-        await showModal("Игра получена", `${label} добавлена. Нажмите «Перезапустить Steam», чтобы она появилась в библиотеке.`, { symbol: "✓" });
+        await showModal(
+          refresh ? "Манифесты обновлены" : "Игра получена",
+          refresh
+            ? `Манифесты для ${label} перекачаны через ${hubcap ? "HubCap" : "Ryuu"}. Перезапустите Steam, чтобы применить изменения.`
+            : `${label} добавлена. Нажмите «Перезапустить Steam», чтобы она появилась в библиотеке.`,
+          { symbol: "✓" },
+        );
       }
     } catch (error) {
-      log(`Ошибка получения: ${errorText(error)}`, "error");
+      log(`Ошибка ${refresh ? "обновления" : "получения"}: ${errorText(error)}`, "error");
       toast(errorText(error), "error");
     } finally {
       if (hubcap) refreshHubcapUsage();
+    }
+  }
+
+  // Кнопка на карточке игры: перекачать манифесты выбранным сервисом
+  async function luaRefreshManifests(appid, button) {
+    setBusy(button, true, "Обновляем…");
+    try {
+      await luaGet(appid, state.lua.names[appid] || "", { refresh: true });
+    } finally {
+      setBusy(button, false);
     }
   }
 
@@ -2451,7 +2844,7 @@
     // Версия без суффикса Portable x64 — других сборок нет
     const appVerEl = $("#about-app-version");
     if (appVerEl) {
-      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "10.0.0";
+      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "10.1.0";
       state.version = currentVer;
       appVerEl.textContent = currentVer;
     }
@@ -2463,7 +2856,7 @@
         try {
           const hvStatus = await call("eclipse_hv_status");
           if (hvStatus && hvStatus.installed) {
-            const rawVer = hvStatus.version || "10.0.0";
+            const rawVer = hvStatus.version || "10.1.0";
             hvVerEl.textContent = rawVer.replace(/^v/i, "");
           } else {
             hvVerEl.textContent = "Не установлен";
@@ -3230,6 +3623,8 @@
       if (updateDialogOpen()) renderUpdateDialog();
       renderUpdateStatus();
       if (state.updates.latest) renderUpdateDownloads(state.updates.latest);
+      // Карточки исключены из глобального перевода — обновляем их отдельно
+      window.cgsI18n?.translate($("#lua-games"));
     });
 
     document.addEventListener("contextmenu", (event) => event.preventDefault(), { capture: true });
@@ -3336,6 +3731,16 @@
 
     $("#lua-browse-button").addEventListener("click", luaBrowseFiles);
     $("#lua-drop-zone").addEventListener("dblclick", luaBrowseFiles);
+    // Галочка «Сторонние добавления»: показывать игры, добавленные другими инструментами
+    const luaExternalToggle = $("#lua-show-external");
+    if (luaExternalToggle) {
+      luaExternalToggle.checked = Boolean(state.lua.showExternal);
+      luaExternalToggle.addEventListener("change", () => {
+        state.lua.showExternal = luaExternalToggle.checked;
+        window.cgsStorage.setItem("cgs-lua-external", luaExternalToggle.checked ? "1" : "0");
+        luaRefresh();
+      });
+    }
     $("#lua-refresh-button").addEventListener("click", luaRefresh);
     $("#lua-restart-button").addEventListener("click", luaRestartSteam);
     $("#millennium-site-button").addEventListener("click", downloadMillenniumInstaller);
@@ -3617,10 +4022,21 @@
     }
   }
 
-  function boot() {
+  async function boot() {
     bindEvents();
+    // Замеры включаются запуском приложения с флагом --perf
+    try {
+      if (await call("perf_mode_enabled")) window.cgsPerf?.setEnabled(true);
+    } catch (_) {
+      // В сборке без команды замеры просто выключены
+    }
     // Сигнал здоровья после обновления и счётчик откладываний — до фоновой проверки версий
-    state.updates.ready = initUpdates().catch(() => {});
+    // Проверка обновлений не мешает первому кадру: запускаем в простое
+    const startUpdateCheck = () => {
+      state.updates.ready = initUpdates().catch(() => {});
+    };
+    if ("requestIdleCallback" in window) requestIdleCallback(startUpdateCheck, { timeout: 1500 });
+    else setTimeout(startUpdateCheck, 400);
     applyAccent(window.cgsStorage.getItem("accent") || "white");
     // Раздел при запуске: ?view= в адресе важнее настройки «Открывать при запуске»
     const requestedView = new URLSearchParams(window.location.search).get("view");
@@ -3645,7 +4061,7 @@
     updateRyuuKeyStatus();
     renderLoaderInfo();
     updateAboutInfo();
-    log("Eclipse Studio 10.0.0 инициализирован", "system");
+    log("Eclipse Studio 10.1.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный показ окна, если заставка отключена
@@ -3693,7 +4109,7 @@
     manifest: () => state.lua.loaded ? state.lua.games.map((game) => ({ appid: String(game.appid), name: state.lua.names[game.appid] || "" })) : null,
     steam: () => state.dlc.libraryScanned ? state.dlc.games.map((game) => ({ ...game })) : null,
     async loadManifest(known = {}) {
-      const status = await call("luatools_status", { steamPath: state.lua.steamPath || null });
+      const status = await call("luatools_status", { steamPath: state.lua.steamPath || null, includeExternal: state.lua.showExternal });
       const ids = (status?.games || []).map((game) => String(game.appid));
       const missing = ids.filter((appid) => !state.lua.names[appid] && !known[appid]);
       if (missing.length) {

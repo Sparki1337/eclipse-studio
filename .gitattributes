@@ -1,0 +1,32 @@
+# ── Переводы строк в репозитории
+# В индексе и в истории Git всегда LF; рабочее дерево Windows получает CRLF
+# по core.autocrlf. Так SHA-256 сборок не зависит от машины разработчика.
+* text=auto
+
+# ── Бинарные ресурсы: текстовая нормализация к ним не применяется
+*.dll    binary
+*.exe    binary
+*.sys    binary
+*.ico    binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.bmp    binary
+*.ttf    binary
+*.otf    binary
+*.woff   binary
+*.woff2  binary
+*.zip    binary
+*.rar    binary
+*.7z     binary
+*.tar    binary
+*.gz     binary
+*.pdf    binary
+
+# ── Плагин Eclipse Manifest
+# Его исходники, lock-файл и собранные bundle хешируются с каноническими LF
+# (scripts/plugin-integrity.cjs), поэтому LF фиксируется и в рабочем дереве:
+# checkout на любой машине даёт те же байты, что и карта целостности.
+eclipse-manifest/** text eol=lf

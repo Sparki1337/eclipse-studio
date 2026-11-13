@@ -1580,6 +1580,8 @@
 
   function cleanGameName(name) {
     if (!name) return '';
+    // Устаревшие названия каталога правит общий список из data/game-names.js
+    if (typeof window.cgsCanonicalGameName === 'function') return window.cgsCanonicalGameName(name);
     return name.replace(/[\uFFFD]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
@@ -2478,7 +2480,7 @@
     };
 
     getJson(GIST_URL)
-      .catch(() => getJson(`${FALLBACK_URL}?v=10.0.0`))
+      .catch(() => getJson(`${FALLBACK_URL}?v=10.1.0`))
       .then(async (data) => {
         const cracks = Array.isArray(data) ? data : (data?.cracks || []);
         allGames = prepareGames(cracks.filter((c) => c && c.name && c.url));

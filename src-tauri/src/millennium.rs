@@ -8,7 +8,7 @@ use std::{
 };
 
 const PLUGIN_FOLDER_NAME: &str = "eclipse-manifest";
-const BUNDLED_PLUGIN_VERSION: &str = "0.5.3";
+const BUNDLED_PLUGIN_VERSION: &str = "5.5.0";
 
 const EMBEDDED_MILLENNIUM_FILES: &[(&str, &[u8])] = &[
     ("wsock32.dll", include_bytes!("../../millenium/wsock32.dll")),
@@ -346,17 +346,22 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
             }
         }
 
+        let relative = match target.strip_prefix(&steam) {
+            Ok(path) => path.to_string_lossy().into_owned(),
+            Err(error) => return OperationResult::error(error.to_string(), logs),
+        };
+        // Прошлые версии приложения записывали файлы плагина, но не фиксировали
+        // установленный хеш. Без подтверждения такая запись считалась чужой,
+        // и обновление останавливалось с конфликтом. Папка плагина наша,
+        // поэтому уже лежащие в ней файлы подтверждаем как установленные.
+        let _ = crate::backup::record_installed(&steam, &relative);
         if fs::read(&target).ok().as_deref() == Some(*contents) {
             logs.push(format!("Без изменений: {relative}"));
             continue;
         }
-        if let Err(error) = target
-            .strip_prefix(&steam)
-            .map_err(|e| e.to_string())
-            .and_then(|relative| {
-                crate::backup::protect(&steam, &relative.to_string_lossy(), "millennium-install")
-            })
+        if let Err(error) = crate::backup::protect(&steam, &relative, "millennium-install")
             .and_then(|_| crate::durable::write(&target, contents))
+            .and_then(|_| crate::backup::record_installed(&steam, &relative))
         {
             return OperationResult::error(
                 format!("Не удалось записать {}: {error}", target.display()),
@@ -586,17 +591,21 @@ fn install_bundled_runtime(steam: &Path) -> OperationResult {
                 );
             }
         }
+        let relative = match target.strip_prefix(steam) {
+            Ok(path) => path.to_string_lossy().into_owned(),
+            Err(error) => return OperationResult::error(error.to_string(), logs),
+        };
+        // Комплект Millennium тоже наш: подтверждаем файлы, записанные прошлыми
+        // версиями без установленного хеша, иначе повторная установка видела
+        // в них чужое изменение и падала с конфликтом.
+        let _ = crate::backup::record_installed(steam, &relative);
         if fs::read(&target).ok().as_deref() == Some(*contents) {
             logs.push(format!("Без изменений: {relative}"));
             continue;
         }
-        if let Err(error) = target
-            .strip_prefix(steam)
-            .map_err(|e| e.to_string())
-            .and_then(|relative| {
-                crate::backup::protect(steam, &relative.to_string_lossy(), "millennium-install")
-            })
+        if let Err(error) = crate::backup::protect(steam, &relative, "millennium-install")
             .and_then(|_| crate::durable::write(&target, contents))
+            .and_then(|_| crate::backup::record_installed(steam, &relative))
         {
             return OperationResult::error(
                 format!("Не удалось записать {}: {error}", target.display()),
@@ -696,6 +705,44 @@ mod tests {
             status_for(Some(steam.display().to_string())).status,
             "plugin_missing"
         );
+
+        fs::remove_dir_all(steam).expect("clean test directory");
+    }
+
+    #[test]
+    fn updates_plugin_left_without_installed_hash() {
+        let steam = test_steam_dir();
+        fs::create_dir_all(&steam).expect("create fake Steam");
+        fs::write(steam.join("steam.exe"), []).expect("create fake steam.exe");
+        let runtime = install_bundled_runtime(&steam);
+        assert!(runtime.success, "{}", runtime.message);
+
+        // Повторяем состояние после сбоя прошлых версий: оригинал защищён,
+        // поверх записана новая версия, а установленный хеш не зафиксирован.
+        let plugin = plugin_dir(&steam);
+        fs::create_dir_all(&plugin).expect("create plugin folder");
+        let plugin_json = plugin.join("plugin.json");
+        fs::write(
+            &plugin_json,
+            br#"{"name":"eclipse-manifest","common_name":"Eclipse Manifest","version":"0.5.2"}"#,
+        )
+        .expect("write original plugin.json");
+        let relative = plugin_json
+            .strip_prefix(&steam)
+            .expect("relative plugin path")
+            .to_string_lossy()
+            .into_owned();
+        crate::backup::protect(&steam, &relative, "millennium-install").expect("protect original");
+        fs::write(
+            &plugin_json,
+            br#"{"name":"eclipse-manifest","common_name":"Eclipse Manifest","version":"0.5.3"}"#,
+        )
+        .expect("write unconfirmed plugin.json");
+
+        let result = millennium_install_plugin(Some(steam.display().to_string()));
+        assert!(result.success, "{}", result.message);
+        let installed = fs::read_to_string(&plugin_json).expect("read plugin.json");
+        assert!(installed.contains(BUNDLED_PLUGIN_VERSION), "{installed}");
 
         fs::remove_dir_all(steam).expect("clean test directory");
     }

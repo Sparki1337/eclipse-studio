@@ -8,7 +8,7 @@
   const EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
   const LIST_SELECTORS = [
     "#files-grid", "#files-featured-grid", "#dlc-game-list", "#dlc-list", "#dlc-catalog",
-    "#save-list", "#lua-games", "#hv-game-list", "#ac-list", "#lua-search-results",
+    "#save-list", "#hv-game-list", "#ac-list", "#lua-search-results",
     "#lua-detail-in", "#lua-detail-missing", ".vbs-components-list", "#files-pages",
     "#home-recent-games", "#home-recent-backups", "#home-pending-jobs", "#home-attention",
   ];
@@ -23,7 +23,6 @@
   ].join(",");
   const animations = new Map();
   const classRuns = new Map();
-  const pendingReveals = new Map();
   const signatures = new WeakMap();
   const enabled = () => !root.classList.contains("no-motion");
   let requested = true;
@@ -83,24 +82,6 @@
     ], { delay, duration: 320 });
   }
 
-  const revealObserver = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue;
-      const options = pendingReveals.get(entry.target);
-      pendingReveals.delete(entry.target);
-      revealObserver.unobserve(entry.target);
-      if (options && enabled()) enter(entry.target, 0, options.horizontal);
-    }
-  }, { threshold: 0.04 }) : null;
-
-  function clearReveals(scope) {
-    for (const element of pendingReveals.keys()) {
-      if (scope && !scope.contains(element)) continue;
-      revealObserver?.unobserve(element);
-      pendingReveals.delete(element);
-    }
-  }
-
   function enterSequence(elements, horizontal = 0) {
     const main = document.querySelector(".main-area")?.getBoundingClientRect();
     let index = 0;
@@ -108,8 +89,9 @@
       if (!visible(element)) continue;
       const rect = element.getBoundingClientRect();
       const inFrame = rect.bottom > (main?.top || 0) && rect.top < Math.min(innerHeight, main?.bottom || innerHeight);
-      if (inFrame || !revealObserver) enter(element, Math.min(index++, 6) * 26, horizontal);
-      else { pendingReveals.set(element, { horizontal }); revealObserver.observe(element); }
+      // Анимируем только уже видимые элементы: панель со списком игр
+      // не должна «обновляться» при прокрутке к ней.
+      if (inFrame) enter(element, Math.min(index++, 6) * 26, horizontal);
     }
   }
 
@@ -150,7 +132,6 @@
     for (const [element, runs] of [...classRuns]) {
       if (scope.contains(element)) for (const className of [...runs.keys()]) removeClassRun(element, className);
     }
-    clearReveals(scope);
   }
 
   function applyMotion(on, save = true) {
@@ -215,7 +196,7 @@
       } else if (record.oldValue !== null && !element.hidden) revealed.add(element);
     }
     for (const element of revealed) {
-      if (!visible(element) || element.matches(".settings-tab-panel,.modal-backdrop,.nav-context-menu")) continue;
+      if (!visible(element) || element.matches(".settings-tab-panel,.modal-backdrop,.nav-context-menu,#lua-games")) continue;
       if (element.closest(".toast-stack,.modal-backdrop,.nav-context-menu,.k-search") || enteringParent(element)) continue;
       enter(element);
     }

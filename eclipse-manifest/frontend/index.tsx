@@ -404,7 +404,7 @@ function PluginContent() {
               fontWeight: 700,
             }}
           >
-            v0.5.3
+            v5.5.0
           </span>
         </div>
       </section>

@@ -9,6 +9,7 @@ const MOCK = fs.readFileSync(path.join(__dirname, "tauri-mock.js"), "utf8");
 const LIB_RS = fs.readFileSync(path.join(ROOT, "src-tauri", "src", "lib.rs"), "utf8");
 const VBS_RS = fs.readFileSync(path.join(ROOT, "src-tauri", "src", "vbs.rs"), "utf8");
 const COMMANDS = [...LIB_RS.matchAll(/^\s+(?:[a-z_]+::)?([a-z_0-9]+),\s*$/gm)].map((m) => m[1]);
+const APP_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
 const SHOTS = process.env.SCREENSHOTS || "";
 
 const TEST_FILTER = process.env.ECLIPSE_TEST_FILTER || "";
@@ -20,6 +21,8 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 async function open({ storage = {}, mock = {}, view = "home", viewport = { width: 1440, height: 900 }, reducedMotion = "no-preference" } = {}) {
   // Тесты по умолчанию работают на русском; English-first проверяется отдельным сценарием
   if (!Object.prototype.hasOwnProperty.call(storage, "cgs-language")) storage = { ...storage, "cgs-language": "ru" };
+  // Окно первого запуска патча не должно перекрывать остальные сценарии
+  if (!Object.prototype.hasOwnProperty.call(storage, "cgs-steam-patch-prompt-version")) storage = { ...storage, "cgs-steam-patch-prompt-version": APP_VERSION };
   const context = await browser.newContext({ viewport, reducedMotion });
   // Подменяем внешние обложки, чтобы тесты не зависели от CDN Steam
   await context.route(/^https?:\/\//, route => route.request().resourceType() === "image"
@@ -36,6 +39,8 @@ async function open({ storage = {}, mock = {}, view = "home", viewport = { width
     new Function(script)();
   }, { storage, mock, commands: COMMANDS, script: MOCK });
   const page = await context.newPage();
+  // Полный прогон идёт параллельно с другими задачами: даём ожиданиям запас
+  page.setDefaultTimeout(15000);
   page.on("pageerror", (error) => errors.push("pageerror: " + error.message));
   page.on("console", (msg) => { if (msg.type() === "error") errors.push("console: " + msg.text()); });
   await page.goto(`${PAGE}?view=${view}`);
@@ -106,10 +111,10 @@ async function run() {
     assert(missing.length === 0, "Не зарегистрированы: " + missing.join(", "));
   });
 
-  await test("Запуск без ошибок JS, версия 10.0.0", async () => {
+  await test("Запуск без ошибок JS, версия 10.1.0", async () => {
     const { page, context, errors } = await open();
     const version = await page.textContent(".titlebar-version");
-    assert(version.trim() === "10.0.0", "версия " + version);
+    assert(version.trim() === "10.1.0", "версия " + version);
     assert(errors.length === 0, errors.join("\n"));
     await context.close();
   });
@@ -150,7 +155,7 @@ async function run() {
     assert((await calls(page, "update_launch_ready")).length === 0, "старый экземпляр подтвердил чужой запуск");
   });
   await test("Админ-запуск: переданный и проверяемый после обновления процессы не перезапускаются", async () => {
-    for (const extra of [{ elevatedHandoff: true }, { launchOutcome: { success: true, message: "Обновление подтверждено", version: "10.0.0" } }]) {
+    for (const extra of [{ elevatedHandoff: true }, { launchOutcome: { success: true, message: "Обновление подтверждено", version: "10.1.0" } }]) {
       const { page, context } = await open({ mock: { admin: false, ...extra } });
       assert(await page.evaluate(() => window.__startupAdminAttempts || 0) === 0, "создан повторный процесс при передаче/проверке обновления");
       assert((await calls(page, "update_launch_ready")).length === 1, "не выполнен обычный handshake обновления");
@@ -1876,7 +1881,7 @@ async function run() {
   });
 
   for (const theme of ["oled", "light"]) {
-    await test(`Быстрый поиск: подсветка без рамки затухает за секунду, тема ${theme}`, async () => {
+    await test(`Быстрый поиск: подсветка без рамки держится и плавно затухает, тема ${theme}`, async () => {
       const { page, errors } = await open({ storage: { "cgs-theme": theme } });
       await freezeSearchExit(page);
       await page.click("#titlebar-search");
@@ -1890,7 +1895,7 @@ async function run() {
         const style = getComputedStyle(layer);
         const animation = layer.getAnimations()[0];
         animation.pause();
-        const opacity = [0, 500, 950].map(time => {
+        const opacity = [0, 1600, 2300].map(time => {
           animation.currentTime = time;
           return Number(getComputedStyle(layer).opacity);
         });
@@ -1905,7 +1910,7 @@ async function run() {
       });
       assert(!effect.open && effect.closing && effect.view === "settings", "переход ждёт окончания закрытия поиска");
       assert(effect.border === "0px" && effect.shadow === "none" && effect.outline === "none", "подсветка оставила рамку или свечение");
-      assert(effect.duration === 1000 && effect.opacity[0] > effect.opacity[1] && effect.opacity[1] > effect.opacity[2], JSON.stringify(effect));
+      assert(effect.duration === 2400 && effect.opacity[0] > effect.opacity[1] && effect.opacity[1] > effect.opacity[2], JSON.stringify(effect));
       assert(effect.visible && effect.inlineOpacity === "" && effect.widthDelta < 1, "подсветка меняет сам блок или выходит за него");
       await page.keyboard.press("Control+KeyK");
       await page.keyboard.press("Control+KeyA");
@@ -2411,6 +2416,60 @@ async function run() {
     assert(errors.length === 0, errors.join("\n"));
   });
 
+  await test("Патч appcache: статус, включение и возврат в стоковое состояние", async () => {
+    const { page, errors } = await open({ view: "lua" });
+    await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч выключен");
+    assert(await page.isEnabled("#sp-enabled"), "переключатель патча недоступен");
+    assert((await page.textContent("#sp-status")) === "Патч не активен", "нет стокового статуса");
+    assert(await page.getAttribute("#sp-status", "data-kind") === "info", "статус окрашен без причины");
+    assert(await page.isHidden("#sp-prompt-backdrop"), "окно патча показано повторно");
+    // Включение: команда получает путь Steam, переключатель и бейдж подтверждают патч
+    await page.click("#sp-enabled");
+    await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч активен");
+    const applyCall = (await calls(page, "steam_patch_apply")).at(-1);
+    assert(applyCall?.args.steamPath === "C:\\Program Files (x86)\\Steam", "не передан путь Steam: " + JSON.stringify(applyCall?.args));
+    assert(await page.isChecked("#sp-enabled"), "переключатель не отражает активный патч");
+    assert((await page.textContent("#sp-status")).includes("Патч применён"), "нет подтверждения патча");
+    // Выключение возвращает оригиналы
+    await page.click("#sp-enabled");
+    await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч выключен");
+    assert((await calls(page, "steam_patch_restore")).length === 1, "возврат файлов не выполнен");
+    assert(!(await page.isChecked("#sp-enabled")), "переключатель остался включённым");
+    // Перевод на английский без кириллицы
+    await page.evaluate(() => window.cgsI18n.setLanguage("en"));
+    await page.waitForTimeout(150);
+    const english = await page.innerText("#steam-patch-panel");
+    assert(!/[А-Яа-яЁё]/.test(english), "в панели патча осталась кириллица: " + english);
+    assert(english.includes("0 bytes / no connection fix"), "нет перевода панели патча");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+
+  await test("Патч appcache: окно первого запуска новой версии", async () => {
+    const { page, errors } = await open({ view: "lua", storage: { "cgs-steam-patch-prompt-version": "" } });
+    const prompt = page.locator("#sp-prompt-backdrop");
+    await prompt.waitFor({ state: "visible" });
+    assert((await page.textContent("#sp-prompt-title")) === "Патч не активен", "неверный заголовок окна патча");
+    assert((await page.textContent("#sp-prompt-description")).includes("0 байт"), "нет описания ошибки 0 байт");
+    await page.click("#sp-prompt-skip");
+    await prompt.waitFor({ state: "hidden" });
+    assert((await calls(page, "steam_patch_apply")).length === 0, "«Пропустить» применил патч");
+    // Повторный запуск той же версии не показывает окно
+    await reload(page);
+    await page.waitForTimeout(700);
+    assert(await prompt.isHidden(), "окно повторилось в той же версии");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+
+  await test("Патч appcache: окно первого запуска применяет патч", async () => {
+    const { page, errors } = await open({ view: "lua", storage: { "cgs-steam-patch-prompt-version": "" } });
+    await page.locator("#sp-prompt-backdrop").waitFor({ state: "visible" });
+    await page.click("#sp-prompt-apply");
+    await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч активен");
+    assert((await calls(page, "steam_patch_apply")).length === 1, "патч не применён из окна");
+    assert(await page.isHidden("#sp-prompt-backdrop"), "окно не закрылось после применения");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+
   await test("Первый запуск: английский язык по умолчанию и сохранение выбора", async () => {
     const { page, errors } = await open({ storage: { "cgs-language": "" } });
     assert(await page.evaluate(() => window.cgsI18n.language) === "en", "первый запуск не на английском");
@@ -2450,7 +2509,7 @@ async function run() {
   });
 
   const UPDATE_RELEASE = {
-    available: true, currentVersion: "10.0.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
+    available: true, currentVersion: "10.1.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
     notes: "## Что нового\n- Локальное облако\n- Обновление с перезапуском",
     releaseUrl: "https://github.com/Sparki1337/eclipse-studio/releases/tag/v9.1.0",
     installerUrl: null, portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v9.1.0/EclipseStudio.exe",
@@ -2561,9 +2620,9 @@ async function run() {
     const { page, errors } = await open({
       view: "settings",
       storage: { "cgs-update-snooze-launches": "5", "cgs-language": "en" },
-      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 10.0.0.", version: "10.0.0" } }),
+      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 10.1.0.", version: "10.1.0" } }),
     });
-    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 10.0.0."));
+    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 10.1.0."));
     // Успешная установка сбрасывает откладывание, поэтому новое окно показывается сразу
     await dialogOpen(page);
     assert(await page.evaluate(() => cgsStorage.getItem("cgs-update-snooze-launches")) === null, "откладывание не сброшено после успешной установки");
@@ -2573,6 +2632,272 @@ async function run() {
     await second.page.waitForTimeout(500);
     assert(await second.page.isHidden("#app-update-backdrop"), "окно показано во время откладывания");
     assert(await second.page.evaluate(() => cgsStorage.getItem("cgs-update-snooze-launches")) === "4", "новый запуск не уменьшил счётчик");
+  });
+
+  // Сторонние добавления: галочка включена по умолчанию
+  await test("Сторонние добавления: включены по умолчанию и управляются как свои", async () => {
+    const { page, context, errors } = await open({ view: "lua", mock: { responses: {
+      luatools_status: {
+        steamPath: "C:\\Steam",
+        externalCount: 1,
+        games: [{ appid: "1245620", enabled: true, status: "ready", external: false }],
+      },
+      luatools_names: { "1245620": "ELDEN RING", "570": "Dota 2" },
+      luatools_headers: {},
+      luatools_toggle: { success: true, message: "Игра отключена", logs: [] },
+      luatools_remove: { success: true, message: "Игра удалена из загрузчика", logs: [] },
+      ryuu_get: { success: true, message: "Манифесты обновлены", logs: [] },
+    }}});
+    await page.waitForFunction(() => document.querySelectorAll("#lua-games .lua-game").length === 1);
+    // Галочка включена по умолчанию, поэтому первый запрос уже просит сторонние игры
+    assert(await page.isChecked("#lua-show-external"), "галочка выключена по умолчанию");
+    assert(await page.evaluate(() => window.__mockCalls.some((call) => call.command === "luatools_status" && call.args.includeExternal === true)), "сторонние не запрошены по умолчанию");
+    assert((await page.textContent("#lua-external-count")).trim() === "1", "счётчик сторонних не показан");
+    assert(await page.isHidden("#lua-empty-external"), "подсказка видна при непустом списке");
+    // Галочка стоит в шапке раздела и не ломает карточки
+    const layout = await page.evaluate(() => {
+      const label = document.querySelector("#lua-show-external").closest(".lua-external-toggle");
+      const box = label.getBoundingClientRect();
+      return {
+        visible: box.width > 0 && box.height > 0,
+        inHeader: document.querySelector("#view-lua .save-browser-header").contains(label),
+        cardWidth: document.querySelector("#lua-games .lua-game").getBoundingClientRect().width,
+      };
+    });
+    assert(layout.visible, "галочка не видна");
+    assert(layout.inHeader, "галочка вне шапки раздела");
+    assert(layout.cardWidth > 200, "карточка сжалась: " + layout.cardWidth);
+    // Кнопка «Обновить манифесты» перекачивает их сервисом из настроек
+    await page.click('#lua-games .lua-game[data-appid="1245620"] .lua-action-refresh');
+    await page.waitForFunction(() => window.__mockCalls.some((call) => call.command === "ryuu_get" && call.args.appid === "1245620"));
+    await page.waitForSelector("#modal-backdrop:not(.hidden)");
+    assert((await page.textContent("#modal-title")).trim() === "Манифесты обновлены", "нет подтверждения обновления");
+    await page.click("#modal-confirm");
+    await page.waitForSelector("#modal-backdrop", { state: "hidden" });
+    // Ответ на функцию ставим уже в странице: addInitScript не передаёт функции
+    await page.evaluate(() => {
+      window.__CGS_MOCK_CONFIG__.responses.luatools_status = (args = {}) => ({
+        steamPath: "C:\\Steam",
+        externalCount: 1,
+        games: [
+          { appid: "1245620", enabled: true, status: "ready", external: false },
+          ...(args.includeExternal ? [{ appid: "570", enabled: true, status: "ready", external: true }] : []),
+        ],
+      });
+      const box = document.querySelector("#lua-show-external");
+      box.checked = false;
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    // Выключенная галочка прячет чужие игры и сохраняется
+    await page.waitForFunction(() => window.__mockCalls.some((call) => call.command === "luatools_status" && call.args.includeExternal === false));
+    assert(await page.evaluate(() => cgsStorage.getItem("cgs-lua-external")) === "0", "выключение не сохранено");
+    await page.evaluate(() => {
+      const box = document.querySelector("#lua-show-external");
+      box.checked = true;
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await page.waitForFunction(() => document.querySelectorAll("#lua-games .lua-game").length === 2);
+    const card = '#lua-games .lua-game[data-appid="570"]';
+    assert((await page.textContent(`${card} .lua-external-badge`)).trim() === "Сторонняя", "нет метки сторонней игры");
+    assert(await page.evaluate(() => cgsStorage.getItem("cgs-lua-external")) === "1", "галочка не сохранена");
+    // Управление: отключение и удаление работают для чужой игры
+    await page.click(`${card} .lua-action-toggle`);
+    await page.waitForFunction(() => window.__mockCalls.some((call) => call.command === "luatools_toggle" && call.args.appid === "570"));
+    await page.click(`${card} .lua-action-remove`);
+    await page.waitForSelector("#modal-backdrop:not(.hidden)");
+    await page.click("#modal-confirm");
+    await page.waitForFunction(() => window.__mockCalls.some((call) => call.command === "luatools_remove" && call.args.appid === "570"));
+    assert(errors.length === 0, errors.join("\n"));
+    await context.close();
+  });
+
+  // Защита игры: подсказка не должна оставаться на английском
+  await test("Защита игры: подсказка на русском и перевод на английский", async () => {
+    const { page, context, errors } = await open({ view: "lua", mock: { responses: {
+      luatools_status: {
+        steamPath: "C:\\Steam",
+        externalCount: 0,
+        games: [{ appid: "1245620", enabled: true, status: "ready", external: false }],
+      },
+      luatools_names: { "1245620": "ELDEN RING" },
+      luatools_headers: {},
+      luatools_game_detail: { appid: "1245620", name: "ELDEN RING", inLua: [], missing: [] },
+      steam_drm_info: [{
+        appid: "1245620",
+        kind: "launcher",
+        label: "EA App",
+        notice: "Requires 3rd-Party Account: EA Play (EA app)",
+        features: ["ea_app"],
+        checkedAt: 1,
+      }],
+    }}});
+    await page.waitForFunction(() => document.querySelectorAll("#lua-games .lua-game").length === 1);
+    // Сведения о защите загружаются в карточке игры, а не при прокрутке списка
+    await page.click('#lua-games .lua-game[data-appid="1245620"] .lua-action-details');
+    await page.waitForSelector("#lua-detail-backdrop:not(.hidden)");
+    await page.waitForFunction(() => document.querySelector("#lua-detail-drm")?.textContent === "EA App");
+    const tooltip = () => page.getAttribute("#lua-detail-drm", "title");
+    assert((await tooltip()) === "Для запуска требуется приложение EA app.", "подсказка не на русском: " + await tooltip());
+    await page.evaluate(() => window.cgsI18n.setLanguage("en"));
+    await page.waitForFunction(() => document.querySelector("#lua-detail-drm")?.title === "EA app is required to launch the game.");
+    await page.evaluate(() => window.cgsI18n.setLanguage("ru"));
+    await page.waitForFunction(() => document.querySelector("#lua-detail-drm")?.title === "Для запуска требуется приложение EA app.");
+    assert(errors.length === 0, errors.join("\n"));
+    await context.close();
+  });
+
+  // Длинные названия не должны сжиматься до одной буквы
+  await test("Добавленные игры: длинное название читается на карточке", async () => {
+    const longName = "Call of Duty Modern Warfare 4 Remastered Deluxe Edition";
+    const { page, context, errors } = await open({
+      view: "lua",
+      viewport: { width: 960, height: 700 },
+      storage: { "cgs-compact": "1", "cgs-font-scale": "140" },
+      mock: { responses: {
+        luatools_status: {
+          steamPath: "C:\\Steam",
+          externalCount: 1,
+          games: [
+            { appid: "7940", enabled: true, status: "ready", external: true, manifestCount: 1, missingManifestCount: 0 },
+            { appid: "7941", enabled: true, status: "missing_manifests", external: false, manifestCount: 0, missingManifestCount: 3 },
+          ],
+        },
+        luatools_names: { "7940": longName, "7941": "ELDEN RING" },
+        luatools_headers: {},
+      } },
+    });
+    await page.waitForFunction(() => [...document.querySelectorAll("#lua-games .lua-game-name strong")].some((element) => element.textContent.startsWith("Call of Duty")));
+    const sizes = await page.evaluate((expected) => [...document.querySelectorAll("#lua-games .lua-game")].map((card) => {
+      const box = card.querySelector(".lua-game-name");
+      const name = box.querySelector("strong");
+      const status = card.querySelector(".lua-game-status");
+      const bar = parseFloat(getComputedStyle(name).lineHeight) || 16;
+      const statusRect = status.getBoundingClientRect();
+      const badge = card.querySelector(".lua-external-badge");
+      const badgeRect = badge ? badge.getBoundingClientRect() : null;
+      return {
+        title: name.textContent,
+        isLong: name.textContent === expected,
+        boxWidth: Math.round(box.getBoundingClientRect().width),
+        cardWidth: Math.round(card.getBoundingClientRect().width),
+        nameHeight: Math.round(name.getBoundingClientRect().height),
+        lines: Math.round(name.getBoundingClientRect().height / bar),
+        clipped: Math.round(name.scrollWidth - name.clientWidth),
+        statusWidth: Math.round(statusRect.width),
+        statusTop: Math.round(statusRect.top),
+        statusLeft: Math.round(statusRect.left),
+        nameLeft: Math.round(box.getBoundingClientRect().left),
+        hasExternal: Boolean(badgeRect),
+        badgeTop: badgeRect ? Math.round(badgeRect.top) : null,
+        badgeLeft: badgeRect ? Math.round(badgeRect.left) : null,
+        overflow: card.scrollWidth - card.clientWidth,
+      };
+    }), longName);
+    for (const size of sizes) {
+      // Название занимает почти всю ширину карточки, а не пару букв
+      assert(size.boxWidth >= size.cardWidth - 40, "название сжалось: " + JSON.stringify(size));
+      assert(size.clipped <= 1, "название обрезано: " + JSON.stringify(size));
+      assert(size.statusWidth >= 40, "статус сжался: " + JSON.stringify(size));
+      assert(size.overflow <= 1, "карточка переполнена: " + JSON.stringify(size));
+    }
+    // Длинное название переносится, а не обрезается до одной строки
+    const long = sizes.find((size) => size.isLong);
+    assert(long.lines >= 2, "длинное название не переносится: " + JSON.stringify(long));
+    // Статус и метка стоят одной строкой под названием и прижаты влево
+    const tagged = sizes.find((size) => size.hasExternal);
+    assert(Math.abs(tagged.badgeTop - tagged.statusTop) <= 2, "метка не на строке статуса: " + JSON.stringify(tagged));
+    assert(tagged.badgeLeft > tagged.statusLeft, "метка стоит перед статусом: " + JSON.stringify(tagged));
+    assert(tagged.statusLeft - tagged.nameLeft <= 2, "статус съехал от левого края: " + JSON.stringify(tagged));
+    assert(errors.length === 0, errors.join("\n"));
+    await context.close();
+  });
+
+  // Оптимизация: вкладка манифестов не сканирует диск при каждом переходе
+  await test("Eclipse Manifest: повторное открытие вкладки не пересканирует диск", async () => {
+    const { page, context, errors } = await open({ view: "home", mock: { responses: {
+      luatools_status: {
+        steamPath: "C:\\Steam",
+        externalCount: 0,
+        elapsedMs: 12,
+        games: [{ appid: "1245620", enabled: true, status: "ready", external: false, manifestCount: 2 }],
+      },
+      luatools_names: { "1245620": "ELDEN RING" },
+      luatools_headers: {},
+    }}});
+    await page.click('[data-view="lua"]');
+    await page.waitForFunction(() => document.querySelectorAll("#lua-games .lua-game").length === 1);
+    const first = (await calls(page, "luatools_status")).length;
+    await page.click('[data-view="home"]');
+    await page.click('[data-view="lua"]');
+    await page.waitForTimeout(250);
+    const after = (await calls(page, "luatools_status")).length;
+    assert(after === first, `вкладка пересчитала статус заново: ${first} → ${after}`);
+    assert((await page.$$("#lua-games .lua-game")).length === 1, "список пропал при возврате");
+    assert(errors.length === 0, errors.join("\n"));
+    await context.close();
+  });
+
+  // Оптимизация: обновление списка не пересоздаёт карточки
+  await test("Eclipse Manifest: обновление списка не пересобирает карточки", async () => {
+    const { page, context, errors } = await open({ view: "lua", mock: { responses: {
+      luatools_status: {
+        steamPath: "C:\\Steam",
+        externalCount: 0,
+        games: [{ appid: "1245620", enabled: true, status: "ready", external: false, manifestCount: 2 }],
+      },
+      luatools_names: { "1245620": "ELDEN RING" },
+      luatools_headers: {},
+    }}});
+    await page.waitForFunction(() => document.querySelectorAll("#lua-games .lua-game").length === 1);
+    await page.evaluate(() => { window.__firstCard = document.querySelector("#lua-games .lua-game"); });
+    await page.click("#lua-refresh-button");
+    await page.waitForFunction(() => window.__mockCalls.filter((call) => call.command === "luatools_status").length >= 2);
+    await page.waitForTimeout(150);
+    assert(await page.evaluate(() => window.__firstCard === document.querySelector("#lua-games .lua-game")), "карточка пересобрана с нуля");
+    assert(errors.length === 0, errors.join("\n"));
+    await context.close();
+  });
+
+  // Оптимизация: сохранённые названия не запрашиваются у Steam повторно
+  await test("Eclipse Manifest: сохранённые названия не запрашиваются заново", async () => {
+    const { page, context, errors } = await open({
+      view: "lua",
+      storage: { "cgs-lua-names": JSON.stringify({ "1245620": "ELDEN RING" }) },
+      mock: { responses: {
+        luatools_status: {
+          steamPath: "C:\\Steam",
+          externalCount: 0,
+          games: [{ appid: "1245620", enabled: true, status: "ready", external: false }],
+        },
+        luatools_names: { "1245620": "ELDEN RING" },
+        luatools_headers: {},
+      } },
+    });
+    await page.waitForFunction(() => document.querySelectorAll("#lua-games .lua-game").length === 1);
+    await page.waitForTimeout(200);
+    assert((await calls(page, "luatools_names")).length === 0, "названия запрошены повторно");
+    assert((await page.textContent("#lua-games .lua-game-name strong")).trim() === "ELDEN RING", "название не применилось");
+    assert(errors.length === 0, errors.join("\n"));
+    await context.close();
+  });
+
+  // Обложка подставляется, когда URL пришёл из Steam уже после отрисовки карточки
+  await test("Eclipse Manifest: обложка подставляется из Steam", async () => {
+    const header = "https://cdn.example.com/steam/header.jpg";
+    const { page, context, errors } = await open({ view: "lua", mock: { responses: {
+      luatools_status: {
+        steamPath: "C:\\Steam",
+        externalCount: 0,
+        games: [{ appid: "1245620", enabled: true, status: "ready", external: false }],
+      },
+      luatools_names: { "1245620": "ELDEN RING" },
+      luatools_headers: { "1245620": header },
+    }}});
+    await page.waitForFunction(() => document.querySelectorAll("#lua-games .lua-game").length === 1);
+    await page.waitForFunction((expected) => document.querySelector("#lua-games .lua-game-cover img")?.getAttribute("src") === expected, header);
+    await page.waitForFunction(() => document.querySelector("#lua-games .lua-game-cover")?.classList.contains("loaded"));
+    assert(errors.length === 0, errors.join("\n"));
+    await context.close();
   });
 
   await browser.close();

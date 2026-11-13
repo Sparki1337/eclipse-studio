@@ -1287,12 +1287,23 @@ html.no-motion .app-update-progress-bar.indeterminate .app-update-progress-fill 
 
 .lua-autoupdate { display: flex; align-items: center; gap: 9px; margin-left: auto; }
 .lua-autoupdate small { color: #8993a1; font-size: 9.5px; white-space: nowrap; }
+/* ── Галочка сторонних добавлений в библиотеке загрузчика */
+.lua-library-tools { align-items: center; }
+.lua-external-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.lua-external-toggle small { color: #8993a1; font-size: 9.5px; white-space: nowrap; }
+.lua-external-toggle .switch { margin-left: 0; }
+.lua-external-count { min-width: 18px; height: 18px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 9px; font-size: 9px; color: var(--accent); background: rgba(var(--accent-rgb), .1); }
+.lua-external-hint { color: #8993a1; }
+/* ── Метка игры, добавленной другим инструментом */
+.lua-game-name { display: flex; align-items: flex-start; gap: 6px; width: 100%; min-width: 0; }
+.lua-game-name strong { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lua-external-badge { flex: none; font-size: 8px; padding: 3px 6px; border-radius: 6px; color: var(--tone-warn, #ffcc66); background: rgba(255, 204, 102, .09); }
 .lua-heading-tools { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin-left: auto; }
 .lua-heading-tools .lua-autoupdate { margin-left: 0; }
 .hubcap-limit-badge { font-size: 8.5px; padding: 5px 8px; border-radius: 7px; color: var(--accent); background: rgba(var(--accent-rgb), .08); border: 1px solid rgba(var(--accent-rgb), .13); white-space: nowrap; }
 .hubcap-limit-badge.error { color: var(--tone-bad, #ff7994); border-color: rgba(255,121,148,.2); background: rgba(255,121,148,.06); }
 .lua-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; padding: 20px 27px 26px; }
-.lua-game { border: 1px solid rgba(255,255,255,.06); border-radius: 14px; overflow: hidden; background: rgba(255,255,255,.016); transition: .18s ease; display: flex; flex-direction: column; }
+.lua-game { border: 1px solid rgba(255,255,255,.06); border-radius: 14px; overflow: hidden; background: rgba(255,255,255,.016); transition: .18s ease; display: flex; flex-direction: column; contain: layout; }
 .lua-game:hover { border-color: rgba(var(--accent-rgb), .22); }
 .lua-game.needs-attention { border-color: rgba(255,121,148,.18); }
 .lua-game.disabled { opacity: .5; }
@@ -1302,14 +1313,28 @@ html.no-motion .app-update-progress-bar.indeterminate .app-update-progress-fill 
 .lua-cover-fallback { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(var(--accent-rgb), .4); font: 800 15px/1 "Cascadia Code", Consolas, monospace; }
 .lua-game-cover.loaded .lua-cover-fallback { display: none; }
 .lua-game-info { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 11px 13px 6px; }
-.lua-game-info-main { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+/* Статус и метка сторонней игры всегда в одну строку, чтобы высота карточки не менялась */
+.lua-game-meta { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; max-width: 100%; }
 .lua-game-info strong { min-width: 0; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.lua-game-status { flex: none; font-size: 8.5px; padding: 3px 7px; border-radius: 6px; color: var(--accent); background: rgba(var(--accent-rgb), .08); }
+/* Длинное название переносится на две строки, а место под них занято заранее:
+   когда Steam присылает названия позже карточек, сетка не перескакивает */
+.lua-game-info .lua-game-name strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+  min-height: 2.6em;
+}
+.lua-game-status { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 8.5px; padding: 3px 7px; border-radius: 6px; color: var(--accent); background: rgba(var(--accent-rgb), .08); }
 .lua-game.disabled .lua-game-status { color: #8993a1; background: rgba(255,255,255,.05); }
 .lua-game-status.missing_manifests, .lua-game-status.invalid_lua { color: var(--tone-bad, #ff7994); background: rgba(255,121,148,.07); }
 .lua-game-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 6px 13px 13px; margin-top: auto; }
 .lua-game-actions .ghost-button { height: 31px; min-height: 31px; font-size: 9.5px; font-weight: 650; padding: 0 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; }
 .lua-game-actions .lua-action-remove { grid-column: 1 / -1; height: 28px; min-height: 28px; font-size: 9px; }
+/* Кнопка обновления манифестов занимает всю ширину над удалением */
+.lua-game-actions .lua-action-refresh { grid-column: 1 / -1; height: 28px; min-height: 28px; font-size: 9px; }
 
 /* ── CrocLua — детальная карточка игры */
 .lua-detail { position: relative; width: min(420px, 92vw); max-height: 88vh; padding: 0; overflow: hidden; display: flex; flex-direction: column; border-radius: var(--radius-lg); }
@@ -1412,13 +1437,13 @@ html.no-motion .app-update-progress-bar.indeterminate .app-update-progress-fill 
   font: 9.5px/1 "Cascadia Code", Consolas, monospace;
 }
 .lua-drm-badge { display: inline-flex; align-items: center; max-width: 160px; min-height: 16px; padding: 2px 7px; border: 1px solid transparent; border-radius: 999px; overflow: hidden; color: #aab4c1; background: rgba(122,135,153,.09); font-size: 8px; font-weight: 800; line-height: 1; text-overflow: ellipsis; white-space: nowrap; }
-.lua-drm-badge.loading { color: #778291; border-color: rgba(122,135,153,.13); animation: drm-badge-pulse 1.35s ease-in-out infinite; }
+#lua-detail-drm[hidden] { display: none; }
+.lua-drm-badge.loading { color: #778291; border-color: rgba(122,135,153,.13); background: rgba(122,135,153,.05); }
 .lua-drm-badge.denuvo { color: #ff8f9d; border-color: rgba(255,79,104,.28); background: rgba(255,79,104,.11); }
 .lua-drm-badge.launcher { color: var(--tone-warn, #ffbd72); border-color: rgba(255,157,61,.28); background: rgba(255,157,61,.1); }
 .lua-drm-badge.steam { color: #76baf2; border-color: rgba(73,155,222,.28); background: rgba(73,155,222,.1); }
 .lua-drm-badge.third-party { color: #cba0ff; border-color: rgba(170,103,245,.28); background: rgba(170,103,245,.1); }
 .lua-drm-badge.unknown { color: #8994a2; border-color: rgba(122,135,153,.18); background: rgba(122,135,153,.07); }
-@keyframes drm-badge-pulse { 50% { opacity: .55; } }
 .lua-search-get {
   flex: none;
   font-size: 9px;

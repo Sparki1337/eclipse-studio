@@ -349,7 +349,6 @@
     "Удалить": "Remove",
     "Найдите и получите игру": "Find and get a game",
     "Введите название или AppID — выберите игру, и манифесты автоматически попадут в нужные папки Steam.": "Enter a title or AppID, select a game, and its manifests will be placed into the correct Steam folders automatically.",
-    "Автообновление игр": "Automatic game updates",
     "Введите название игры или AppID…": "Enter a game title or AppID…",
     "Или добавьте файлы вручную": "Or add files manually",
     "или": "or",
@@ -364,6 +363,11 @@
     "Обновить": "Refresh",
     "Пока ничего не добавлено": "Nothing has been added yet",
     "Перетащите файлы игры выше, чтобы добавить её в Steam.": "Drop game files above to add it to Steam.",
+    "Сторонние добавления": "Third-party additions",
+    "Показывать игры, добавленные другими инструментами: LuaTools, SteamTools и прочими": "Show games added by other tools: LuaTools, SteamTools and others",
+    "Сторонняя": "Third-party",
+    "Добавлена другим инструментом": "Added by another tool",
+    "Сторонние добавления скрыты. Включите галочку выше, чтобы увидеть игры из LuaTools и других инструментов.": "Third-party additions are hidden. Turn on the checkbox above to see games from LuaTools and other tools.",
     "ЗАГРУЗЧИК МАНИФЕСТОВ STEAM": "STEAM MANIFEST LOADER",
     "Версия OpenSteamTool": "OpenSteamTool Version",
     "Загрузчик манифестов Steam": "Steam Manifest Loader",
@@ -442,6 +446,43 @@
     "Назад": "Back",
     "Вперёд": "Next",
     "Страница 1 из 1": "Page 1 of 1",
+    "Сортировка файлов": "File sorting",
+    "Сортировка": "Sorting",
+    "По умолчанию": "Default",
+    "Сначала новые": "Newest first",
+    "Сначала старые": "Oldest first",
+    "По названию": "By name",
+    "По взломщику": "By cracker",
+    "Взломщик": "Cracker",
+    "Все взломщики": "All crackers",
+    "Закреплено": "Pinned",
+    "Новое": "New",
+    "НОВОЕ": "NEW",
+    "УСТАНОВЛЕНО": "INSTALLED",
+    "Установлено": "Installed",
+    "Приостановлено": "Paused",
+    "Можно продолжить": "Can be resumed",
+    "Пауза: сегменты сохранены. Продолжить можно и после перезапуска.": "Paused: segments saved. You can resume even after restarting the app.",
+    "Загрузка отменена, временные сегменты удалены": "Download cancelled, temporary segments removed",
+    "Загрузка не завершена:": "Download not completed:",
+    "Выполнено частично или с ошибкой. Архив и оригиналы сохранены.": "Completed partially or with error. Archive and originals are preserved.",
+    "Кряк установлен успешно!": "Crack installed successfully!",
+    "Переустановить кряк": "Reinstall crack",
+    "Открыть папку с файлом": "Open folder with file",
+    "Установить скачанный кряк в игру": "Install downloaded crack into game",
+    "Удалить загрузку": "Delete download",
+    "Пауза": "Pause",
+    "0 файлов": "0 files",
+    "· локальная копия": " · local copy",
+    "Скачивание…": "Downloading…",
+    "Установка в игру…": "Installing to game…",
+    "Поместить в корневую папку игры": "Place in the game's root directory",
+    "В корень папки с игрой": "Place in the game's root directory",
+    "В корневую папку игры": "Place in the game's root directory",
+    "фикс кряка": "crack fix",
+    "только для EA": "EA build only",
+    "только для Ubisoft": "Ubisoft build only",
+    "Сборка неизвестна": "Build unknown",
 
     "ИНТЕРФЕЙС": "INTERFACE",
     "Внешний вид": "Appearance",
@@ -512,14 +553,14 @@
     "Компактная": "Compact",
     "Иконки": "Icons",
     "Редактирование «На лету»": "Live editing",
-    "Разрешить перетаскивать кнопки и открывать меню настроек прямо на боковой панели": "Allow dragging buttons and opening settings directly on the sidebar",
+    "Разрешить перетаскивать иконки, панель и строку поиска, а также открывать меню настроек": "Allow dragging icons, the panel and the search bar, and opening the settings menu",
     "Включить редактирование «На лету»": "Enable live editing",
     "Расположение панелей": "Panel layout",
     "Край окна для боковой панели и место строки поиска в заголовке": "Window edge for the sidebar and search bar position in the title bar",
     "Положение боковой панели": "Sidebar position",
-    "Панель можно перетащить мышью: зажмите свободное место на ней и отпустите у нужного края окна": "You can drag the sidebar with the mouse: hold an empty spot on it and release it at the window edge you want",
+    "Панель можно перетащить мышью в режиме «На лету»: зажмите свободное место на ней и отпустите у нужного края окна": "In live edit mode you can drag the panel with the mouse: hold an empty spot on it and release it at the window edge you want",
     "Положение строки поиска": "Search bar position",
-    "Строку поиска в заголовке окна тоже можно перетащить: влево, в центр или вправо": "The search bar in the title bar can be dragged too: to the left, center, or right",
+    "Строку поиска в заголовке окна можно перетащить в режиме «На лету»: влево, в центр или вправо": "The search bar in the title bar can be dragged in live edit mode: to the left, center, or right",
     "Перетащите за свободное место, чтобы переместить панель": "Drag by an empty spot to move the panel",
     "Слева": "Left",
     "Справа": "Right",
@@ -573,7 +614,7 @@
     "Настройки панели…": "Sidebar settings…",
     "Сбросить панель": "Reset sidebar",
     "Кнопка скрыта из панели. Вернуть её можно в Настройках → Боковая панель": "Button hidden from sidebar. You can restore it in Settings → Sidebar",
-    "Режим «На лету» включён: можно переставлять и растягивать иконки": "Live edit mode enabled: you can reorder and expand icons",
+    "Режим «На лету» включён: иконки, панель и строку поиска можно перетаскивать": "Live edit mode enabled: icons, the panel and the search bar can be dragged",
     "Режим «На лету» выключен": "Live edit mode disabled",
     "Боковая панель сброшена к исходным настройкам": "Sidebar has been reset to default settings",
 
@@ -598,10 +639,19 @@
     "Открыть в Проводнике": "Open in File Explorer",
     "Сбросить к папке по умолчанию": "Reset to default folder",
     "Выберите цвет светового акцента. Настройка сохраняется локально.": "Choose the accent color. This setting is stored locally.",
-    "Новогоднее оформление": "New Year decorations",
-    "Снег и праздничные детали. Ваш стиль сохраняется.": "Snow and festive details. Your theme stays yours.",
-    "Зимний сезон": "Winter edition",
-    "Новогодний сезон": "New Year season",
+    "Сезонное оформление": "Seasonal decorations",
+    "Снег зимой, дождь с листьями осенью, лепестки весной и солнечные блики летом. В авто-режиме летом оформление отключается. Ваш стиль сохраняется.": "Snow in winter, rain with leaves in autumn, petals in spring and sun glints in summer. In auto mode, decorations turn off for summer. Your theme stays yours.",
+    "Сезон года": "Season of the year",
+    "Автоматически по календарю или вручную": "Automatically by calendar, or manual",
+    "Авто": "Auto",
+    "Зима": "Winter",
+    "Весна": "Spring",
+    "Лето": "Summer",
+    "Осень": "Autumn",
+    "Плотность эффектов": "Effect density",
+    "Количество снежинок, капель дождя и листьев": "The amount of snowflakes, raindrops and leaves",
+    "Редкая": "Sparse",
+    "Густая": "Dense",
     "Язык интерфейса": "Interface language",
     "Меняется моментально без перезапуска": "Changes instantly without restarting",
     "Русский": "Russian",
@@ -690,6 +740,7 @@
     "Отключена": "Disabled",
     "Защита…": "Protection…",
     "Получаем сведения о защите из Steam": "Getting protection information from Steam",
+    "Не удалось получить сведения о защите из Steam. Повторите позже.": "Could not retrieve protection information from Steam. Try again later.",
     "Отключить": "Disable",
     "Включить": "Enable",
     "Ничего нет": "Nothing here",
@@ -725,6 +776,10 @@
     "Укажите API-ключ Ryuu в настройках": "Enter your Ryuu API key in Settings",
     "Загрузка манифестов…": "Downloading manifests…",
     "Игра получена": "Game received",
+    "Обновить манифесты": "Refresh manifests",
+    "Перекачать манифесты по выбранному сервису и ключу": "Re-download manifests with the selected service and key",
+    "Обновляем манифесты…": "Refreshing manifests…",
+    "Манифесты обновлены": "Manifests refreshed",
     "У этой игры DLC не обнаружены": "No DLC were found for this game",
     "Нужно определить": "Detection required",
     "Другой": "Other",
@@ -1325,6 +1380,9 @@
     "Поиск разделов, вкладок и настроек": "Search sections, tabs and settings",
     "Строка поиска по разделам, вкладкам и настройкам": "Search bar for sections, tabs and settings",
     "Кнопка в заголовке окна и вызов сочетанием клавиш": "Title bar button and keyboard shortcut",
+    "Размер строки поиска": "Search bar size",
+    "Компактная, обычная или широкая кнопка в заголовке окна": "A compact, regular or wide button in the window title bar",
+    "Широкая": "Wide",
     "Сочетание клавиш": "Keyboard shortcut",
     "Нажмите кнопку, затем новое сочетание. Esc — отмена": "Click the button, then press a new shortcut. Esc cancels",
     "Сочетание клавиш для поиска": "Search keyboard shortcut",
@@ -1457,6 +1515,28 @@
     "Обновление DLL локального облака": "Local Cloud DLL update",
     "Обновление": "Update",
     "Доступно обновление DLL локального облака.": "A Local Cloud DLL update is available.",
+    // ── Патч appcache: фикс ошибки «0 байт» / «Нет соединения»
+    "Фикс ошибки 0 байт / нет соединения": "0 bytes / no connection fix",
+    "Патч не активен": "Patch is off",
+    "У вас не активен патч для исправления ошибки 0 байт / нет соединения. Применить сейчас?": "The 0 bytes / no connection fix is not active. Apply it now?",
+    "Пропустить": "Skip",
+    "Применить": "Apply",
+    "Патч активен": "Patch active",
+    "Патч выключен": "Patch off",
+    "Частично": "Partial",
+    "Проверка состояния патча…": "Checking patch status…",
+    "Steam не найден. Укажите папку Steam выше.": "Steam was not found. Enter the Steam folder above.",
+    "В папке Steam не найден appcache. Запустите Steam и нажмите «Проверить».": "The appcache folder was not found in Steam. Start Steam and press Verify.",
+    "Патч активен частично": "Patch partially active",
+    "Применяем патч: закрываем Steam и сохраняем оригиналы…": "Applying the patch: closing Steam and backing up the originals…",
+    "Возвращаем оригинальные файлы Steam…": "Restoring the original Steam files…",
+    "Патч применён. Steam запущен снова.": "Patch applied. Steam has been restarted.",
+    "Патч применён. Запустите Steam, чтобы применить изменения.": "Patch applied. Start Steam to apply the changes.",
+    "Патч отключён. Оригинальные файлы восстановлены, Steam запущен снова.": "Patch disabled. The original files were restored and Steam has been restarted.",
+    "Патч отключён. Оригинальные файлы восстановлены. Запустите Steam.": "Patch disabled. The original files were restored. Start Steam.",
+    "Патч отключён. Steam восстановит стандартные файлы при запуске.": "Patch disabled. Steam will restore the standard files on startup.",
+    "Патч appcache включён": "Appcache patch enabled",
+    "Патч appcache отключён": "Appcache patch disabled",
     "Обновить и перезапустить": "Update and restart",
     "Отложить на 5 запусков": "Remind me after 5 launches",
     "Отменить обновление": "Cancel update",
@@ -1570,6 +1650,7 @@
     [/^Обновление · (.+)$/u, (_, version) => `Update · ${version}`],
     [/^Установлен · (.+)$/u, (_, version) => `Installed · ${version}`],
     [/^Отменить (\d+)%$/u, (_, percent) => `Cancel ${percent}%`],
+    [/^Продолжить (\d+)%$/u, (_, percent) => `Resume ${percent}%`],
     [/^Загружено в кэш:\s*(\d+)\s*(?:звук|звука|звуков)$/u, (_, n) => `Cached: ${n} ${Number(n) === 1 ? "sound" : "sounds"}`],
     [/^Удалить звуковой профиль «(.+)»\?$/u, (_, name) => `Delete sound profile "${name}"?`],
     [/^Применён профиль «(.+)»$/u, (_, name) => `Applied profile "${name}"`],
@@ -1615,7 +1696,9 @@
     [/^Ещё (\d+)$/u, (_, count) => `${count} more`],
     [/^Скрыто записей: (\d+)$/u, (_, count) => `Hidden entries: ${count}`],
     [/^Игр: (\d+) · резервных копий: (\d+)$/u, (_, games, backups) => `Games: ${games} · backups: ${backups}`],
-    [/^Раздел скрыт в боковой панели — при запуске откроется «(.+)»\.$/u, (_, name) => `This section is hidden in the sidebar, so “${translateBody(name)}” opens at startup.`]
+    [/^Раздел скрыт в боковой панели — при запуске откроется «(.+)»\.$/u, (_, name) => `This section is hidden in the sidebar, so “${translateBody(name)}” opens at startup.`],
+    // ── Обновление манифестов игры по выбранному сервису
+    [/^Манифесты для ([\s\S]+) перекачаны через (HubCap|Ryuu)\. Перезапустите Steam, чтобы применить изменения\.$/u, (_, name, service) => `Manifests for ${name} were re-downloaded via ${service}. Restart Steam to apply the changes.`]
   ];
 
     const FRAGMENTS = [
@@ -1687,10 +1770,22 @@
     ["Резервная копия:", "Backup:"],
     ["Удалено компонентов:", "Components removed:"],
     ["Системный модуль недоступен", "System module is unavailable"],
-    ["Eclipse Studio 10.0.0 инициализирован", "Eclipse Studio 10.0.0 initialized"],
+    ["Eclipse Studio 10.1.0 инициализирован", "Eclipse Studio 10.1.0 initialized"],
     ["Доступна версия", "Version available:"],
     ["Осталось", "Remaining"],
-    ["локальная копия", "local copy"]
+    ["локальная копия", "local copy"],
+    // ── Защита игры: подписи и подсказки собираются из меток
+    ["В игре используется защита Denuvo.", "The game uses Denuvo protection."],
+    ["В игре используется защита Steam DRM.", "The game uses Steam DRM protection."],
+    ["Для запуска требуется приложение EA app.", "EA app is required to launch the game."],
+    ["Для запуска требуется аккаунт EA.", "An EA account is required to launch the game."],
+    ["Для запуска требуется Ubisoft Connect.", "Ubisoft Connect is required to launch the game."],
+    ["Для запуска требуется аккаунт Rockstar Games.", "A Rockstar Games account is required to launch the game."],
+    ["Steam сообщает о сторонней защите без подробностей.", "Steam reports third-party protection without details."],
+    ["Для запуска требуется сторонний аккаунт.", "A third-party account is required to launch the game."],
+    ["Аккаунт EA", "EA account"],
+    ["Сторонняя DRM", "Third-party DRM"],
+    ["Сторонний аккаунт", "Third-party account"]
   ].sort((a, b) => b[0].length - a[0].length);
 
   const textRecords = new WeakMap();
@@ -1736,9 +1831,9 @@
     if (current !== rendered) node.nodeValue = rendered;
   }
 
-  function processAttribute(element, name) {
+  function processAttribute(element, name, force = false) {
     // Смешанные двуязычные подписи (например, выбор языка) не переводим
-    if (!element.hasAttribute(name) || element.closest("[data-i18n-skip]")) return;
+    if (!element.hasAttribute(name) || (!force && element.closest("[data-i18n-skip]"))) return;
     const current = element.getAttribute(name) || "";
     let records = attributeRecords.get(element);
     if (!records) {
@@ -1753,22 +1848,23 @@
     if (current !== rendered) element.setAttribute(name, rendered);
   }
 
-  function translateTree(root = document.body) {
+  function translateTree(root = document.body, { force = false } = {}) {
     if (!root) return;
     applying = true;
+    const skipped = force ? "script,style,code,pre" : "script,style,code,pre,[data-i18n-skip]";
     try {
       if (root.nodeType === Node.TEXT_NODE) processText(root);
       const textWalker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
         acceptNode(node) {
           const parent = node.parentElement;
-          return parent && !parent.closest("script,style,code,pre,[data-i18n-skip]") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+          return parent && !parent.closest(skipped) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
         }
       });
       while (textWalker.nextNode()) processText(textWalker.currentNode);
 
       const elements = root.nodeType === Node.ELEMENT_NODE ? [root, ...root.querySelectorAll("*")] : [...root.querySelectorAll("*")];
       for (const element of elements) {
-        for (const name of ["placeholder", "title", "aria-label", "alt"]) processAttribute(element, name);
+        for (const name of ["placeholder", "title", "aria-label", "alt"]) processAttribute(element, name, force);
       }
     } finally {
       applying = false;
@@ -1831,6 +1927,8 @@
     locale,
     setLanguage,
     refresh,
+    // Перевод отдельного поддерева: динамические списки не тормозят весь документ
+    translate(root) { translateTree(root, { force: true }); },
     t(value) { return language === "en" ? translateValue(value) : String(value ?? ""); }
   };
 

@@ -94,6 +94,8 @@
         if (dock === "top" || dock === "bottom") root.classList.add("sidebar-horizontal");
         var searchDock = window.cgsStorage.getItem("cgs-search-dock");
         if (searchDock === "left" || searchDock === "right") root.classList.add("search-dock-" + searchDock);
+        var searchSize = window.cgsStorage.getItem("cgs-search-width");
+        if (searchSize === "compact" || searchSize === "wide") root.classList.add("search-size-" + searchSize);
         if (window.cgsStorage.getItem("cgs-splash") === "0") root.classList.add("no-splash");
         window.cgsAccent.apply(window.cgsStorage.getItem("accent") || "white", theme);
         // Предзагрузка логотипа заставки — исключает чёрный экран

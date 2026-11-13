@@ -213,6 +213,10 @@
     if (toggle) toggle.checked = enabled;
     const row = $("#pref-row-search-hotkey");
     row?.classList.toggle("disabled", !enabled);
+    // Размер строки поиска не имеет смысла без самой строки
+    const sizeRow = $("#pref-row-search-size");
+    sizeRow?.classList.toggle("disabled", !enabled);
+    sizeRow?.querySelectorAll("[data-search-width]").forEach((button) => { button.disabled = !enabled; });
     const button = $("#search-hotkey-button");
     if (button) {
       button.disabled = !enabled;
@@ -923,7 +927,8 @@
     if (subline) {
       const sub = document.createElement("span");
       sub.className = "k-search-sub";
-      sub.textContent = subline;
+      // Совпадения подсвечиваются и в пути: сразу видно, за что зацепился поиск
+      highlight(sub, subline, tokens);
       if (item.path.length && item.hint) sub.title = item.hint;
       text.append(sub);
     }
@@ -955,6 +960,8 @@
     }
     const badge = document.createElement("span");
     badge.className = "k-search-badge";
+    // Тип пункта определяет оттенок плашки, чтобы группы читались с одного взгляда
+    badge.dataset.kind = item.kind;
     if (item.danger) {
       // Опасное действие: перед выполнением появится окно подтверждения
       badge.classList.add("danger");
@@ -1118,6 +1125,8 @@
       header.className = "k-search-group";
       header.setAttribute("role", "presentation");
       header.textContent = group.name;
+      // Количество пунктов в группе рисует CSS по атрибуту: текст заголовка не меняется
+      header.dataset.count = String(group.items.length);
       fragment.append(header);
       for (const item of group.items) {
         fragment.append(makeOption(item, shown.length, tokens));
@@ -1452,6 +1461,9 @@
   let flashLayer = null;
   let flashFrame = 0;
   let flashTarget = null;
+  // Подсветка держится достаточно долго, чтобы элемент успели найти глазами, и плавно гаснет.
+  // Длительность совпадает с animation у .k-search-flash в korona.css (2.4s).
+  const FLASH_MS = 2400;
 
   function clearFlash() {
     cancelAnimationFrame(flashFrame);
@@ -1474,10 +1486,9 @@
     flashLayer = layer;
     flashTarget = target;
     const started = performance.now();
-    const duration = 1000;
     const step = (time) => {
       if (flashLayer !== layer) return;
-      if (!visible(target) || time - started >= duration) {
+      if (!visible(target) || time - started >= FLASH_MS) {
         clearFlash();
         return;
       }

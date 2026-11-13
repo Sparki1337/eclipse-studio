@@ -270,11 +270,12 @@
   }
 
   function applyPinnedCollapsed() {
+    const isEn = window.cgsI18n?.language === "en";
     const collapsed = state.pinnedCollapsed;
     $("#files-featured")?.classList.toggle("collapsed", collapsed);
     $("#files-featured-toggle")?.setAttribute("aria-expanded", String(!collapsed));
     const label = $("#files-featured-label");
-    if (label) label.textContent = collapsed ? "Показать" : "Скрыть";
+    if (label) label.textContent = collapsed ? (isEn ? "Show" : "Показать") : (isEn ? "Hide" : "Скрыть");
   }
 
   function togglePinned() {
@@ -399,9 +400,21 @@
     cracker: "По взломщику",
   };
 
+  const SORT_LABELS_EN = {
+    default: "Default",
+    new: "Newest first",
+    old: "Oldest first",
+    name: "By name",
+    cracker: "By cracker",
+  };
+
   function syncSortUi() {
+    const isEn = window.cgsI18n?.language === "en";
     const label = $("#files-sort-label");
-    if (label) label.textContent = SORT_LABELS[state.sort] || "По умолчанию";
+    if (label) {
+      const labels = isEn ? SORT_LABELS_EN : SORT_LABELS;
+      label.textContent = labels[state.sort] || (isEn ? "Default" : "По умолчанию");
+    }
 
     const groupChip = $("#files-sort-group");
     if (groupChip) {
@@ -432,7 +445,8 @@
       if (counts.size > 0) {
         crackerSec.hidden = false;
         const sortedGroups = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-        const allItem = `<button type="button" class="files-sort-item ${!state.group ? "active" : ""}" role="menuitemradio" aria-checked="${String(!state.group)}" data-group=""><span>Все взломщики</span></button>`;
+        const allText = isEn ? "All crackers" : "Все взломщики";
+        const allItem = `<button type="button" class="files-sort-item ${!state.group ? "active" : ""}" role="menuitemradio" aria-checked="${String(!state.group)}" data-group=""><span>${allText}</span></button>`;
         const groupItems = sortedGroups.map(([grp, count]) => {
           const active = state.group === grp;
           return `<button type="button" class="files-sort-item ${active ? "active" : ""}" role="menuitemradio" aria-checked="${String(active)}" data-group="${escapeHtml(grp)}"><span>${escapeHtml(grp)}</span><b>${count}</b></button>`;
@@ -507,7 +521,37 @@
 
   function isStudio(item) {
     const name = String(item?.name || "").toLowerCase().trim();
-    return name.includes("studio") || name.includes("студи");
+    const url = String(item?.url || "").toLowerCase();
+    return name.includes("studio") || name.includes("студи") || url.includes("studio");
+  }
+
+  // Локализация и форматирование описания сборки или инструкции кряка
+  function formatBuild(build) {
+    const raw = String(build || "").trim();
+    const isEn = window.cgsI18n?.language === "en";
+    if (!raw) return isEn ? "Not specified" : "Не указан";
+
+    // Английская инструкция в поле build: "Place in the game's root directory"
+    if (/^place in the game'?s root directory$/i.test(raw)) {
+      return isEn ? "Place in the game's root directory" : "Поместить в корневую папку игры";
+    }
+
+    if (!isEn) {
+      let localized = raw;
+      localized = localized.replace(/,?\s*CRACK\s*FIX\b/gi, ", фикс кряка");
+      localized = localized.replace(/,?\s*EA\s*BUILD\s*ONLY\b/gi, ", только для EA");
+      localized = localized.replace(/,?\s*(?:ONLY\s*UBISOFT|UBISOFT\s*ONLY)\b/gi, ", только для Ubisoft");
+      return localized;
+    } else {
+      let localized = raw;
+      if (/СКАЧАЙТЕ ЧЕРЕЗ СТИМ МАНИФЕСТ ИГРУ/i.test(localized)) {
+        localized = localized.replace(/СКАЧАЙТЕ ЧЕРЕЗ СТИМ МАНИФЕСТ ИГРУ И УДАЛИТЕ steam_api64\.dll и ЗАКИНЬТЕ КРЯК/gi, "Download via Steam manifest, remove steam_api64.dll and apply crack");
+      }
+      if (/^Build ХЗ$/i.test(localized)) {
+        localized = "Build Unknown";
+      }
+      return localized;
+    }
   }
 
   function featuredFiles() {
@@ -531,10 +575,12 @@
   }
 
   function showSuccessState(url) {
-    notifyCrackSuccess("Кряк установлен успешно!");
+    const isEn = window.cgsI18n?.language === "en";
+    const successMsg = isEn ? "Crack installed successfully!" : "Кряк установлен успешно!";
+    notifyCrackSuccess(successMsg);
     const status = $("#files-status");
     if (status) {
-      status.innerHTML = '<span class="files-status-dot"></span> Кряк установлен успешно!';
+      status.innerHTML = `<span class="files-status-dot"></span> ${escapeHtml(successMsg)}`;
     }
     const card = document.querySelector(`[data-card-url="${CSS.escape(url)}"]`);
     if (card) {
@@ -545,14 +591,14 @@
       const reinstallBtn = card.querySelector('[data-files-action="reinstall"]');
       if (reinstallBtn) {
         reinstallBtn.classList.add("file-success-burst");
-        reinstallBtn.innerHTML = '<svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2.2;fill:none;stroke:#2ed573;vertical-align:-1px"><polyline points="13 4 6 11 3 8"/></svg> <span>Кряк установлен успешно!</span>';
+        reinstallBtn.innerHTML = `<svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:2.2;fill:none;stroke:#2ed573;vertical-align:-1px"><polyline points="13 4 6 11 3 8"/></svg> <span>${escapeHtml(successMsg)}</span>`;
         setTimeout(() => {
           if (!reinstallBtn.isConnected) return;
           reinstallBtn.classList.add("btn-text-fading");
           setTimeout(() => {
             if (!reinstallBtn.isConnected) return;
             reinstallBtn.classList.remove("file-success-burst", "btn-text-fading");
-            reinstallBtn.innerHTML = '<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke-width:2;fill:none;stroke:currentColor;vertical-align:-1px"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> <span>Переустановить</span>';
+            reinstallBtn.innerHTML = `<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke-width:2;fill:none;stroke:currentColor;vertical-align:-1px"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> <span>${isEn ? "Reinstall" : "Переустановить"}</span>`;
           }, 180);
         }, 2200);
       }
@@ -564,15 +610,17 @@
   }
 
   function renderCard(item, position, featured = false) {
-    const password = item.password || "Не требуется";
+    const isEn = window.cgsI18n?.language === "en";
+    const password = item.password || (isEn ? "Not required" : "Не требуется");
     const progress = state.progress.get(item.url);
     const downloaded = state.downloads.get(item.url);
     const installed = state.installed.get(item.url);
     const url = escapeHtml(item.url);
     const newest = !featured && !state.query && position < 3;
-    const marker = featured ? "ЗАКРЕПЛЕНО" : `ФАЙЛ ${String(position + 1).padStart(3, "0")}`;
+    const marker = featured ? (isEn ? "PINNED" : "ЗАКРЕПЛЕНО") : `${isEn ? "FILE" : "ФАЙЛ"} ${String(position + 1).padStart(3, "0")}`;
     const studio = isStudio(item);
     const autoInstall = state.autoInstall && !studio;
+    const buildDisplay = formatBuild(item.build);
     return `
       <article class="file-card ${featured ? "featured" : ""} ${installed && !studio ? "is-installed" : ""}" data-card-url="${url}">
         <div class="file-card-top">
@@ -580,35 +628,35 @@
           <div class="file-title">
             <div>
               <span>${marker}</span>
-              ${installed && !studio ? `<b class="file-badge-installed"><svg viewBox="0 0 16 16"><polyline points="13 4 6 11 3 8"/></svg> УСТАНОВЛЕНО</b>` : (newest ? "<b>НОВОЕ</b>" : "")}
+              ${installed && !studio ? `<b class="file-badge-installed"><svg viewBox="0 0 16 16"><polyline points="13 4 6 11 3 8"/></svg> ${isEn ? "INSTALLED" : "УСТАНОВЛЕНО"}</b>` : (newest ? `<b>${isEn ? "NEW" : "НОВОЕ"}</b>` : "")}
             </div>
             <h3 title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</h3>
           </div>
         </div>
         <div class="file-details">
-          <div><small>БИЛД</small><strong>${escapeHtml(item.build || "Не указан")}</strong></div>
-          <div><small>ПАРОЛЬ</small><strong class="file-password ${item.password ? "" : "empty"}">${escapeHtml(password)}</strong></div>
+          <div><small>${isEn ? "BUILD" : "БИЛД"}</small><strong title="${escapeHtml(buildDisplay)}">${escapeHtml(buildDisplay)}</strong></div>
+          <div><small>${isEn ? "PASSWORD" : "ПАРОЛЬ"}</small><strong class="file-password ${item.password ? "" : "empty"}" title="${escapeHtml(password)}">${escapeHtml(password)}</strong></div>
         </div>
         <div class="file-actions">
-          ${item.password ? `<button class="file-copy" data-files-action="copy" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><rect width="9" height="9" x="5.5" y="5.5" rx="1.5"/><path d="M10.5 5.5V3a1.5 1.5 0 0 0-1.5-1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h2.5"/></svg> <span>Копировать пароль</span></button>` : '<span class="file-no-password">Без пароля</span>'}
+          ${item.password ? `<button class="file-copy" data-files-action="copy" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><rect width="9" height="9" x="5.5" y="5.5" rx="1.5"/><path d="M10.5 5.5V3a1.5 1.5 0 0 0-1.5-1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h2.5"/></svg> <span>${isEn ? "Copy password" : "Копировать пароль"}</span></button>` : `<span class="file-no-password">${isEn ? "No password" : "Без пароля"}</span>`}
           ${installed && !studio
-            ? `<button class="file-download downloaded file-reinstall-btn" data-files-action="reinstall" data-files-url="${url}" title="Переустановить кряк"><svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke-width:2;fill:none;stroke:currentColor;vertical-align:-1px"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> <span>Переустановить</span></button>`
+            ? `<button class="file-download downloaded file-reinstall-btn" data-files-action="reinstall" data-files-url="${url}" title="${isEn ? "Reinstall crack" : "Переустановить кряк"}"><svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke-width:2;fill:none;stroke:currentColor;vertical-align:-1px"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> <span>${isEn ? "Reinstall" : "Переустановить"}</span></button>`
             : downloaded
               ? studio
-                ? `<button class="file-download downloaded" data-files-action="reveal" data-files-url="${url}" title="Открыть папку с файлом"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h3.5l1.8 2H16A1.5 1.5 0 0 1 17.5 7.5v8a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5z"/></svg> <span>Папка</span></button>`
-                : `<button class="file-download downloaded" data-files-action="install-existing" data-files-url="${url}" title="Установить скачанный кряк в игру"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>Установить в игру</span></button>`
+                ? `<button class="file-download downloaded" data-files-action="reveal" data-files-url="${url}" title="${isEn ? "Open folder with file" : "Открыть папку с файлом"}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M2.5 5.5A1.5 1.5 0 0 1 4 4h3.5l1.8 2H16A1.5 1.5 0 0 1 17.5 7.5v8a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5z"/></svg> <span>${isEn ? "Folder" : "Папка"}</span></button>`
+                : `<button class="file-download downloaded" data-files-action="install-existing" data-files-url="${url}" title="${isEn ? "Install downloaded crack into game" : "Установить скачанный кряк в игру"}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>${isEn ? "Install to game" : "Установить в игру"}</span></button>`
               : progress
                 ? progress.paused
-                  ? `<button class="file-download" data-files-action="resume" data-files-url="${url}">Продолжить ${progress.percent || 0}%</button><button class="file-cancel" data-files-action="cancel" data-files-url="${url}">Удалить загрузку</button>`
-                  : `<button class="file-cancel" data-files-action="cancel" data-files-url="${url}" ${progress.cancelling || progress.installing ? "disabled" : ""}>${progress.installing ? "Установка…" : progress.cancelling ? "Отменяем…" : `Отменить ${progress.percent ?? ""}%`}</button>${progress.resumable && !progress.installing ? `<button class="file-download" data-files-action="pause" data-files-url="${url}">Пауза</button>` : ""}`
+                  ? `<button class="file-download" data-files-action="resume" data-files-url="${url}">${isEn ? "Resume" : "Продолжить"} ${progress.percent || 0}%</button><button class="file-cancel" data-files-action="cancel" data-files-url="${url}">${isEn ? "Delete download" : "Удалить загрузку"}</button>`
+                  : `<button class="file-cancel" data-files-action="cancel" data-files-url="${url}" ${progress.cancelling || progress.installing ? "disabled" : ""}>${progress.installing ? (isEn ? "Installing…" : "Установка…") : progress.cancelling ? (isEn ? "Cancelling…" : "Отменяем…") : `${isEn ? "Cancel" : "Отменить"} ${progress.percent ?? ""}%`}</button>${progress.resumable && !progress.installing ? `<button class="file-download" data-files-action="pause" data-files-url="${url}">${isEn ? "Pause" : "Пауза"}</button>` : ""}`
                 : autoInstall
-                  ? `<button class="file-download" data-files-action="install-flow" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>Установить в игру</span></button>`
-                  : `<button class="file-download" data-files-action="download" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>Скачать</span></button>`}
+                  ? `<button class="file-download" data-files-action="install-flow" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>${isEn ? "Install to game" : "Установить в игру"}</span></button>`
+                  : `<button class="file-download" data-files-action="download" data-files-url="${url}"><svg viewBox="0 0 16 16" style="width:13px;height:13px;stroke-width:1.8;vertical-align:-1px"><path d="M8 2.5v8m-3.5-3.5 3.5 3.5 3.5-3.5M2.5 13.5h11"/></svg> <span>${isEn ? "Download" : "Скачать"}</span></button>`}
         </div>
       </article>`;
   }
 
-  function render() {
+    function render() {
     const pinned = featuredFiles();
     const all = filteredFiles();
     const totalPages = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
@@ -633,18 +681,19 @@
       .map((item, pageIndex) => renderCard(item, start + pageIndex))
       .join("");
 
+    const isEn = window.cgsI18n?.language === "en";
     $("#files-pages").innerHTML = pageNumbers(state.page, totalPages)
       .map((page) => `<button class="${page === state.page ? "active" : ""}" data-files-page="${page}">${page}</button>`)
       .join("");
     $("#files-prev").disabled = state.page <= 1;
     $("#files-next").disabled = state.page >= totalPages;
-    $("#files-page-state").textContent = `Страница ${state.page} из ${totalPages}`;
+    $("#files-page-state").textContent = isEn ? `Page ${state.page} of ${totalPages}` : `Страница ${state.page} из ${totalPages}`;
 
     if (!state.loading && state.error) {
       $("#files-status").textContent = state.error;
     } else if (!state.loading) {
-      const range = all.length ? `${start + 1}–${start + pageItems.length} из ${all.length}` : "0 файлов";
-      const source = state.cached ? " · локальная копия" : "";
+      const range = all.length ? (isEn ? `${start + 1}–${start + pageItems.length} of ${all.length}` : `${start + 1}–${start + pageItems.length} из ${all.length}`) : (isEn ? "0 files" : "0 файлов");
+      const source = state.cached ? (isEn ? " · local copy" : " · локальная копия") : "";
       $("#files-status").textContent = `${range}${source}`;
     }
   }
@@ -908,6 +957,11 @@
       if (button.dataset.filesAction === "resume") download(item);
       if (button.dataset.filesAction === "cancel") cancelDownload(item);
       if (button.dataset.filesAction === "reveal") reveal(item);
+    });
+    // Обновление отображения при смене языка интерфейса
+    window.addEventListener("cgs:language-changed", () => {
+      syncSortUi();
+      render();
     });
     window.addEventListener("cgs:view-changed", (event) => {
       const active = event.detail === "files";

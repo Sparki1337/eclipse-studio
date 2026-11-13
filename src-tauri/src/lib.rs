@@ -39,6 +39,7 @@ mod startup_policy;
 mod steam;
 mod steam_hv;
 mod steam_library;
+mod steam_patch;
 #[cfg(windows)]
 mod system_lock;
 #[cfg(windows)]
@@ -162,6 +163,38 @@ fn open_path(path: String) -> Result<(), String> {
     {
         let _ = target;
         Err("Поддерживается только в Windows".into())
+    }
+}
+
+// Замеры производительности: включаются запуском с флагом --perf.
+// Временно включены всегда, чтобы снять цифры с реальной машины.
+#[tauri::command]
+fn perf_mode_enabled() -> bool {
+    !std::env::args().any(|argument| argument == "--no-perf")
+}
+
+// Строки замеров пишутся в файл рядом с данными приложения, чтобы их можно
+// было прочитать после запуска с --perf. Тоже временно.
+#[tauri::command]
+fn perf_log(app: AppHandle, line: String) {
+    if !perf_mode_enabled() {
+        return;
+    }
+    let Ok(directory) = app.path().app_local_data_dir() else {
+        return;
+    };
+    let _ = std::fs::create_dir_all(&directory);
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_secs())
+        .unwrap_or_default();
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(directory.join("perf.log"))
+    {
+        use std::io::Write;
+        let _ = writeln!(file, "{stamp} {line}");
     }
 }
 
@@ -349,6 +382,8 @@ pub fn run() {
             native_drop::enable_file_drop,
             open_path,
             open_external,
+            perf_mode_enabled,
+            perf_log,
             platform_info,
             process_is_elevated,
             relaunch_as_admin,
@@ -410,6 +445,9 @@ pub fn run() {
             luatools::luatools_update_loader,
             luatools::luatools_is_steam_running,
             luatools::luatools_close_steam,
+            steam_patch::steam_patch_status,
+            steam_patch::steam_patch_apply,
+            steam_patch::steam_patch_restore,
             loader_github::luatools_check_loader_updates,
             lua_loader::luatools_loader_info,
             millennium::millennium_plugin_status,

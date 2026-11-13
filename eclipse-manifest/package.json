@@ -1,6 +1,6 @@
 {
   "name": "eclipse-manifest",
-  "version": "0.5.3",
+  "version": "5.5.0",
   "private": true,
   "type": "module",
   "main": "./frontend/index.tsx",

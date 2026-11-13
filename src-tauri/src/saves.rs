@@ -14,6 +14,9 @@ use walkdir::{DirEntry, WalkDir};
 const SAVE_MANIFEST_NAME: &str = "cgs-save-manifest.json";
 const MAX_RESTORE_FILES: usize = 250_000;
 
+#[path = "save_safety.rs"]
+mod save_safety;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SaveManifest {
@@ -932,9 +935,7 @@ fn source_preview(paths: &[String]) -> SavePreview {
 #[tauri::command]
 pub async fn preview_save_backup(paths: Vec<String>) -> Result<SavePreview, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        if paths.is_empty() || paths.len() > 256 {
-            return Err("Выберите от 1 до 256 папок".into());
-        }
+        save_safety::validate_sources(&paths)?;
         Ok(source_preview(&paths))
     })
     .await
@@ -968,9 +969,7 @@ fn create_save_archive_blocking(
     format: String,
 ) -> SaveArchiveResult {
     let result = (|| -> Result<SaveArchiveResult, String> {
-        if paths.is_empty() || paths.len() > 256 {
-            return Err("Выберите от 1 до 256 папок".into());
-        }
+        save_safety::validate_sources(&paths)?;
         let options = save_options(app)?;
         let format = match format.as_str() {
             "zip" => "zip",
@@ -1069,6 +1068,8 @@ fn create_save_archive_blocking(
         }
         let verify = tempfile::tempdir().map_err(|e| e.to_string())?;
         crate::archive_policy::extract(&output_path, verify.path(), None)?;
+        // Проверяем не только байты, но и допустимость собственного плана восстановления.
+        restore_plan(verify.path(), &options)?;
         for entry in WalkDir::new(stage.path()) {
             let entry = entry.map_err(|e| e.to_string())?;
             if entry.file_type().is_file() {
@@ -1468,10 +1469,7 @@ pub async fn save_undo_restore(app: tauri::AppHandle) -> SaveArchiveResult {
                     for (index, item) in snapshot.files.iter().enumerate() {
                         let result = (|| -> Result<(), String> {
                             let target = make_target(Path::new(&item.root), &item.relative)?;
-                            if target.exists() {
-                                let safety = backup.join("before-undo").join(index.to_string());
-                                crate::durable::copy(&target, &safety)?;
-                            }
+                            save_safety::capture_before_undo(&backup, index, &target)?;
                             if let Some(saved) = &item.backup {
                                 crate::durable::copy(
                                     &crate::safe_path::join(&backup, saved)?,

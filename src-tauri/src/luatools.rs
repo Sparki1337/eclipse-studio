@@ -7,7 +7,8 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
-    time::{SystemTime, UNIX_EPOCH},
+    sync::{Mutex, OnceLock},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
 
@@ -31,6 +32,8 @@ pub struct LuaGame {
     pub status: String,
     pub manifest_count: u64,
     pub missing_manifest_count: u64,
+    // Файл добавлен не через Eclipse, а другим инструментом (LuaTools, SteamTools)
+    pub external: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -46,6 +49,10 @@ pub struct LuaStatus {
     pub loader_issue: Option<String>,
     pub lua_count: u64,
     pub games: Vec<LuaGame>,
+    // Сколько сторонних добавлений найдено в папке загрузчика
+    pub external_count: u64,
+    // Время чтения статуса в миллисекундах (для замеров производительности)
+    pub elapsed_ms: u64,
 }
 
 fn registry_path(app: &AppHandle) -> Option<PathBuf> {
@@ -776,11 +783,57 @@ fn game_health(lua_path: &Path, depotcache: &Path, enabled: bool) -> (String, u6
     (status.into(), manifest_count, missing)
 }
 
+// Сторонние добавления: lua-файлы, которых нет в нашем реестре. Их кладут
+// LuaTools, SteamTools или пользователь вручную, поэтому показываем их
+// отдельно и не трогаем, пока галочка «Сторонние добавления» не включена.
+// Статус только читает диск: восстановление недостающих манифестов уходит
+// в фоновую задачу, поэтому открытие вкладки не ждёт копирования файлов.
+fn external_games(
+    registry: &BTreeMap<String, u64>,
+    stplugin: &Path,
+    depotcache: &Path,
+) -> Vec<LuaGame> {
+    let Ok(entries) = fs::read_dir(stplugin) else {
+        return Vec::new();
+    };
+    let mut found: BTreeMap<String, PathBuf> = BTreeMap::new();
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|kind| kind.is_file()).unwrap_or(false) {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(appid) = appid_from_lua(&name) else {
+            continue;
+        };
+        if registry.contains_key(&appid) {
+            continue;
+        }
+        // Активный файл важнее отключённого дубликата
+        if name.ends_with(".lua") || !found.contains_key(&appid) {
+            found.insert(appid, entry.path());
+        }
+    }
+    let mut games = Vec::with_capacity(found.len());
+    for (appid, path) in found {
+        let enabled = !path.to_string_lossy().ends_with(".disabled");
+        let (status, manifest_count, missing_manifest_count) =
+            game_health(&path, depotcache, enabled);
+        games.push(LuaGame {
+            appid,
+            enabled,
+            status,
+            manifest_count,
+            missing_manifest_count,
+            external: true,
+        });
+    }
+    games
+}
+
 fn registry_games(
     registry: &BTreeMap<String, u64>,
     stplugin: &Path,
     depotcache: &Path,
-    manifest_cache: Option<&Path>,
 ) -> Vec<LuaGame> {
     let mut games = Vec::new();
     for appid in registry.keys() {
@@ -793,9 +846,6 @@ fn registry_games(
         } else {
             continue;
         };
-        if let Some(cache) = manifest_cache {
-            sync_game_manifest_cache(&path, depotcache, cache);
-        }
         let (status, manifest_count, missing_manifest_count) =
             game_health(&path, depotcache, enabled);
         games.push(LuaGame {
@@ -804,6 +854,7 @@ fn registry_games(
             status,
             manifest_count,
             missing_manifest_count,
+            external: false,
         });
     }
     games.sort_by(|a, b| {
@@ -815,9 +866,69 @@ fn registry_games(
     games
 }
 
+// Короткий кэш статуса: повторное открытие вкладки не сканирует диск заново
+struct StatusCacheEntry {
+    key: (String, bool),
+    status: LuaStatus,
+    at: Instant,
+}
+
+fn status_cache() -> &'static Mutex<Option<StatusCacheEntry>> {
+    static CACHE: OnceLock<Mutex<Option<StatusCacheEntry>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(None))
+}
+
+// Любое изменение файлов игры сбрасывает кэш, чтобы список не отставал
+pub(crate) fn invalidate_status_cache() {
+    if let Ok(mut guard) = status_cache().lock() {
+        *guard = None;
+    }
+}
+
+// Фоновое восстановление недостающих манифестов: не чаще раза в две минуты
+fn restore_slot() -> &'static Mutex<Option<Instant>> {
+    static SLOT: OnceLock<Mutex<Option<Instant>>> = OnceLock::new();
+    SLOT.get_or_init(|| Mutex::new(None))
+}
+
+fn take_restore_slot() -> bool {
+    let Ok(mut guard) = restore_slot().lock() else {
+        return false;
+    };
+    let now = Instant::now();
+    if let Some(last) = *guard {
+        if now.duration_since(last) < Duration::from_secs(120) {
+            return false;
+        }
+    }
+    *guard = Some(now);
+    true
+}
+
+fn restore_manifest_cache(steam: &Path, app: &AppHandle) {
+    let Some(cache) = manifest_cache_dir(app) else {
+        return;
+    };
+    let stplugin = stplugin_dir(steam);
+    let depotcache = depotcache_dir(steam);
+    let Ok(entries) = fs::read_dir(&stplugin) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if appid_from_lua(&name).is_some() {
+            sync_game_manifest_cache(&entry.path(), &depotcache, &cache);
+        }
+    }
+}
+
 // Блокирующая системная проверка выполняется вне главного потока
 #[tauri::command(async)]
-pub fn luatools_status(app: AppHandle, steam_path: Option<String>) -> LuaStatus {
+pub fn luatools_status(
+    app: AppHandle,
+    steam_path: Option<String>,
+    include_external: Option<bool>,
+) -> LuaStatus {
     let Some(steam) = resolve_steam_path(steam_path) else {
         return LuaStatus {
             steam_path: None,
@@ -830,19 +941,50 @@ pub fn luatools_status(app: AppHandle, steam_path: Option<String>) -> LuaStatus 
             loader_issue: Some("Папка Steam не найдена".into()),
             lua_count: 0,
             games: Vec::new(),
+            external_count: 0,
+            elapsed_ms: 0,
         };
     };
+    let include_external = include_external.unwrap_or(false);
+    let key = (steam.display().to_string(), include_external);
+    if let Ok(guard) = status_cache().lock() {
+        if let Some(entry) = guard.as_ref() {
+            if entry.key == key && entry.at.elapsed() < Duration::from_secs(8) {
+                return entry.status.clone();
+            }
+        }
+    }
+
+    let started = Instant::now();
     let stplugin = stplugin_dir(&steam);
-    let cache = manifest_cache_dir(&app);
-    let games = registry_games(
-        &load_registry(&app),
-        &stplugin,
-        &depotcache_dir(&steam),
-        cache.as_deref(),
-    );
+    let depotcache = depotcache_dir(&steam);
+    let registry = load_registry(&app);
+    let mut games = registry_games(&registry, &stplugin, &depotcache);
+    // Сторонние добавления считаются всегда, а в список попадают по галочке
+    let external = external_games(&registry, &stplugin, &depotcache);
+    let external_count = external.len() as u64;
+    // Манифесты сторонних игр тоже восстанавливаем, даже если они скрыты галочкой
+    let external_missing: u64 = external
+        .iter()
+        .map(|game| game.missing_manifest_count)
+        .sum();
+    if include_external {
+        games.extend(external);
+        games.sort_by(|a, b| {
+            a.appid
+                .parse::<u64>()
+                .unwrap_or(u64::MAX)
+                .cmp(&b.appid.parse::<u64>().unwrap_or(u64::MAX))
+        });
+    }
+    let missing_total: u64 = games
+        .iter()
+        .map(|game| game.missing_manifest_count)
+        .sum::<u64>()
+        + external_missing;
     let (loader_status, loader_name, loader_issue) = loader_state(&steam);
 
-    LuaStatus {
+    let status = LuaStatus {
         steam_detected: true,
         steam_exe: steam.join("steam.exe").is_file(),
         plugin_folder: stplugin.is_dir(),
@@ -852,8 +994,31 @@ pub fn luatools_status(app: AppHandle, steam_path: Option<String>) -> LuaStatus 
         loader_issue,
         lua_count: games.len() as u64,
         games,
+        external_count,
+        elapsed_ms: started.elapsed().as_millis() as u64,
         steam_path: Some(steam.display().to_string()),
+    };
+
+    if let Ok(mut guard) = status_cache().lock() {
+        *guard = Some(StatusCacheEntry {
+            key,
+            status: status.clone(),
+            at: Instant::now(),
+        });
     }
+
+    // Возврат манифестов — только когда их правда не хватает и в фоне:
+    // открытие вкладки больше не ждёт копирования файлов
+    if missing_total > 0 && take_restore_slot() {
+        let app_clone = app.clone();
+        let steam_clone = steam.clone();
+        std::thread::spawn(move || {
+            restore_manifest_cache(&steam_clone, &app_clone);
+            invalidate_status_cache();
+        });
+    }
+
+    status
 }
 
 #[tauri::command]
@@ -889,6 +1054,7 @@ pub fn luatools_restore_manifests(app: AppHandle, steam_path: Option<String>) ->
         };
         restored += sync_game_manifest_cache(&lua, &depotcache, &cache);
     }
+    invalidate_status_cache();
     OperationResult::ok(
         if restored > 0 {
             format!("Восстановлено манифестов: {restored}")
@@ -1207,6 +1373,7 @@ pub(crate) fn install_zip_bytes(
         registry.entry(appid.clone()).or_insert(stamp);
     }
     save_registry(app, &registry);
+    invalidate_status_cache();
     LuaInstallResult {
         success: true,
         message: format!(
@@ -1225,7 +1392,7 @@ pub async fn luatools_install(
     steam_path: Option<String>,
     auto_update: bool,
 ) -> LuaInstallResult {
-    match tauri::async_runtime::spawn_blocking(move || {
+    let result = match tauri::async_runtime::spawn_blocking(move || {
         luatools_install_blocking(app, paths, steam_path, auto_update)
     })
     .await
@@ -1237,7 +1404,11 @@ pub async fn luatools_install(
             logs: vec![],
             added_appids: vec![],
         },
+    };
+    if result.success {
+        invalidate_status_cache();
     }
+    result
 }
 
 fn luatools_install_blocking(
@@ -1404,14 +1575,17 @@ pub fn luatools_toggle(appid: String, enable: bool, steam_path: Option<String>) 
     }
     let _ = fs::remove_file(to);
     match fs::rename(from, to) {
-        Ok(()) => OperationResult::ok(
-            if enable {
-                "Игра включена"
-            } else {
-                "Игра отключена"
-            },
-            vec![],
-        ),
+        Ok(()) => {
+            invalidate_status_cache();
+            OperationResult::ok(
+                if enable {
+                    "Игра включена"
+                } else {
+                    "Игра отключена"
+                },
+                vec![],
+            )
+        }
         Err(error) => {
             OperationResult::error(format!("Не удалось изменить состояние: {error}"), vec![])
         }
@@ -1456,6 +1630,7 @@ pub fn luatools_remove(
         removed = true;
     }
     if removed {
+        invalidate_status_cache();
         OperationResult::ok("Игра удалена из загрузчика", vec![])
     } else {
         OperationResult::error("Файл lua для этой игры не найден", vec![])
@@ -1892,6 +2067,47 @@ mod tests {
     }
 
     #[test]
+    fn external_games_skip_registry_and_prefer_active_files() {
+        let root = std::env::temp_dir().join(format!(
+            "cgs-luatools-external-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos())
+                .unwrap_or_default()
+        ));
+        fs::create_dir_all(&root).expect("создать папку теста");
+        fs::write(root.join("570.lua"), "addappid(570)").expect("активный файл");
+        fs::write(root.join("730.lua.disabled"), "addappid(730)").expect("отключённый файл");
+        // Игра из реестра Eclipse сторонней не считается
+        fs::write(root.join("1245620.lua"), "addappid(1245620)").expect("свой файл");
+        fs::write(root.join("readme.txt"), "text").expect("посторонний файл");
+
+        let mut registry = BTreeMap::new();
+        registry.insert("1245620".to_string(), 0_u64);
+        let games = external_games(&registry, &root, &root.join("depotcache"));
+        let ids: Vec<&str> = games.iter().map(|game| game.appid.as_str()).collect();
+        assert_eq!(ids, vec!["570", "730"], "состав сторонних игр");
+        assert!(games.iter().all(|game| game.external), "метка внешней игры");
+        assert!(
+            games
+                .iter()
+                .find(|game| game.appid == "570")
+                .map(|game| game.enabled)
+                .unwrap_or(false)
+        );
+        assert!(
+            !games
+                .iter()
+                .find(|game| game.appid == "730")
+                .map(|game| game.enabled)
+                .unwrap_or(true)
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn comments_setmanifestid_when_auto_update() {
         let source = "addappid(480)\nsetManifestid(481,\"123\")\naddappid(481,0,\"key\")\n";
         let patched = patch_lua(source, true, "480");
@@ -2000,7 +2216,7 @@ paths = ["ignore"]
         .into_iter()
         .collect();
 
-        let games = registry_games(&registry, &stplugin, &depotcache, None);
+        let games = registry_games(&registry, &stplugin, &depotcache);
         assert_eq!(
             games.len(),
             2,

@@ -16,7 +16,7 @@
     }
     window.cgsModulesLoading = true;
     // Порядок важен: ядро (core/) и разделы (features/) подключаются последовательно
-    for (const source of ["core/gradient.js", "core/bootstrap.js", "core/api.js", "core/dialogs.js", "core/jobs.js", "features/saves.js", "core/audio.js", "core/splash.js", "core/scale.js", "core/i18n.js", "core/onboarding.js", "core/app.js", "features/startup.js", "features/hypervisor.js", "features/anticheat.js", "features/vbs.js", "features/local-cloud.js", "features/files.js", "features/utilities.js", "features/appearance.js", "features/gradient.js", "features/layout.js", "core/custom-select.js", "core/motion.js", "features/holiday.js", "features/home.js", "features/search.js"]) {
+    for (const source of ["core/perf.js", "core/gradient.js", "core/bootstrap.js", "core/api.js", "core/dialogs.js", "core/jobs.js", "features/saves.js", "core/audio.js", "core/splash.js", "core/scale.js", "core/i18n.js", "core/onboarding.js", "core/app.js", "features/startup.js", "features/hypervisor.js", "features/anticheat.js", "features/vbs.js", "features/local-cloud.js", "features/steam-patch.js", "features/files.js", "features/utilities.js", "features/appearance.js", "features/gradient.js", "features/layout.js", "core/custom-select.js", "core/motion.js", "features/seasons.js", "features/home.js", "features/search.js"]) {
       await new Promise((resolve, reject) => {
         const script = document.createElement("script"); script.src = "./" + source;
         script.onload = resolve; script.onerror = () => reject(new Error("Не загружен модуль: " + source)); document.body.append(script);

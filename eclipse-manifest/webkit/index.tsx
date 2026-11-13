@@ -35,26 +35,18 @@ type ButtonState = 'idle' | 'loading' | 'success' | 'error' | 'installed' | 'pen
 const installManifest = callable<[{ appid: string; name: string }], string>('install_manifest');
 const restartSteam = callable<[], string>('restart_steam');
 const getGameStatus = callable<[{ appid: string }], string>('get_game_status');
-const restoreManifestCache = callable<[], string>('restore_manifest_cache');
 
 const PANEL_ID = 'eclipse-manifest-panel';
 const LEGACY_PANEL_ID = 'crocodile-manifest-panel';
 const STYLE_ID = 'eclipse-manifest-style';
 const MODAL_ID = 'eclipse-manifest-modal';
-let cacheRestoreRunning = false;
 
-// Периодическое фоновое восстановление кэша манифестов
-async function keepManifestsAvailable(): Promise<void> {
-  if (cacheRestoreRunning) return;
-  cacheRestoreRunning = true;
-  try {
-    await restoreManifestCache();
-  } catch {
-    // Повтор при следующем фоновом проходе
-  } finally {
-    cacheRestoreRunning = false;
-  }
-}
+// Статус не запрашивается чаще общего интервала: панель пересоздаётся при
+// перерисовке страницы Steam, а каждый запрос — это работа Lua-бэкенда и PowerShell.
+const STATUS_INTERVAL = 12_000;
+let statusRequestedAt = 0;
+let statusInFlight = false;
+let lastStatus: { appid: string; status: GameStatusReply } | null = null;
 
 // Извлечение AppID текущей открытой игры из URL или DOM
 function currentAppId(): string | null {
@@ -67,9 +59,8 @@ function currentAppId(): string | null {
   const fromSearch = searchParams.get('appid') ?? searchParams.get('appId');
   if (fromSearch && /^\d+$/.test(fromSearch)) return fromSearch;
 
-  // Из скрытых полей или метатегов Steam
-  const metaAppId = document.querySelector<HTMLInputElement>('input[name="appid"]')?.value
-    ?? document.querySelector<HTMLElement>('[data-appid]')?.dataset.appid;
+  // Из скрытых полей Steam: на странице игры есть поле с AppID
+  const metaAppId = document.querySelector<HTMLInputElement>('input[name="appid"]')?.value;
   if (metaAppId && /^\d+$/.test(metaAppId)) return metaAppId;
 
   return null;
@@ -694,11 +685,6 @@ function addStyles(): void {
       from { opacity: 0; }
     }
     @keyframes ryuu-card-in {
-    #${MODAL_ID} button:disabled { cursor: wait; opacity: .6; }
-    @keyframes ryuu-fade-in {
-      from { opacity: 0; }
-    }
-    @keyframes ryuu-card-in {
       from { opacity: 0; transform: translateY(8px) scale(.985); }
     }
   `;
@@ -907,23 +893,32 @@ function applyGameStatus(
 }
 
 async function refreshGameStatus(panel: HTMLElement, appid: string, force = false): Promise<void> {
-  const lastCheck = Number(panel.dataset.statusChecked || 0);
-  if (!force && Date.now() - lastCheck < 4000) return;
-  if (panel.dataset.statusLoading === 'true') return;
   const button = panel.querySelector<HTMLButtonElement>('.ryuu-button');
   const subtitle = panel.querySelector<HTMLElement>('.ryuu-subtitle');
   if (!button || !subtitle) return;
 
+  // Пересозданная панель сразу получает последний известный статус — без запроса
+  if (lastStatus && lastStatus.appid === appid) {
+    applyGameStatus(panel, button, subtitle, lastStatus.status);
+  }
+
+  if (statusInFlight) return;
+  const now = Date.now();
+  if (!force && now - statusRequestedAt < STATUS_INTERVAL) return;
+
+  statusRequestedAt = now;
+  statusInFlight = true;
   panel.dataset.statusLoading = 'true';
-  panel.dataset.statusChecked = String(Date.now());
   try {
     const status = JSON.parse(await getGameStatus({ appid })) as GameStatusReply;
+    lastStatus = { appid, status };
     if (status.success && button.dataset.state !== 'loading') {
       applyGameStatus(panel, button, subtitle, status);
     }
   } catch {
-    // Игнорирование сетевых ошибок фоновой проверки
+    // Сетевые и фоновые ошибки не должны мешать странице магазина
   } finally {
+    statusInFlight = false;
     panel.dataset.statusLoading = 'false';
   }
 }
@@ -1047,7 +1042,7 @@ function injectButton(): void {
   });
   panel.append(header, serviceMeta, button);
   target.prepend(panel);
-  void refreshGameStatus(panel, appid, true);
+  void refreshGameStatus(panel, appid);
 }
 
 // Запуск наблюдателя и таймеров внедрения плагина
@@ -1056,27 +1051,43 @@ function startWebkitInjection(): void {
   injectButton();
 
   let scheduled = false;
-  const observer = new MutationObserver(() => {
-    if (scheduled) return;
+  let lastInjectAt = 0;
+  const injectSoon = (): void => {
+    if (scheduled || document.hidden) return;
+    // Пока панель на месте, перерисовки страницы не требуют её пересборки
+    const panel = document.getElementById(PANEL_ID);
+    const appid = currentAppId();
+    if (panel && appid && panel.dataset.appid === appid) return;
     scheduled = true;
     window.setTimeout(() => {
       scheduled = false;
+      if (document.hidden) return;
+      // Steam может перерисовывать область покупки постоянно — держим свой темп
+      if (Date.now() - lastInjectAt < 1000) return;
+      lastInjectAt = Date.now();
       injectButton();
     }, 150);
-  });
+  };
+
+  const observer = new MutationObserver(injectSoon);
   if (document.documentElement) {
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
-  window.setInterval(injectButton, 1200);
+  window.setInterval(() => {
+    if (document.hidden) return;
+    injectButton();
+  }, 1200);
+  // После возврата на вкладку панель обновляется сразу
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) injectSoon();
+  });
 }
 
-export default async function WebkitMain(): Promise<void> {
-  void keepManifestsAvailable();
-  window.setInterval((): void => {
-    void keepManifestsAvailable();
-  }, 2000);
+let webkitStarted = false;
 
-  if (!/^(store\.)?steam(powered|china)\.com$/i.test(window.location.hostname)) return;
+export default async function WebkitMain(): Promise<void> {
+  if (!/^(store\.)?steam(powered|china)\.com$/i.test(window.location.hostname) || webkitStarted) return;
+  webkitStarted = true;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => startWebkitInjection(), { once: true });

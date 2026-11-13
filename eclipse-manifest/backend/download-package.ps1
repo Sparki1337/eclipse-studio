@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory=$true)][string]$ReplyFile,
     [ValidateRange(1,90)][int]$TimeoutSeconds = 90,
     [ValidateRange(4,67108864)][long]$MaximumBytes = 67108864,
+    [string]$RequestPath = '',
     [switch]$AllowLoopbackFixture
 )
 . (Join-Path $PSScriptRoot 'safe-io.ps1')
@@ -14,7 +15,7 @@ $status = 0; $success = $false; $reply = @{ success = $false; status = 0; bytes_
 try {
     Assert-NoLinks $OutputFile
     if ([IO.File]::Exists($OutputFile) -or [IO.Directory]::Exists($OutputFile)) { throw 'Output already exists' }
-    $text = [Console]::In.ReadToEnd()
+    $text = if ($RequestPath) { [IO.File]::ReadAllText($RequestPath, $script:Utf8) } else { [Console]::In.ReadToEnd() }
     if ($text.Length -gt 1048576) { throw 'Request too large' }
     $request = Parse-Json $text; $origin = [Uri]$request.url
     function Assert-Url([Uri]$Url) {
@@ -40,7 +41,7 @@ try {
         Assert-Url $current
         $message = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $current)
         try {
-            [void]$message.Headers.TryAddWithoutValidation('User-Agent', 'EclipseManifest/0.5.3')
+            [void]$message.Headers.TryAddWithoutValidation('User-Agent', 'EclipseManifest/0.5.4')
             # Custom API-key headers must not leak to a redirected CDN/origin.
             if ($current.GetLeftPart([UriPartial]::Authority) -eq $origin.GetLeftPart([UriPartial]::Authority)) {
                 foreach ($name in $request.headers.Keys) { [void]$message.Headers.TryAddWithoutValidation([string]$name, [string]$request.headers[$name]) }

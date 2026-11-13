@@ -1658,5 +1658,5 @@ html[data-theme="light"] .accent::before { border-color: rgba(0, 0, 0, .12); }
 .accent-light-note { display: none; margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
 html[data-theme="light"] .accent-light-note { display: block; }
 /* ── Приглушённые подписи, подобранные под тёмный фон, на белом были слишком бледными */
-html[data-theme="light"] :is(.brand-caption, .loader-option small, .lua-autoupdate small) { color: #526071; }
+html[data-theme="light"] :is(.brand-caption, .loader-option small, .lua-autoupdate small, .lua-external-toggle small) { color: #526071; }
 html[data-theme="light"] .millennium-plugin-badge:not(.ready, .warning, .error) { color: #526071; border-color: rgba(0, 0, 0, .1); background: rgba(0, 0, 0, .03); }

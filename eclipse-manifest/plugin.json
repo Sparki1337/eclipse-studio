@@ -3,7 +3,7 @@
   "name": "eclipse-manifest",
   "common_name": "Eclipse Manifest",
   "description": "Получает манифесты через Ryuu или HubCap прямо со страниц игр в магазине Steam.",
-  "version": "0.5.3",
+  "version": "5.5.0",
   "backendType": "lua",
   "useBackend": true,
   "webkitApiVersion": "2.0.0"

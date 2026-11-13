@@ -1,4 +1,4 @@
-# Eclipse Manifest for Millennium (Eclipse Studio) v0.5.2
+# Eclipse Manifest for Millennium (Eclipse Studio) v5.5.0
 
 Встроенный плагин для Millennium, входящий в состав **Eclipse Studio**. Плагин добавляет кнопку **«Получить манифест»** на страницы игр в магазине настольного клиента Steam.
 
@@ -52,5 +52,5 @@ npm run build
 
 - Первая версия ориентирована на Windows.
 - Кнопка появляется только на адресах `store.steampowered.com/app/<AppID>`.
-- Строки `setManifestid` в Lua комментируются так же, как в модуле Eclipse Manifest, чтобы Steam мог обновлять данные.
+- Строки `setManifestid` в Lua сохраняются как есть: игра ссылается на конкретные GID манифестов, потому что Steam не выдаёт коды запроса манифестов для неприобретённых игр.
 - Если Steam изменит разметку магазина, селектор места для кнопки может потребовать обновления.

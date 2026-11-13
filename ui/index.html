@@ -148,7 +148,7 @@
   <link rel="stylesheet" href="./styles/korona.css" />
   <link rel="stylesheet" href="./styles/gradient.css" />
   <link rel="stylesheet" href="./styles/motion.css" />
-  <link rel="stylesheet" href="./styles/holiday.css" />
+  <link rel="stylesheet" href="./styles/seasons.css" />
   <link rel="stylesheet" href="./styles/onboarding.css" />
 </head>
 <body id="korona">
@@ -159,7 +159,7 @@
   <aside class="app-splash s4" id="app-splash" aria-label="Заставка запуска">
     <div class="s4-box" id="s4-box">
       <canvas id="s4-canvas"></canvas>
-      <div class="k-eclipse" aria-hidden="true"><i class="k-ring"></i><i class="k-ring k-ring-2"></i><i class="k-sun"></i><i class="k-moon"></i></div>
+      <div class="k-eclipse" aria-hidden="true"><i class="k-sun"></i><i class="k-moon"></i></div>
     </div>
     <div class="s4-name" id="s4-name">
       <span>E</span><span>c</span><span>l</span><span>i</span><span>p</span><span>s</span><span>e</span><span>-</span><span>s</span><span>t</span><span>u</span><span>d</span><span>i</span><span>o</span>
@@ -173,7 +173,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><span class="eclipse-mark" aria-hidden="true" data-tauri-drag-region></span></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>10.0.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>10.1.0</span>
       </div>
       <button class="titlebar-search" id="titlebar-search" type="button" aria-label="Быстрый поиск" aria-keyshortcuts="Control+K">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
@@ -206,7 +206,7 @@
         </div>
       </div>
 
-      <nav class="navigation" aria-label="Разделы приложения" title="Перетащите за свободное место, чтобы переместить панель">
+      <nav class="navigation" aria-label="Разделы приложения">
         <div class="nav-label">Рабочая область</div>
         <button class="nav-item active" data-view="home">
           <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
@@ -262,7 +262,7 @@
           <div class="home-hero premium-panel">
             <div class="home-glow"></div>
             <div class="hero-copy">
-              <span class="hero-kicker">ECLIPSE STUDIO 10.0.0</span>
+              <span class="hero-kicker">ECLIPSE STUDIO 10.1.0</span>
               <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
               <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
             </div>
@@ -673,6 +673,32 @@
             </div>
           </section>
 
+          <!-- Патч appcache: устранение ошибки «0 байт» и «Нет соединения» -->
+          <section class="premium-panel local-cloud-panel steam-patch-panel" id="steam-patch-panel" data-busy="false" aria-label="Фикс ошибки 0 байт / нет соединения">
+            <div class="local-cloud-head">
+              <div class="millennium-plugin-icon" aria-hidden="true">
+                <svg class="local-cloud-icon" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              </div>
+              <div class="local-cloud-copy">
+                <div class="millennium-plugin-heading">
+                  <span class="coming-label">APPCACHE · PATCH</span>
+                  <span class="millennium-plugin-badge" id="sp-badge">Проверка…</span>
+                </div>
+                <h3>Фикс ошибки 0 байт / нет соединения</h3>
+              </div>
+              <div class="local-cloud-actions">
+                <label class="local-cloud-toggle">
+                  <span id="sp-toggle-label">Включить</span>
+                  <span class="switch"><input id="sp-enabled" type="checkbox" aria-labelledby="sp-toggle-label" disabled /><i></i></span>
+                </label>
+              </div>
+            </div>
+            <div class="local-cloud-footer">
+              <span id="sp-status" role="status" aria-live="polite" data-kind="info">Проверка…</span>
+              <button type="button" class="ghost-button" id="sp-refresh">Проверить</button>
+            </div>
+          </section>
+
           <section class="premium-panel path-panel lua-find-panel">
             <div class="section-heading">
               <span class="step-index">01</span>
@@ -707,14 +733,22 @@
           <section class="premium-panel save-browser">
             <div class="save-browser-header">
               <div><span class="coming-label">БИБЛИОТЕКА ЗАГРУЗЧИКА</span><h3>Добавленные игры</h3><p>Отключайте, удаляйте или обновляйте список. После изменений перезапустите Steam.</p></div>
-              <div class="save-selection-actions"><button class="ghost-button" id="lua-refresh-button">Обновить</button></div>
+              <div class="save-selection-actions lua-library-tools">
+                <label class="lua-external-toggle" title="Показывать игры, добавленные другими инструментами: LuaTools, SteamTools и прочими">
+                  <span class="switch"><input type="checkbox" id="lua-show-external" checked /><i></i></span>
+                  <small>Сторонние добавления</small>
+                  <b class="lua-external-count hidden" id="lua-external-count">0</b>
+                </label>
+                <button class="ghost-button" id="lua-refresh-button">Обновить</button>
+              </div>
             </div>
             <div class="save-empty" id="lua-empty">
               <span><svg viewBox="0 0 32 32"><path d="m23 20 5-4-5-4M9 12l-5 4 5 4M19 6l-6 20"/></svg></span>
               <h3>Пока ничего не добавлено</h3>
               <p>Перетащите файлы игры выше, чтобы добавить её в Steam.</p>
+              <p class="lua-external-hint hidden" id="lua-empty-external">Сторонние добавления скрыты. Включите галочку выше, чтобы увидеть игры из LuaTools и других инструментов.</p>
             </div>
-            <div class="lua-games hidden" id="lua-games"></div>
+            <div class="lua-games hidden" id="lua-games" data-i18n-skip></div>
           </section>
         </div>
       </section>
@@ -1491,10 +1525,28 @@
                       <div><strong>Акцентное свечение</strong><small>Неоновый отблеск и тени в цвет выбранного акцента</small></div>
                       <span class="switch"><input type="checkbox" id="ui-glow" checked /><i></i></span>
                     </label>
-                    <label class="pref-row" for="ui-holiday">
-                      <div><strong>Новогоднее оформление</strong><small>Снег и праздничные детали. Ваш стиль сохраняется.</small></div>
-                      <span class="switch"><input type="checkbox" id="ui-holiday" checked /><i></i></span>
+                    <label class="pref-row" for="ui-seasonal">
+                      <div><strong>Сезонное оформление</strong><small>Снег зимой, дождь с листьями осенью, лепестки весной и солнечные блики летом. В авто-режиме летом оформление отключается. Ваш стиль сохраняется.</small></div>
+                      <span class="switch"><input type="checkbox" id="ui-seasonal" checked /><i></i></span>
                     </label>
+                    <div class="pref-row">
+                      <div><strong>Сезон года</strong><small>Автоматически по календарю или вручную</small></div>
+                      <div class="personalization-segment season-mode-segment" role="group" aria-label="Сезон года">
+                        <button type="button" data-season-choice="winter">Зима</button>
+                        <button type="button" data-season-choice="spring">Весна</button>
+                        <button type="button" data-season-choice="summer">Лето</button>
+                        <button type="button" data-season-choice="autumn">Осень</button>
+                        <button type="button" data-season-choice="auto" class="active">Авто</button>
+                      </div>
+                    </div>
+                    <div class="pref-row">
+                      <div><strong>Плотность эффектов</strong><small>Количество снежинок, капель дождя и листьев</small></div>
+                      <div class="personalization-segment" role="group" aria-label="Плотность эффектов">
+                        <button type="button" data-season-density="low">Редкая</button>
+                        <button type="button" data-season-density="normal" class="active">Обычная</button>
+                        <button type="button" data-season-density="high">Густая</button>
+                      </div>
+                    </div>
                     <label class="pref-row">
                       <div><strong>Анимации интерфейса</strong><small>Плавное появление разделов, карточек и списков</small></div>
                       <span class="switch"><input type="checkbox" id="motion-mode" checked /><i></i></span>
@@ -1792,6 +1844,14 @@
                       <div><strong>Включить быстрый поиск</strong><small>Кнопка в заголовке окна и вызов сочетанием клавиш</small></div>
                       <span class="switch"><input type="checkbox" id="search-enabled" checked /><i></i></span>
                     </label>
+                    <div class="pref-row" id="pref-row-search-size">
+                      <div><strong>Размер строки поиска</strong><small>Компактная, обычная или широкая кнопка в заголовке окна</small></div>
+                      <div class="personalization-segment" role="group" aria-label="Размер строки поиска">
+                        <button type="button" data-search-width="compact">Компактная</button>
+                        <button type="button" data-search-width="normal" class="active">Обычная</button>
+                        <button type="button" data-search-width="wide">Широкая</button>
+                      </div>
+                    </div>
                     <div class="pref-row pref-row-search-hotkey" id="pref-row-search-hotkey">
                       <div><strong>Сочетание клавиш</strong><small>Нажмите кнопку, затем новое сочетание. Esc — отмена</small><small class="search-hotkey-hint hidden" id="search-hotkey-hint" role="status"></small></div>
                       <div class="search-hotkey-controls">
@@ -1985,7 +2045,7 @@
                   <div class="sidebar-live-edit-row">
                     <div class="sidebar-live-edit-info">
                       <strong>Редактирование «На лету»</strong>
-                      <p>Разрешить перетаскивать кнопки и открывать меню настроек прямо на боковой панели</p>
+                      <p>Разрешить перетаскивать иконки, панель и строку поиска, а также открывать меню настроек</p>
                     </div>
                     <label class="switch" title="Включить редактирование «На лету»">
                       <input type="checkbox" id="sidebar-live-edit-toggle" />
@@ -2014,7 +2074,7 @@
                   <div class="dock-row" id="pref-row-sidebar-dock">
                     <div class="dock-row-info">
                       <strong>Положение боковой панели</strong>
-                      <p>Панель можно перетащить мышью: зажмите свободное место на ней и отпустите у нужного края окна</p>
+                      <p>Панель можно перетащить мышью в режиме «На лету»: зажмите свободное место на ней и отпустите у нужного края окна</p>
                     </div>
                     <div class="dock-picker" role="group" aria-label="Положение боковой панели">
                       <button type="button" class="dock-btn active" data-sidebar-dock="left" aria-pressed="true"><i class="dock-preview" aria-hidden="true"></i><span>Слева</span></button>
@@ -2026,7 +2086,7 @@
                   <div class="dock-row" id="pref-row-search-dock">
                     <div class="dock-row-info">
                       <strong>Положение строки поиска</strong>
-                      <p>Строку поиска в заголовке окна тоже можно перетащить: влево, в центр или вправо</p>
+                      <p>Строку поиска в заголовке окна можно перетащить в режиме «На лету»: влево, в центр или вправо</p>
                     </div>
                     <div class="dock-picker dock-picker-search" role="group" aria-label="Положение строки поиска">
                       <button type="button" class="dock-btn" data-search-dock="left" aria-pressed="false"><i class="dock-preview" aria-hidden="true"></i><span>Слева</span></button>
@@ -2326,7 +2386,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">10.0.0</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">10.1.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -2355,7 +2415,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">10.0.0</b></div>
+                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">10.1.0</b></div>
                   <div class="about-row"><span>Версия Eclipse HV</span><b id="about-hv-version">Проверка…</b></div>
                   <div class="about-row"><span>Права доступа</span><b id="about-admin-rights">Проверка…</b></div>
                   <div class="about-row"><span>Путь к Steam</span><b id="about-steam-path" class="about-path">Определение…</b></div>
@@ -2468,6 +2528,19 @@
     </div>
   </div>
 
+  <!-- Первый запуск новой версии: предложение включить патч appcache -->
+  <div class="modal-backdrop hidden" id="sp-prompt-backdrop">
+    <div class="modal premium-panel lc-update-modal steam-patch-modal" role="dialog" aria-modal="true" aria-labelledby="sp-prompt-title" aria-describedby="sp-prompt-description">
+      <span class="coming-label">APPCACHE · PATCH</span>
+      <h3 id="sp-prompt-title">Патч не активен</h3>
+      <p id="sp-prompt-description">У вас не активен патч для исправления ошибки 0 байт / нет соединения. Применить сейчас?</p>
+      <div class="modal-actions equal-button-group">
+        <button type="button" class="secondary-button" id="sp-prompt-skip">Пропустить</button>
+        <button type="button" class="install-button" id="sp-prompt-apply">Применить</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop hidden" id="telegram-hub-backdrop">
     <div class="telegram-hub-modal premium-panel">
       <button class="telegram-hub-close" id="telegram-hub-close" aria-label="Закрыть">
@@ -2551,6 +2624,7 @@
           <span>App ID · <b id="lua-detail-appid">—</b></span>
           <span id="lua-detail-added"></span>
           <span id="lua-detail-released"></span>
+          <span class="lua-drm-badge loading" id="lua-detail-drm" title="Получаем сведения о защите из Steam" hidden>Защита…</span>
         </div>
         <div class="lua-detail-section">
           <div class="lua-detail-heading"><span class="lua-dot on"></span><h3>Разблокированные DLC <b id="lua-detail-in-count">(0)</b></h3></div>

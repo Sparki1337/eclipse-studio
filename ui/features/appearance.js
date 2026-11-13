@@ -140,12 +140,42 @@
     write("cgs-glow", enabled ? "1" : "0");
   }
 
-  // Новогодние украшения включаются отдельным флагом, по умолчанию включены
-  function applyHoliday(enabled) {
-    root.dataset.holiday = enabled ? "on" : "off";
-    const input = document.getElementById("ui-holiday");
+  // Сезонное оформление включается отдельным флагом, по умолчанию включено
+  function applySeasonal(enabled) {
+    root.dataset.seasonal = enabled ? "on" : "off";
+    const input = document.getElementById("ui-seasonal");
     if (input) input.checked = enabled;
-    write("cgs-holiday", enabled ? "1" : "0");
+    write("cgs-seasonal", enabled ? "1" : "0");
+  }
+
+  // Режим сезона: «auto» — по календарю (летом оформление отключается),
+  // иначе выбранный вручную сезон
+  const SEASON_MODES = new Set(["auto", "winter", "spring", "summer", "autumn"]);
+  const SEASON_DENSITIES = new Set(["low", "normal", "high"]);
+
+  function applySeasonMode(mode) {
+    const value = SEASON_MODES.has(mode) ? mode : "auto";
+    root.dataset.seasonMode = value;
+    document.querySelectorAll("[data-season-choice]").forEach((button) => {
+      const active = button.dataset.seasonChoice === value;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    write("cgs-season-mode", value);
+    // Сезонный модуль ещё не загружен на раннем старте — refresh безопасен
+    window.cgsSeasons?.refresh();
+  }
+
+  // Плотность эффектов: количество снежинок, капель дождя, листьев и лепестков
+  function applySeasonDensity(density) {
+    const value = SEASON_DENSITIES.has(density) ? density : "normal";
+    root.dataset.seasonDensity = value;
+    document.querySelectorAll("[data-season-density]").forEach((button) => {
+      const active = button.dataset.seasonDensity === value;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+    write("cgs-season-density", value);
   }
 
   async function openExternal(url) {
@@ -181,8 +211,14 @@
     document.getElementById("ui-glow")?.addEventListener("change", (event) => {
       applyGlow(event.currentTarget.checked);
     });
-    document.getElementById("ui-holiday")?.addEventListener("change", (event) => {
-      applyHoliday(event.currentTarget.checked);
+    document.getElementById("ui-seasonal")?.addEventListener("change", (event) => {
+      applySeasonal(event.currentTarget.checked);
+    });
+    document.querySelectorAll("[data-season-choice]").forEach((button) => {
+      button.addEventListener("click", () => applySeasonMode(button.dataset.seasonChoice));
+    });
+    document.querySelectorAll("[data-season-density]").forEach((button) => {
+      button.addEventListener("click", () => applySeasonDensity(button.dataset.seasonDensity));
     });
     document.getElementById("font-scale")?.addEventListener("input", (event) => {
       applyFontScale(event.currentTarget.value);
@@ -905,12 +941,13 @@
     const menu = document.getElementById("nav-context-menu");
     if (!menu) return;
 
-    // Контекстное меню по правой кнопке мыши
+    // Контекстное меню по правой кнопке мыши — только в режиме редактирования «На лету»
     document.addEventListener("contextmenu", (e) => {
       const item = e.target.closest(".nav-item");
       if (!item) return;
       const sidebar = item.closest(".sidebar");
       if (!sidebar) return;
+      if (!isSidebarLiveEditEnabled()) return;
 
       e.preventDefault();
       e.stopPropagation();
@@ -1060,7 +1097,7 @@
       const next = !isSidebarLiveEditEnabled();
       setSidebarLiveEdit(next);
       closeSidebarContextMenu(true);
-      showToast(next ? "Режим «На лету» включён: можно переставлять и растягивать иконки" : "Режим «На лету» выключен", "info");
+      showToast(next ? "Режим «На лету» включён: иконки, панель и строку поиска можно перетаскивать" : "Режим «На лету» выключен", "info");
     });
 
     // Переход в настройки
@@ -1128,7 +1165,9 @@
   applyTextWeight(read("cgs-text-weight", "regular"));
   applyContrast(read("cgs-contrast", "0") === "1");
   applyGlow(read("cgs-glow", "1") !== "0");
-  applyHoliday(read("cgs-holiday", "1") !== "0");
+  applySeasonal(read("cgs-seasonal", "1") !== "0");
+  applySeasonMode(read("cgs-season-mode", "auto"));
+  applySeasonDensity(read("cgs-season-density", "normal"));
 
   window.cgsAppearance = {
     applyTheme,
@@ -1139,7 +1178,9 @@
     applyTextWeight,
     applyContrast,
     applyGlow,
-    applyHoliday,
+    applySeasonal,
+    applySeasonMode,
+    applySeasonDensity,
     applySidebarWidth,
     applySidebarMode,
     applySettingsTab,

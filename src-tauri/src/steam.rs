@@ -23,6 +23,9 @@ pub struct SteamDrmInfo {
     pub label: String,
     pub kind: String,
     pub notice: String,
+    // Машиночитаемые метки защиты: по ним интерфейс переводит подписи и подсказку
+    #[serde(default)]
+    pub features: Vec<String>,
     pub checked_at: u64,
 }
 
@@ -67,56 +70,110 @@ fn contains_any(text: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| text.contains(needle))
 }
 
-fn drm_label(drm_notice: &str, account_notice: &str) -> (String, String) {
+fn drm_features(drm_notice: &str, account_notice: &str) -> Vec<String> {
     let combined = format!("{drm_notice} {account_notice}").to_lowercase();
-    let mut labels = Vec::new();
-    let mut kind = "unknown";
+    let mut features: Vec<String> = Vec::new();
 
     if combined.contains("denuvo") {
-        labels.push("Denuvo");
-        kind = "denuvo";
+        features.push("denuvo".into());
     }
     if contains_any(&combined, &["ea app", "ea account", "origin"]) {
-        labels.push(if drm_notice.to_lowercase().contains("ea app") {
-            "EA App"
-        } else {
-            "EA Account"
-        });
-        if kind == "unknown" {
-            kind = "launcher";
-        }
+        features.push(
+            if drm_notice.to_lowercase().contains("ea app") {
+                "ea_app"
+            } else {
+                "ea_account"
+            }
+            .into(),
+        );
     }
     if contains_any(&combined, &["ubisoft", "uplay"]) {
-        labels.push("Ubisoft Connect");
-        if kind == "unknown" {
-            kind = "launcher";
-        }
+        features.push("ubisoft".into());
     }
     if combined.contains("rockstar") {
-        labels.push("Rockstar");
-        if kind == "unknown" {
-            kind = "launcher";
-        }
+        features.push("rockstar".into());
     }
 
-    if labels.is_empty() && !drm_notice.is_empty() {
-        if contains_any(&combined, &["steam drm", "steamworks drm"]) {
-            labels.push("Steam DRM");
-            kind = "steam";
-        } else {
-            labels.push("Сторонняя DRM");
-            kind = "third-party";
-        }
-    } else if labels.is_empty() && !account_notice.is_empty() {
-        labels.push("Сторонний аккаунт");
-        kind = "third-party";
+    if features.is_empty() && !drm_notice.is_empty() {
+        features.push(
+            if contains_any(&combined, &["steam drm", "steamworks drm"]) {
+                "steam_drm"
+            } else {
+                "third_party_drm"
+            }
+            .into(),
+        );
+    } else if features.is_empty() && !account_notice.is_empty() {
+        features.push("third_party_account".into());
     }
 
-    if labels.is_empty() {
-        ("Не указано".into(), "unknown".into())
+    features
+}
+
+fn feature_label(feature: &str) -> &'static str {
+    match feature {
+        "denuvo" => "Denuvo",
+        "ea_app" => "EA App",
+        "ea_account" => "Аккаунт EA",
+        "ubisoft" => "Ubisoft Connect",
+        "rockstar" => "Rockstar",
+        "steam_drm" => "Steam DRM",
+        "third_party_drm" => "Сторонняя DRM",
+        "third_party_account" => "Сторонний аккаунт",
+        _ => "Другое",
+    }
+}
+
+fn drm_kind(features: &[String]) -> &'static str {
+    if features.iter().any(|feature| feature == "denuvo") {
+        "denuvo"
+    } else if features
+        .iter()
+        .any(|feature| matches!(feature.as_str(), "ea_app" | "ea_account" | "ubisoft" | "rockstar"))
+    {
+        "launcher"
+    } else if features.iter().any(|feature| feature == "steam_drm") {
+        "steam"
+    } else if features.is_empty() {
+        "unknown"
     } else {
-        (labels.join(" + "), kind.into())
+        "third-party"
     }
+}
+
+// Подписи на русском: английский вариант подставляет интерфейс по меткам
+fn drm_label(drm_notice: &str, account_notice: &str) -> (String, String) {
+    let features = drm_features(drm_notice, account_notice);
+    let kind = drm_kind(&features);
+    if features.is_empty() {
+        return ("Не указано".into(), kind.into());
+    }
+    let labels: Vec<&str> = features.iter().map(|feature| feature_label(feature)).collect();
+    (labels.join(" + "), kind.into())
+}
+
+fn drm_notice_text(features: &[String]) -> String {
+    if features.is_empty() {
+        return "Steam не указывает сведения о защите для этой игры.".into();
+    }
+    let mut sentences: Vec<&str> = Vec::new();
+    for feature in features {
+        let sentence = match feature.as_str() {
+            "denuvo" => "В игре используется защита Denuvo.",
+            "ea_app" => "Для запуска требуется приложение EA app.",
+            "ea_account" => "Для запуска требуется аккаунт EA.",
+            "ubisoft" => "Для запуска требуется Ubisoft Connect.",
+            "rockstar" => "Для запуска требуется аккаунт Rockstar Games.",
+            "steam_drm" => "В игре используется защита Steam DRM.",
+            "third_party_drm" => "Steam сообщает о сторонней защите без подробностей.",
+            "third_party_account" => "Для запуска требуется сторонний аккаунт.",
+            _ => "Сведения о защите не уточняются.",
+        };
+        if !sentences.contains(&sentence) {
+            sentences.push(sentence);
+        }
+    }
+    sentences.join(" ")
 }
 
 fn drm_info_inner(appid: u64) -> Result<SteamDrmInfo, String> {
@@ -134,17 +191,14 @@ fn drm_info_inner(appid: u64) -> Result<SteamDrmInfo, String> {
         .unwrap_or("")
         .trim();
     let (label, kind) = drm_label(drm_notice, account_notice);
-    let notice = match (drm_notice.is_empty(), account_notice.is_empty()) {
-        (false, false) => format!("{drm_notice}\n{account_notice}"),
-        (false, true) => drm_notice.to_string(),
-        (true, false) => account_notice.to_string(),
-        (true, true) => "Steam не указывает сведения о защите для этой игры.".into(),
-    };
+    let features = drm_features(drm_notice, account_notice);
+    let notice = drm_notice_text(&features);
     Ok(SteamDrmInfo {
         appid: appid.to_string(),
         label,
         kind,
         notice,
+        features,
         checked_at: unix_time(),
     })
 }
@@ -155,13 +209,22 @@ fn name_cache() -> &'static Mutex<HashMap<u64, String>> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+// Один клиент на процесс: соединения переиспользуются, TLS-рукопожатие
+// выполняется один раз вместо каждого запроса к Steam
+fn http_client() -> &'static Client {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .timeout(Duration::from_secs(10))
+            .user_agent("Mozilla/5.0 CrocodileGenaStudio/3.0")
+            .build()
+            .unwrap_or_else(|_| Client::new())
+    })
+}
+
 fn fetch_json(url: &str) -> Result<Value, String> {
-    Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|error| format!("Не удалось подготовить сетевой клиент: {error}"))?
+    http_client()
         .get(url)
-        .header("User-Agent", "Mozilla/5.0 CrocodileGenaStudio/3.0")
         .send()
         .and_then(|response| response.error_for_status())
         .map_err(|error| format!("Steam Store API не ответил: {error}"))?
@@ -532,7 +595,7 @@ pub fn auto_detect_from_path(game_path: &Path) -> DetectedGame {
 
 #[cfg(test)]
 mod tests {
-    use super::drm_label;
+    use super::{drm_features, drm_label, drm_notice_text};
 
     #[test]
     fn classifies_known_protection_notices() {
@@ -549,5 +612,29 @@ mod tests {
             ("Rockstar".into(), "launcher".into())
         );
         assert_eq!(drm_label("", ""), ("Не указано".into(), "unknown".into()));
+    }
+
+    #[test]
+    fn explains_protection_in_russian_for_the_tooltip() {
+        let features = drm_features(
+            "EA online activation and EA app software installation required.",
+            "EA Account",
+        );
+        assert_eq!(features, vec!["ea_app".to_string()]);
+        assert_eq!(
+            drm_notice_text(&features),
+            "Для запуска требуется приложение EA app."
+        );
+        // Пустые сведения не превращаются в английский текст Steam
+        assert_eq!(
+            drm_notice_text(&[]),
+            "Steam не указывает сведения о защите для этой игры."
+        );
+        let combined = drm_features("Denuvo", "EA Account");
+        assert_eq!(combined, vec!["denuvo".to_string(), "ea_account".to_string()]);
+        assert_eq!(
+            drm_notice_text(&combined),
+            "В игре используется защита Denuvo. Для запуска требуется аккаунт EA."
+        );
     }
 }

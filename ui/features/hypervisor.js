@@ -918,10 +918,16 @@ ${destShort}
       try { await listen("station-event", (event) => handleStationEvent(event.payload ?? event)); }
       catch (error) { appendLog("warning", `События запуска недоступны: ${error}`); }
     }
-    await refreshAll(true);
+    // Список игр и проверка профилей — в простое, чтобы не задерживать запуск
+    const idle = window.requestIdleCallback
+      ? (task) => requestIdleCallback(task, { timeout: 1500 })
+      : (task) => setTimeout(task, 300);
+    idle(() => {
+      refreshAll(true).catch(() => {});
+      call("check_asset_updates").catch((error) => appendLog("warning", `Обновление профилей пропущено: ${error}`));
+    });
     // Возвращаемся к диалогу защит после перезапуска с правами администратора
     await window.cgsHvProtectionResume?.();
-    call("check_asset_updates").catch((error) => appendLog("warning", `Обновление профилей пропущено: ${error}`));
   }
 
   // Данные для быстрого поиска: добавленные игры и выбор игры, как нажатием на карточку

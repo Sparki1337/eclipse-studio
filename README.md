@@ -6,7 +6,7 @@
 
 **Автономный центр управления Steam-библиотекой, дополнениями, сетевыми фиксами и системной средой**
 
-[![Версия](https://img.shields.io/badge/Версия-10.0.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases/latest)
+[![Версия](https://img.shields.io/badge/Версия-10.1.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases/latest)
 [![Платформа](https://img.shields.io/badge/Платформа-Windows_10_|_11_(x64)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
 [![Процессоры](https://img.shields.io/badge/CPU-Поддержка_AVX2-5c6bc0?style=for-the-badge)](#-о-проекте)
 [![Стек](https://img.shields.io/badge/Стек-Rust_Tauri_v2-f74c00?style=for-the-badge&logo=rust&logoColor=white)](https://tauri.app/)
@@ -65,7 +65,7 @@
 * **Автоматическая раскладка**: перемещение `.lua`-скриптов в `config/stplug-in/` и `.manifest` в `depotcache/` без ручных действий.
 * **Встроенный OpenSteamTool (v1 и v2)**: переключение между основной (v0.5.3, 1.58 МБ) и альтернативной версиями загрузчика, поддержка Схемы 2 файловой структуры и автозавершение зависших процессов Steam для предотвращения ошибок занятости файлов (`os error 32`).
 * **Локальное облако (CloudRedirect)**: сохранения игр, добавленных через Lua и манифесты, синхронизируются как облачные, но хранятся в выбранной папке на вашем диске — без Google Drive, OneDrive и регистрации. Включается одним переключателем: программа проверяет совместимость загрузчика OpenSteamTool, делает резервную копию `opensteamtool.toml`, откатывает изменения при ошибке и сама перезапускает Steam. Обычные игры Steam продолжают пользоваться своим облаком.
-* **Плагин для Millennium («Eclipse Manifest» v0.5.3)**: встроенный плагин, добавляющий кнопку «Получить манифест» прямо на страницы игр внутри официального клиента Steam.
+* **Плагин для Millennium («Eclipse Manifest» v5.5.0)**: встроенный плагин, добавляющий кнопку «Получить манифест» прямо на страницы игр внутри официального клиента Steam.
 
 > [!TIP]
 > **Если генератор Ryuu выдаёт ошибку недоступности**: домен `generator.ryuu.lol` часто блокируется сетевой веб-защитой антивирусов (например, ESET Smart Security / NOD32) или провайдерами. Чтобы разрешить доступ, добавьте адрес `*generator.ryuu.lol*` в список разрешённых URL в настройках антивируса, либо переключитесь на альтернативный встроенный сервис **HubCap** прямо в интерфейсе программы.
@@ -134,7 +134,7 @@
 > [!NOTE]
 > **Аппаратные требования**: требуется процессор с поддержкой инструкций **AVX2** (поддерживаются как старые линейки CPU, начиная с Intel Core 4-го поколения Haswell и AMD Zen / Excavator, так и новейшие современные платформы).
 
-1. Перейдите в раздел **[Releases](https://github.com/Sparki1337/eclipse-studio/releases/latest)** и скачайте актуальный файл `Eclipse-Studio-v10.0.0.exe`.
+1. Перейдите в раздел **[Releases](https://github.com/Sparki1337/eclipse-studio/releases/latest)** и скачайте актуальный файл `Eclipse-Studio-v10.1.0.exe`.
 2. Поместите исполняемый файл в любую удобную папку (установка не требуется).
 3. Запустите приложение (для доступа к функциям VBS, Test Mode и реестру Steam рекомендуется запуск от имени администратора).
 
@@ -202,6 +202,6 @@ eclipse-studio/
 
 <div align="center">
 
-**Eclipse Studio v10.0.0** • 2026
+**Eclipse Studio v10.1.0** • 2026
 
 </div>

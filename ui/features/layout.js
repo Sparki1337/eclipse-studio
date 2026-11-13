@@ -5,8 +5,10 @@
   const root = document.documentElement;
   const SIDEBAR_KEY = "cgs-sidebar-dock";
   const SEARCH_KEY = "cgs-search-dock";
+  const SEARCH_WIDTH_KEY = "cgs-search-width";
   const SIDEBAR_DOCKS = ["left", "right", "top", "bottom"];
   const SEARCH_DOCKS = ["left", "center", "right"];
+  const SEARCH_WIDTHS = ["compact", "normal", "wide"];
   const LABELS = { left: "Слева", right: "Справа", top: "Сверху", bottom: "Снизу", center: "По центру" };
   // Сдвиг указателя, после которого нажатие считается перетаскиванием, а не щелчком
   const DRAG_THRESHOLD = 8;
@@ -20,6 +22,14 @@
     try { window.cgsStorage.setItem(key, value); } catch (_) {}
   };
 
+  // Одноразовая чистка после возврата к трём позициям: нестандартное значение
+  // (край окна из старой системы) заменяется на «По центру», лишний ключ убирается
+  (function cleanupSearchStorage() {
+    const stored = read(SEARCH_KEY, null);
+    if (stored === null || !SEARCH_DOCKS.includes(stored)) write(SEARCH_KEY, "center");
+    try { window.cgsStorage.removeItem?.("cgs-search-align"); } catch (_) {}
+  })();
+
   // Отсутствующий или неизвестный ключ даёт прежнюю раскладку: рейка слева, поиск по центру
   const sidebarDock = () => {
     const value = read(SIDEBAR_KEY, "left");
@@ -29,7 +39,13 @@
     const value = read(SEARCH_KEY, "center");
     return SEARCH_DOCKS.includes(value) ? value : "center";
   };
+  const searchWidth = () => {
+    const value = read(SEARCH_WIDTH_KEY, "normal");
+    return SEARCH_WIDTHS.includes(value) ? value : "normal";
+  };
   const isHorizontal = (dock) => dock === "top" || dock === "bottom";
+  // Прямое редактирование (перетаскивание рейки и строки поиска) разрешено только в режиме «На лету»
+  const liveEdit = () => root.classList.contains("sidebar-live-edit");
 
   function syncButtons() {
     const side = sidebarDock();
@@ -44,6 +60,12 @@
       button.classList.toggle("active", on);
       button.setAttribute("aria-pressed", String(on));
     });
+    const size = searchWidth();
+    $$("[data-search-width]").forEach((button) => {
+      const on = button.dataset.searchWidth === size;
+      button.classList.toggle("active", on);
+      button.setAttribute("aria-pressed", String(on));
+    });
   }
 
   function setSidebarClasses(dock) {
@@ -54,6 +76,12 @@
   function setSearchClasses(dock) {
     root.classList.toggle("search-dock-left", dock === "left");
     root.classList.toggle("search-dock-right", dock === "right");
+  }
+
+  // Размер строки поиска: обычный — базовый, компактный и широкий — модификаторы
+  function setSearchSizeClasses(width) {
+    root.classList.toggle("search-size-compact", width === "compact");
+    root.classList.toggle("search-size-wide", width === "wide");
   }
 
   // Плавная смена раскладки; без анимаций (или без View Transitions) — мгновенно
@@ -98,6 +126,14 @@
       setSearchClasses(value);
       syncButtons();
     }, animate);
+    notify();
+  }
+
+  function applySearchWidth(width, { save = true } = {}) {
+    const value = SEARCH_WIDTHS.includes(width) ? width : "normal";
+    if (save) write(SEARCH_WIDTH_KEY, value);
+    setSearchSizeClasses(value);
+    syncButtons();
     notify();
   }
 
@@ -167,9 +203,24 @@
   function bindRailDrag() {
     const sidebar = $(".sidebar");
     if (!sidebar) return;
+    const nav = $(".navigation", sidebar);
+
+    // Подсказка о перетаскивании показывается только в режиме редактирования «На лету»
+    const RAIL_HINT = "В режиме «На лету»: перетащите за свободное место, чтобы переместить панель";
+    const syncRailHint = () => {
+      if (!nav) return;
+      if (liveEdit()) nav.setAttribute("title", RAIL_HINT);
+      else nav.removeAttribute("title");
+    };
+    syncRailHint();
+    new MutationObserver(syncRailHint).observe(root, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
 
     sidebar.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0 || event.target.closest(".nav-item, .sidebar-resizer, button, a, input, select, textarea")) return;
+      // Рейку можно переставлять только в режиме редактирования «На лету»
+      if (event.button !== 0 || !liveEdit() || event.target.closest(".nav-item, .sidebar-resizer, button, a, input, select, textarea")) return;
       const startX = event.clientX;
       const startY = event.clientY;
       const current = sidebarDock();
@@ -228,7 +279,6 @@
     });
 
     // Колесо мыши прокручивает горизонтальную рейку, если пункты не помещаются
-    const nav = $(".navigation", sidebar);
     nav?.addEventListener("wheel", (event) => {
       if (!root.classList.contains("sidebar-horizontal") || nav.scrollWidth <= nav.clientWidth + 1) return;
       if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
@@ -283,7 +333,8 @@
     }, true);
 
     trigger.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0) return;
+      // Строку поиска можно переставлять только в режиме редактирования «На лету»
+      if (event.button !== 0 || !liveEdit()) return;
       const startX = event.clientX;
       const current = searchDock();
       let target = current;
@@ -371,11 +422,17 @@
         if (button.dataset.searchDock !== searchDock()) applySearchDock(button.dataset.searchDock, { animate: true });
       });
     });
+    $$("[data-search-width]").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.searchWidth !== searchWidth()) applySearchWidth(button.dataset.searchWidth);
+      });
+    });
   }
 
   // bootstrap.js уже расставил классы до первой отрисовки; здесь — то же из сохранённых значений
   setSidebarClasses(sidebarDock());
   setSearchClasses(searchDock());
+  setSearchSizeClasses(searchWidth());
   syncButtons();
   bindSettings();
   bindRailDrag();
@@ -384,7 +441,9 @@
   window.cgsLayout = {
     sidebarDock,
     searchDock,
+    searchWidth,
     applySidebarDock,
     applySearchDock,
+    applySearchWidth,
   };
 })();

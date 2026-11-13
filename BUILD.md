@@ -129,7 +129,7 @@ src-tauri/resources/local-cloud/
 python scripts/bump_version.py
 
 # Или передача версии аргументом:
-python scripts/bump_version.py 10.0.0
+python scripts/bump_version.py 10.1.0
 ```
 Скрипт автоматически:
 * Обновляет `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, `package.json` и `package-lock.json`.
@@ -272,7 +272,7 @@ npm test
 ---
 
 <div align="center">
-  <sub>Eclipse Studio v10.0.0 • Инструкция по сборке</sub>
+  <sub>Eclipse Studio v10.1.0 • Инструкция по сборке</sub>
 </div>
 
 ## Проверки перед portable-сборкой
@@ -280,6 +280,8 @@ npm test
 `npm run quality` запускает контракты, регрессии сохранения состояния, UI, CSP, проверки потокового скачивания с лимитом 64 MiB, DPAPI и файловых транзакций на временных данных Windows, typecheck плагина, Rust tests, rustfmt и clippy. UEFI проверяется чистой моделью транзакции, EFI-фикстурами во временных каталогах и моками BCD WMI. Ничего не меняет в рабочем Steam/BCD/реестре.
 
 `npm run build` и `python scripts/build.py --type portable` сначала выполняют quality gate. Прямая release-сборка Cargo также отказывается вшивать Dist, не соответствующий исходникам и lock-файлу. Сборка плагина: `npm run build:plugin`.
+
+Карта целостности плагина версии 2 нормализует CRLF → LF только для перечисленных текстовых входов и JS-bundle. Поэтому checkout с другими переводами строк не считается изменением содержимого. Для бинарных ресурсов такой нормализации нет. После реального изменения исходников сначала пересоберите изменённый компонент, затем обновляйте карту; одна перезапись ожидаемых хешей не заменяет сборку.
 
 ### Миграция состояния плагина и совместимость отката
 

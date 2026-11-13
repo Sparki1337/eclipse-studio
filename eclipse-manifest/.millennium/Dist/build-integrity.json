@@ -1,26 +1,29 @@
 {
-  "schema": 1,
+  "schema": 2,
   "algorithm": "SHA-256",
+  "textNormalization": "LF",
   "sources": {
-    "frontend/index.tsx": "a3551b603df934da33979b6da28d4ddab4b23ac9cf5936b6b5abd04b65e48e48",
-    "webkit/index.tsx": "219a186d2caf97a5dfbc9ffcacfab1a2272fd5d9d79f4ce80331dc3d36bb95a7",
-    "backend/main.lua": "842dbfa5f7b8f3c42a5d135b1f361f83f2bd681a0bbf08bbe20716a8240c761d",
+    "frontend/index.tsx": "4543645c0da24534f458e516071beaa5d1759a5ab95269822746a1c1140a361b",
+    "webkit/index.tsx": "c32ecc164d22562f9f48cb602b9be8f4d86b9b67e50e2504fa066d5c2541bc40",
+    "backend/main.lua": "d35c62215891d06a749994831942744bb6e15850a5e2beb9adba33a79ce0cadf",
     "backend/safe-io.ps1": "61a658312f07b91ecb3890848bbcc631ee7073402192f55d9970f25e244bc23d",
-    "backend/state-store.ps1": "7c85390ebea83d3cd446237f92b6f65d2be9ed0def70148d3c0db96b507889e7",
+    "backend/state-store.ps1": "52544d825a1b9e57573aab92f4a71c03707a6f7f57a25ab1e44b8d780902d724",
     "backend/file-transaction.ps1": "e6b20768b1a04f1933e909225125feff3fb9cd7ac8957e8962229276b5225c28",
-    "backend/download-package.ps1": "ebbfcf6b77a886867c721bab24e03f2e69d6cc20b7b1ab9320f6a6bf01732c81",
+    "backend/download-package.ps1": "eefec1f943898f28c5291419e56413ca7db1198e92e4d5324f6b46eab5931a65",
     "backend/install-loader.ps1": "8ffd61ea6a0266e3937029bc17b64a1bcb1ede8ab5012fbb75522cfb8e0c0ef3",
     "tsconfig.json": "043dd5ccb9530d62a1ed7bdc4d46c59ae3b15c4eec5f3b45245e2d3301b6a8ac",
     "frontend/tsconfig.json": "2363b7d4bc75c951ce19eeaebb0b08e3aace450ee70f3ddbe5784834eac7d5cc",
     "webkit/tsconfig.json": "a367eb0bfd575494d157c3f7515ebee79c5a94ad59c20e3858a469591630e923",
-    "package.json": "a648e73f4f72355106aff98e7fe91181e2fef1b963bfcaafd423955f96846f27",
+    "package.json": "ec5e11cce96023fc658dd49d89ca9a0dbb9c724851c58d5e208f9c4651b12982",
     ".npmrc": "6d55db7155e0291a54a482e15c9c1d44fd63c8aacb58536629ebe74f068ae9d6",
-    "package-lock.json": "e8e549525153826b0b51bda23b2f53d7d306625af2aa6e9f790f01cf4483b5ed",
-    "plugin.json": "acfe694a0c4c1216fa053223e8d5002ea86a505a98eaaad54cf8daa2b251561c",
-    "../scripts/check-deepmerge.cjs": "61397c8bf59e45229375610f2e271030a4c82854742a7f0486d08f88dd6cb16a"
+    "package-lock.json": "aefcae2308abe8704521e015323b55f8c6967f1eebbe04c80bbf47475423d0cc",
+    "plugin.json": "b2c82a2e8c0d8efb2ea6bdc34f044375ca38baabaefca777ae16e998ef27d965",
+    "../scripts/check-deepmerge.cjs": "61397c8bf59e45229375610f2e271030a4c82854742a7f0486d08f88dd6cb16a",
+    "../scripts/plugin-integrity.cjs": "c4b35ad7fae472abd08c59c9d81e783a12f4d52e6849c5736d84cd36ce0a69f7",
+    "../.gitattributes": "add1df9cdae66b43ebc9cecd29f22611d78779f57dee6438ab0ec7f3ffe17d38"
   },
   "outputs": {
-    ".millennium/Dist/index.js": "59dd4d406b802ee9edbdfe398662ecae0bbdbbeed973d96616914f466aeaa1b0",
-    ".millennium/Dist/webkit.js": "039be13a072998d69249fc82b66ec87c3c6c11aa7a8bf933035fd07324dc7dd5"
+    ".millennium/Dist/index.js": "44b4eb6e73f58e6c6aaadca0e2622411f9f2da97bb39fbeda18cfcfe4e67d545",
+    ".millennium/Dist/webkit.js": "0bf597dee96eebc28993f91b4841c796bd20a76d768d66c4c964481a824ae140"
   }
 }

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory=$true)][ValidateSet('Read', 'Write')][string]$Action,
-    [string]$StateRoot = '', [string]$LegacyRoot = '', [string]$ReplyPath = ''
+    [string]$StateRoot = '', [string]$LegacyRoot = '', [string]$ReplyPath = '', [string]$RequestPath = ''
 )
 . (Join-Path $PSScriptRoot 'safe-io.ps1')
 Add-Type -AssemblyName System.Security
@@ -53,10 +53,12 @@ try {
             foreach ($old in $legacy) { [IO.File]::Delete($old) }
             $result = @{ success = $true; exists = $true; revision = (Get-HashFile $path); state = $loaded.state }
         } else { $result = @{ success = $true; exists = $false; revision = 'absent' } }
-        [Console]::Write((ConvertTo-Json -InputObject $result -Depth 48 -Compress))
+        $json = ConvertTo-Json -InputObject $result -Depth 48 -Compress
+        if ($ReplyPath) { Write-Json $ReplyPath $result }
+        [Console]::Write($json)
     } else {
         if (!$ReplyPath) { throw 'Write acknowledgement path required' }
-        $text = [Console]::In.ReadToEnd()
+        $text = if ($RequestPath) { [IO.File]::ReadAllText($RequestPath, $script:Utf8) } else { [Console]::In.ReadToEnd() }
         if ($text.Length -gt 16777216) { throw 'State input too large' }
         $request = Parse-Json $text
         $current = if ([IO.File]::Exists($path)) { Get-HashFile $path } else { 'absent' }
@@ -71,6 +73,8 @@ try {
     # Never print state, input JSON or secret values, including on parse failures.
     if ($Action -eq 'Write' -and $ReplyPath) {
         try { Write-Json $ReplyPath @{ success = $false; message = 'State update was not acknowledged. Reload before retry; state was not reset.' } } catch {}
+    } elseif ($ReplyPath) {
+        try { Write-Json $ReplyPath @{ success = $false; message = 'State is unreadable or corrupt; it was not reset.' } } catch {}
     } else { [Console]::Write('{"success":false,"message":"State is unreadable or corrupt; it was not reset."}') }
     exit 1
 } finally { if ($null -ne $mutex) { $mutex.ReleaseMutex(); $mutex.Dispose() } }

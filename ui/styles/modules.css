@@ -2352,6 +2352,11 @@ html[data-theme="oled"] .files-sort-item.active::before {
   .local-cloud-path > button { width: 100%; }
 }
 
+/* ── Патч appcache: окно первого запуска новой версии */
+.steam-patch-modal { width: min(470px, calc(100vw - 40px)); }
+.steam-patch-modal h3 { margin-bottom: 8px; }
+.steam-patch-modal p { margin-bottom: 18px; }
+
 /* ── Окно обновления DLL локального облака: текст слева, действия внизу */
 .modal.lc-update-modal { width: min(560px, calc(100vw - 40px)); padding: 30px; text-align: left; align-items: flex-start; overflow-y: auto; }
 .lc-update-modal .coming-label { margin-bottom: 6px; }

@@ -10,7 +10,7 @@ local HUBCAP_BASE = "https://hubcapmanifest.com/api/v1"
 local USER_AGENT =
 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 local HISTORY_LIMIT = 50
-local REMOTE_VERSION_TTL = 15
+local REMOTE_VERSION_TTL = 60
 local HUBCAP_USAGE_TTL = 15
 local version_cache = {}
 local hubcap_usage_cache = nil
@@ -60,6 +60,18 @@ end
 -- Значения ключей идут только через приватный stdin/stdout PowerShell, не через
 -- аргументы, временный JSON, логи или localStorage. DPAPI привязан к пользователю.
 local state_revisions = setmetatable({}, { __mode = "k" })
+-- Millennium роняет backend на логах с многобайтовыми символами и на длинных
+-- сообщениях, поэтому в лог уходит только короткий ASCII-текст.
+local function log_text(value)
+    local message = tostring(value or ""):gsub("[^ -~]", " "):gsub("%s+", " ")
+    if #message > 100 then message = message:sub(1, 100) end
+    return message
+end
+local log = {
+    info = function(message) logger:info(log_text(message)) end,
+    error = function(message) logger:error(log_text(message)) end
+}
+local state_ok = false
 local function shell_path(path)
     local value = tostring(path or "")
     if value == "" or value:find('["%%\r\n]') then error("Недопустимый путь PowerShell") end
@@ -71,7 +83,11 @@ local function helper_command(name)
     local executable = fs.join(system_root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
     local script = fs.join(millennium.steam_path(), "millennium", "plugins", "eclipse-manifest", "backend", name)
     if not fs.is_file(script) then error("Компонент безопасного хранения не установлен: обновите плагин") end
-    return shell_path(executable) .. " -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File " .. shell_path(script)
+    -- Путь powershell.exe не заключается в кавычки: cmd.exe при нескольких
+    -- кавычках в строке срезает первый и последний символ и ломает команду,
+    -- из-за чего помощник падал с синтаксической ошибкой.
+    if executable:find(" ") then error("Недопустимый путь PowerShell") end
+    return executable .. " -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File " .. shell_path(script)
 end
 
 local function ipc_directory()
@@ -105,20 +121,25 @@ local function file_transaction(action, request)
     return true, result
 end
 
--- Stream packages with a hard byte budget and cancellable deadline. Credentials
--- use stdin only; the acknowledgement contains no private headers or response body.
+-- Пакеты скачиваются потоком с жёстким лимитом байт и общим дедлайном.
+-- io.popen в процессе плагина небезопасен, поэтому запрос передаётся файлом
+-- UTF-8 с немедленным удалением, а ответ приходит в файл-квитанцию.
 local function download_package(url, output, headers, timeout)
-    local acknowledgement = fs.join(ipc_directory(), utils.uuid() .. ".download-reply.json")
+    local token = utils.uuid()
+    local directory = ipc_directory()
+    local request = fs.join(directory, token .. ".download-request.json")
+    local acknowledgement = fs.join(directory, token .. ".download-reply.json")
+    local written, write_error = write_binary(request, json.encode({ url = url, headers = headers }))
+    if not written then return nil, "Не удалось подготовить скачивание: " .. tostring(write_error) end
     local command = helper_command("download-package.ps1") .. " -OutputFile " .. shell_path(output) ..
-        " -ReplyFile " .. shell_path(acknowledgement) .. " -TimeoutSeconds " .. tostring(timeout) .. " 2>NUL"
-    local pipe = io.popen(command, "w")
-    if not pipe then return nil, "Не удалось запустить безопасное скачивание" end
-    local wrote = pcall(function() pipe:write(json.encode({ url = url, headers = headers })) end)
-    pipe:close()
+        " -ReplyFile " .. shell_path(acknowledgement) .. " -RequestPath " .. shell_path(request) ..
+        " -TimeoutSeconds " .. tostring(timeout) .. " 2>NUL"
+    pcall(utils.exec, command)
+    if fs.is_file(request) then fs.remove(request) end
     local content = read_binary(acknowledgement)
     if fs.is_file(acknowledgement) then fs.remove(acknowledgement) end
     local ok, result = pcall(json.decode, tostring(content or ""))
-    if not wrote or not ok or type(result) ~= "table" then return nil, "Скачивание не подтверждено" end
+    if not ok or type(result) ~= "table" then return nil, "Скачивание не подтверждено" end
     return result
 end
 
@@ -141,15 +162,36 @@ local function default_state()
     }
 end
 
+-- Ответ помощника читается из файла UTF-8: консольная кодировка процесса
+-- плагина портит кириллицу, а io.popen роняет backend.
+local function read_state_once()
+    local ok, result = pcall(function()
+        local reply = fs.join(ipc_directory(), utils.uuid() .. ".state-reply.json")
+        local command = helper_command("state-store.ps1") .. " -Action Read -ReplyPath " .. shell_path(reply) .. " 2>&1"
+        local output, status = utils.exec(command)
+        local content = read_binary(reply)
+        if not content or #tostring(content) == 0 then content = tostring(output or "") end
+        if fs.is_file(reply) then fs.remove(reply) end
+        local decoded_ok, decoded = pcall(json.decode, tostring(content or ""))
+        if not decoded_ok or type(decoded) ~= "table" then
+            error("помощник вернул код " .. tostring(status) .. ": " .. log_text(tostring(output or "")):sub(1, 90))
+        end
+        if decoded.success ~= true then
+            error("помощник отклонил чтение: " .. tostring(decoded.message or ""))
+        end
+        return decoded
+    end)
+    if not ok then return nil, tostring(result) end
+    return result
+end
+
 local function load_state()
-    if not io or type(io.popen) ~= "function" then error("Защищённое хранилище недоступно; состояние не изменено") end
-    local pipe = io.popen(helper_command("state-store.ps1") .. " -Action Read 2>NUL", "r")
-    if not pipe then error("Не удалось открыть защищённое хранилище") end
-    local content = pipe:read("*a")
-    pipe:close()
-    local ok, result = pcall(json.decode, tostring(content or ""))
-    if not ok or type(result) ~= "table" or result.success ~= true then
-        error("Состояние плагина не читается или повреждено. Оно сохранено без сброса; новые изменения запрещены.")
+    local result = read_state_once()
+    if not result then
+        -- Хранилище недоступно: работаем без записи, но загрузка плагина
+        -- завершается штатно (аварийная ветка Millennium роняет backend).
+        log.error("state unavailable, storage disabled")
+        return default_state()
     end
     local decoded = result.exists and result.state or default_state()
     if type(decoded) ~= "table" or type(result.revision) ~= "string" then error("Некорректное подтверждение состояния") end
@@ -168,17 +210,21 @@ local function load_state()
     if decoded.service ~= "ryuu" and decoded.service ~= "hubcap" then decoded.service = "ryuu" end
     decoded.compactMode = nil
     state_revisions[decoded] = result.revision
+    state_ok = true
     return decoded
 end
 
 local function save_state(state)
     local revision = state_revisions[state]
     if not revision then return false, "Неподтверждённое состояние: сначала перечитайте настройки" end
-    local output = fs.join(ipc_directory(), utils.uuid() .. ".reply.json")
-    local pipe = io.popen(helper_command("state-store.ps1") .. " -Action Write -ReplyPath " .. shell_path(output) .. " 2>NUL", "w")
-    if not pipe then return false, "Не удалось открыть защищённую запись" end
-    local written = pcall(function() pipe:write(json.encode({ revision = revision, state = state })) end)
-    pipe:close()
+    local token = utils.uuid()
+    local request = fs.join(ipc_directory(), token .. ".state-request.json")
+    local output = fs.join(ipc_directory(), token .. ".reply.json")
+    local written, write_error = write_binary(request, json.encode({ revision = revision, state = state }))
+    if not written then return false, "Не удалось подготовить запись: " .. tostring(write_error) end
+    pcall(utils.exec, helper_command("state-store.ps1") .. " -Action Write -ReplyPath " .. shell_path(output) ..
+        " -RequestPath " .. shell_path(request) .. " 2>NUL")
+    if fs.is_file(request) then fs.remove(request) end
     local content = read_binary(output)
     if fs.is_file(output) then fs.remove(output) end
     local ok, result = pcall(json.decode, tostring(content or ""))
@@ -225,7 +271,7 @@ local function add_history(appid, name, status, message, extra)
     end
     local ok, err = save_state(state)
     if not ok then
-        logger:error("Не удалось сохранить историю плагина")
+        log.error("history save failed")
     end
     return ok, err
 end
@@ -486,16 +532,10 @@ local function run_powershell(script_path, success_marker)
     return false, detail
 end
 
+-- Пины setManifestid сохраняются: Steam больше не выдаёт коды запроса манифестов
+-- для неприобретённых игр, поэтому Lua должен ссылаться на установленные GID.
 local function patch_lua(content)
-    content = content:gsub("\r\n", "\n"):gsub("\r", "\n")
-    local output = {}
-    for line in (content .. "\n"):gmatch("(.-)\n") do
-        if line:match("^%s*setManifestid") then
-            line = "--" .. line
-        end
-        table.insert(output, line)
-    end
-    return table.concat(output, "\n")
+    return (content:gsub("\r\n", "\n"):gsub("\r", "\n"))
 end
 
 local function legacy_manifests_match(appid, service, key, installed_game)
@@ -685,10 +725,10 @@ function install_manifest(appid, name)
         })
     end
 
-    logger:info("Eclipse Manifest is downloading data for AppID " .. clean .. " via " .. service)
+    log.info("Eclipse Manifest is downloading data for AppID " .. clean .. " via " .. service)
     local ok, message, extra = install_package(clean, service, key)
     if not ok then
-        logger:error(message)
+        log.error(message)
         add_history(clean, game_name, "error", message)
         return reply(false, message, {
             service = service,
@@ -699,7 +739,7 @@ function install_manifest(appid, name)
     extra.pendingRestart = not repairing
     local saved, save_err = add_history(clean, game_name, "success", message, extra)
     if not saved then return reply(false, "Файлы установлены, но история не сохранена. Журнал владения сохранён; повторите действие: " .. tostring(save_err), extra) end
-    logger:info("Eclipse Manifest installed data for AppID " .. clean)
+    log.info("Eclipse Manifest installed data for AppID " .. clean)
     extra.configured = true
     return reply(true, message, extra)
 end
@@ -732,8 +772,8 @@ function get_game_status(appid)
         elseif latest and latest.status == "success" and latest.pendingRestart == true then
             game_state = "pending_restart"
         else
-            -- Запрос актуальной версии пакета
-            local remote_version = fetch_remote_version(clean, true, service, key)
+            -- Запрос актуальной версии пакета (кеш TTL, без принудительного обхода)
+            local remote_version = fetch_remote_version(clean, false, service, key)
             local installed_version = tostring(state.installedVersions[clean] or "")
             local trusted_version = type(installed_game) == "table"
                 and tostring(installed_game.packageVersion or "") or ""
@@ -1067,33 +1107,70 @@ function restart_steam()
     return reply(true, "Steam перезапускается")
 end
 
-local function on_load()
-    local state = load_state()
-    local changed = false
-    for _, entry in ipairs(state.history) do
-        if entry.pendingRestart == true then
-            entry.pendingRestart = false
-            changed = true
-        end
-    end
-    if changed then
-        local saved = save_state(state)
-        if not saved then logger:error("Eclipse Manifest: отметка перезапуска не сохранена; состояние не сброшено") end
-    end
+-- После старта Steam OST подхватывает Lua при изменении файлов: перезапись
+-- тем же содержимым запускает переинжект пакетов до первой установки игры,
+-- иначе Steam строит план загрузки с нулём депотов и показывает 0 байт.
+local function touch_lua_files()
     local steam_path = millennium.steam_path()
-    if steam_path and steam_path ~= "" then
-        for appid, installed_game in pairs(state.installedGames) do
-            local latest = latest_history(state, tostring(appid))
-            local manifest_files = recorded_manifest_files(steam_path, tostring(appid), installed_game, latest)
-            sync_manifest_cache(steam_path, tostring(appid), manifest_files)
+    if not steam_path or steam_path == "" then return 0 end
+    local touched = 0
+    for _, relative in ipairs({ "config/lua", "config/stplug-in" }) do
+        local directory = fs.join(steam_path, relative)
+        if fs.is_directory(directory) then
+            local listed, entries = pcall(fs.list_recursive, directory)
+            if listed and entries then
+                for _, entry in ipairs(entries) do
+                    if entry.is_file and tostring(entry.path):lower():match("%.lua$") then
+                        local content = utils.read_file(entry.path)
+                        if content and #content > 0 and #content < 2 * 1024 * 1024 then
+                            if pcall(utils.write_file, entry.path, content) then
+                                touched = touched + 1
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
-    logger:info("Eclipse Manifest loaded")
+    return touched
+end
+
+-- Загрузка не должна ронять процесс плагина: ошибка состояния или помощника
+-- только логируется, а Millennium всё равно получает ready.
+local function on_load()
+    local ok, err = pcall(function()
+        local state = load_state()
+        local changed = false
+        for _, entry in ipairs(state.history) do
+            if entry.pendingRestart == true then
+                entry.pendingRestart = false
+                changed = true
+            end
+        end
+        if changed then
+            local saved = save_state(state)
+            if not saved then log.error("restart flag not saved") end
+        end
+        local steam_path = millennium.steam_path()
+        if steam_path and steam_path ~= "" then
+            for appid, installed_game in pairs(state.installedGames) do
+                local latest = latest_history(state, tostring(appid))
+                local manifest_files = recorded_manifest_files(steam_path, tostring(appid), installed_game, latest)
+                sync_manifest_cache(steam_path, tostring(appid), manifest_files)
+            end
+        end
+        local touched = touch_lua_files()
+        if touched > 0 then log.info("Eclipse Manifest: lua reloaded, files=" .. touched) end
+        log.info("Eclipse Manifest loaded, state=" .. (state_ok and "ok" or "fail"))
+    end)
+    if not ok then
+        log.error("Eclipse Manifest: load aborted, data kept: " .. tostring(err))
+    end
     millennium.ready()
 end
 
 local function on_unload()
-    logger:info("Eclipse Manifest unloaded")
+    log.info("Eclipse Manifest unloaded")
 end
 
 -- Ошибки чтения/миграции не превращаются в запись пустого состояния.
@@ -1103,7 +1180,7 @@ for _, name in ipairs({ "install_manifest", "get_game_status", "restore_manifest
     _G[name] = function(...)
         local ok, result = pcall(action, ...)
         if not ok then
-            logger:error("Eclipse Manifest: операция остановлена; сохранённые данные не сброшены")
+            log.error("Eclipse Manifest: operation aborted, state kept")
             return reply(false, "Операция остановлена: состояние или безопасный помощник недоступны. Данные не сброшены. Обновите плагин и проверьте хранилище.")
         end
         return result

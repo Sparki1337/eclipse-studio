@@ -25,6 +25,20 @@
     steamPath: "C:\\Program Files (x86)\\Steam", componentVersion: "1.0.0", componentOutdated: false,
     ...(config.localCloud || {}),
   };
+  // Патч appcache: состояние и список файлов живут в sessionStorage между вызовами
+  const steamPatchKey = "__steam_patch_state";
+  const steamPatchFiles = (state) => [
+    { name: "appinfo.vdf", exists: true, size: state === "stock" ? 4096 : 0, readonly: state !== "stock", patched: state === "patched" || state === "partial" },
+    { name: "packageinfo.vdf", exists: true, size: state === "patched" ? 0 : 2048, readonly: state === "patched", patched: state === "patched" },
+  ];
+  const steamPatchStatus = (state, extra = {}) => ({
+    steamPath: "C:\\Program Files (x86)\\Steam", appcacheFound: true, state, files: steamPatchFiles(state),
+    backupAvailable: false, backupAt: null, canApply: state !== "patched", canRestore: state === "patched" || state === "partial",
+    ...extra,
+  });
+  const savedSteamPatch = () => JSON.parse(sessionStorage.getItem(steamPatchKey) || "null");
+  const currentSteamPatch = () => savedSteamPatch() || steamPatchStatus(config.steamPatch?.state || "stock");
+
   window.__mockEmit = (name, payload) => (listeners[name] || []).forEach(handler => handler({ payload }));
   const defaults = {
     state_bootstrap: ({legacy}) => {
@@ -85,7 +99,7 @@
     files_pause_download: () => {window.__pendingDownload?.reject("Загрузка приостановлена; проверенные сегменты сохранены для докачки");return true;},
     files_cancel_download: () => {window.__pendingDownload?.reject("Загрузка отменена");return true;},
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "10.0.0", latest_version: "10.0.0", currentVersion: "10.0.0", latestVersion: "10.0.0" }),
+    check_for_update: () => ({ available: false, current_version: "10.1.0", latest_version: "10.1.0", currentVersion: "10.1.0", latestVersion: "10.1.0" }),
     platform_info: () => ({ os: "windows", windows: true, windowsOnlyModules: [], sessionId: config.sessionId || "test-session" }),
     update_launch_ready: () => config.launchOutcome ?? null,
     // Установка обновления: с installPending остаётся ожидающей, ход задаётся через __mockEmit
@@ -121,9 +135,29 @@
       return next;
     },
     cleanup_old_app_versions: () => 0,
+    steam_patch_status: () => currentSteamPatch(),
+    steam_patch_apply: () => {
+      if (config.steamPatchApplyError) throw config.steamPatchApplyError;
+      const next = steamPatchStatus("patched", { backupAvailable: true, backupAt: 1762000000, canApply: false, canRestore: true });
+      sessionStorage.setItem(steamPatchKey, JSON.stringify(next));
+      return { status: next, usedBackup: true, steamRestarted: false };
+    },
+    steam_patch_restore: () => {
+      if (config.steamPatchRestoreError) throw config.steamPatchRestoreError;
+      const before = currentSteamPatch();
+      const next = steamPatchStatus("stock");
+      sessionStorage.setItem(steamPatchKey, JSON.stringify(next));
+      return { status: next, usedBackup: Boolean(before.backupAvailable), steamRestarted: false };
+    },
     luatools_restore_manifests: () => null,
     luatools_detect_steam: () => "C:\\Program Files (x86)\\Steam",
-    luatools_status: () => ({ games: [], steamPath: "C:\\Program Files (x86)\\Steam" }),
+    // Сторонние добавления приходят в списке только при includeExternal
+    luatools_status: (args = {}) => ({
+      games: [],
+      externalCount: 0,
+      steamPath: "C:\\Program Files (x86)\\Steam",
+      includeExternal: Boolean(args.includeExternal),
+    }),
     luatools_names: () => ({}),
     luatools_headers: () => ({}),
     luatools_get_loader_info: () => ({
@@ -185,6 +219,8 @@
     luatools_update_loader: () => ({ success: true, message: "Библиотеки OpenSteamTool успешно обновлены" }),
     game_artwork_store_url: () => null,
     millennium_plugin_status: () => ({ installed: false, millenniumInstalled: false }),
+    perf_mode_enabled: () => false,
+    perf_log: () => null,
     ryuu_usage: () => ({ dailyUsage: 0, dailyLimit: 50, remaining: 50 }),
     hubcap_usage: () => ({ used: 3, limit: 25, remaining: 22 }),
     list_games: () => [], get_app_status: () => ({}), check_asset_updates: () => ({}),
@@ -323,7 +359,11 @@
     if (missing.has(command) || (registered.size && !registered.has(command))) {
       throw `Command ${command} not found`;
     }
-    if (Object.hasOwn(config.responses || {}, command)) return config.responses[command];
+    if (Object.hasOwn(config.responses || {}, command)) {
+      // Ответ может быть функцией: так тест отвечает по аргументам запроса
+      const override = config.responses[command];
+      return typeof override === "function" ? override(args) : override;
+    }
     if (responses[command]) return responses[command](args);
     throw `mock: нет ответа для ${command}`;
   }

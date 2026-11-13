@@ -147,10 +147,32 @@ fn base_headers() -> reqwest::header::HeaderMap {
     headers
 }
 
+fn same_request_origin(initial: &reqwest::Url, target: &reqwest::Url) -> bool {
+    initial.scheme() == "https"
+        && target.scheme() == "https"
+        && initial.host_str() == target.host_str()
+        && initial.port_or_known_default() == target.port_or_known_default()
+}
+
 fn build_client(resolve_to: Option<IpAddr>) -> Result<Client, String> {
     let mut builder = Client::builder()
         .user_agent(USER_AGENT)
         .default_headers(base_headers())
+        .https_only(true)
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 5 {
+                return attempt.error("Превышен предел перенаправлений");
+            }
+            let same_origin = attempt
+                .previous()
+                .first()
+                .is_some_and(|initial| same_request_origin(initial, attempt.url()));
+            if same_origin {
+                attempt.follow()
+            } else {
+                attempt.error("Внешнее перенаправление отклонено: секретный заголовок не передан")
+            }
+        }))
         .timeout(Duration::from_secs(90));
     if let Some(ip) = resolve_to {
         builder = builder.resolve(HOST, SocketAddr::new(ip, 443));
@@ -593,4 +615,25 @@ fn ryuu_usage_blocking(app: AppHandle, api_key: String) -> Result<RyuuUsage, Str
         daily_limit: stored.daily_limit,
         remaining,
     })
+}
+
+#[cfg(test)]
+mod redirect_tests {
+    use super::*;
+
+    #[test]
+    fn secret_requests_only_follow_the_initial_https_origin() {
+        let initial = reqwest::Url::parse("https://example.invalid/api/start").unwrap();
+        let same = reqwest::Url::parse("https://example.invalid:443/api/result").unwrap();
+        assert!(same_request_origin(&initial, &same));
+        for target in [
+            "http://example.invalid/api/result",
+            "https://other.invalid/api/result",
+            "https://example.invalid:8443/api/result",
+            "https://sub.example.invalid/api/result",
+        ] {
+            let target = reqwest::Url::parse(target).unwrap();
+            assert!(!same_request_origin(&initial, &target));
+        }
+    }
 }
