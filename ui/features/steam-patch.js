@@ -171,7 +171,8 @@
   async function applyFromPrompt() {
     markPromptSeen();
     closePrompt();
-    if (!patchEnabled()) await apply(true);
+    // Частично применённый патч доводим до полного: бэкенд сохраняет оригиналы и заменяет оставшийся файл
+    if (result?.state !== "patched") await apply(true);
   }
 
   async function apply(enabled) {

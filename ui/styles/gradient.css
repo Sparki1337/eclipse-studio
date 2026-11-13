@@ -18,7 +18,7 @@
 #korona .gradient-modes, #korona .gradient-points { display: flex; flex-wrap: wrap; gap: 8px; }
 #korona .gradient-modes button, #korona .gradient-points button, #korona #gradient-reset {
   min-height: 44px; padding: 0 16px; border: 1px solid var(--k-border-2); border-radius: var(--k-r-ctl);
-  background: var(--k-field); color: var(--k-text-2); font-size: max(14px, calc(14px * var(--fs, 1))); font-weight: 650; cursor: pointer;
+  background: var(--k-field); color: var(--k-text-2); font-size: calc(var(--ku) * 13.5); font-weight: 650; cursor: pointer;
 }
 #korona .gradient-modes button:hover, #korona .gradient-points button:hover { background: var(--k-panel-2); color: var(--k-text); }
 #korona .gradient-modes button.active, #korona .gradient-points button.active { color: var(--k-text); background: var(--k-panel-3); border-color: var(--k-border-3); }
@@ -29,16 +29,16 @@
 #korona .gradient-surface { position: relative; aspect-ratio: 16 / 10; border-radius: 6px; outline: 1px dashed var(--k-border-2);
   background: radial-gradient(90% 85% at var(--gradient-x1) var(--gradient-y1), rgba(var(--k-g1), var(--k-g-alpha)), transparent 72%), var(--k-bg); }
 :root[data-gradient-mode="two"] #korona .gradient-surface { background: radial-gradient(80% 80% at var(--gradient-x1) var(--gradient-y1), rgba(var(--k-g1), var(--k-g-alpha)), transparent 72%), radial-gradient(80% 80% at var(--gradient-x2) var(--gradient-y2), rgba(var(--k-g2), var(--k-g-alpha)), transparent 72%), var(--k-bg); }
-#korona .gradient-marker { position: absolute; transform: translate(-50%, -50%); width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 2px solid var(--k-text); background: var(--k-bg); color: var(--k-text); font-size: max(14px, calc(16px * var(--fs, 1))); font-weight: 800; cursor: grab; z-index: 1; }
+#korona .gradient-marker { position: absolute; transform: translate(-50%, -50%); width: 44px; height: 44px; padding: 0; border-radius: 50%; border: 2px solid var(--k-text); background: var(--k-bg); color: var(--k-text); font-size: calc(var(--ku) * 16); font-weight: 800; cursor: grab; z-index: 1; }
 #korona .gradient-marker.active { outline: 2px solid var(--accent); outline-offset: 3px; z-index: 2; }
 #korona .gradient-map:active .gradient-marker.active { cursor: grabbing; }
 #korona .gradient-position { min-width: 0; display: grid; gap: 16px; }
 #korona .gradient-axis { min-width: 0; display: grid; gap: 4px; }
-#korona .gradient-axis > span { display: flex; justify-content: space-between; gap: 12px; color: var(--k-text-2); font-size: max(14px, calc(14px * var(--fs, 1))); }
+#korona .gradient-axis > span { display: flex; justify-content: space-between; gap: 12px; color: var(--k-text-2); font-size: calc(var(--ku) * 14); }
 #korona .gradient-axis output { color: var(--k-text); font-variant-numeric: tabular-nums; }
 #korona #collapse-gradient input[type="range"] { min-width: 0; width: 100%; height: 44px; margin: 0; }
-#korona .gradient-help { margin: 16px 0 0; color: var(--k-muted); font-size: max(14px, calc(14px * var(--fs, 1))); line-height: 1.5; }
-#korona #gradient-note { margin: 12px 0 0; color: var(--k-text-2); font-size: max(14px, calc(14px * var(--fs, 1))); line-height: 1.5; }
+#korona .gradient-help { margin: 16px 0 0; color: var(--k-muted); font-size: calc(var(--ku) * 13); line-height: 1.5; }
+#korona #gradient-note { margin: 12px 0 0; color: var(--k-text-2); font-size: calc(var(--ku) * 13); line-height: 1.5; }
 #korona #gradient-note[role="alert"] { color: var(--k-bad); }
 #korona #gradient-reset { justify-self: start; }
 #korona #collapse-gradient [hidden] { display: none !important; }

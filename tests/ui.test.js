@@ -302,6 +302,31 @@ async function run() {
     }
   });
 
+  await test('Градиент: текст следует общему масштабу шрифта 85–140%', async () => {
+    const { page, errors } = await open({ view: 'settings', storage: { 'cgs-motion': '0', 'cgs-splash': '0' } });
+    await gradientMode(page, 'two');
+    const selectors = ['.gradient-modes button', '.gradient-points button', '#gradient-reset',
+      '.gradient-axis > span', '#gradient-x-value', '.gradient-help', '.gradient-marker'];
+    const sizes = () => page.evaluate(selectors => selectors.map(selector =>
+      parseFloat(getComputedStyle(document.querySelector(selector)).fontSize)), selectors);
+    await page.evaluate(() => cgsAppearance.applyFontScale(120));
+    const base = await sizes();
+    for (const size of [85, 100, 120, 140]) {
+      await page.evaluate(size => cgsAppearance.applyFontScale(size), size);
+      const current = await sizes();
+      current.forEach((value, index) => assert(Math.abs(value / base[index] - size / 120) < .01,
+        `${selectors[index]}: размер не следует настройке ${size}% (${value}px)`));
+    }
+    for (const [family, expected] of [['jetbrains', 'JetBrains Mono'], ['minecraft', 'Minecraft'], ['consolas', 'Consolas']]) {
+      await page.evaluate(family => cgsAppearance.applyFontFamily(family), family);
+      const fonts = await page.evaluate(selectors => selectors.map(selector =>
+        getComputedStyle(document.querySelector(selector)).fontFamily), selectors);
+      assert(fonts.every(font => font.includes(expected)), `${family}: шрифт секции не наследуется ${fonts.join('; ')}`);
+    }
+    await page.evaluate(() => cgsAppearance.applyFontScale(120));
+    assert(errors.length === 0, errors.join('\n'));
+  });
+
   await test("Плашек NEW у Гипервизора и Утилит нет", async () => {
     const { page, context } = await open();
     const count = await page.locator(".nav-item .nav-live").count();
@@ -2467,6 +2492,23 @@ async function run() {
     await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч активен");
     assert((await calls(page, "steam_patch_apply")).length === 1, "патч не применён из окна");
     assert(await page.isHidden("#sp-prompt-backdrop"), "окно не закрылось после применения");
+    assert(errors.length === 0, errors.join("\n"));
+  });
+
+  await test("Патч appcache: частичный патч доводится до полного из окна", async () => {
+    const { page, errors } = await open({
+      view: "lua",
+      mock: { steamPatch: { state: "partial" } },
+      storage: { "cgs-steam-patch-prompt-version": "" },
+    });
+    const prompt = page.locator("#sp-prompt-backdrop");
+    await prompt.waitFor({ state: "visible" });
+    assert((await calls(page, "steam_patch_apply")).length === 0, "патч применён до нажатия");
+    // «Применить» при частичном патче обязан довести его до полного, а не просто закрыть окно
+    await page.click("#sp-prompt-apply");
+    await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч активен");
+    assert((await calls(page, "steam_patch_apply")).length === 1, "частичный патч не доведён до полного");
+    assert(await prompt.isHidden(), "окно не закрылось после применения");
     assert(errors.length === 0, errors.join("\n"));
   });
 
