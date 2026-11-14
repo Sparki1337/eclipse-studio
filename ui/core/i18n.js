@@ -1537,6 +1537,7 @@
     "Патч отключён. Steam восстановит стандартные файлы при запуске.": "Patch disabled. Steam will restore the standard files on startup.",
     "Патч appcache включён": "Appcache patch enabled",
     "Патч appcache отключён": "Appcache patch disabled",
+    "Пока патч активен, мастерская Steam с модами не работает. Чтобы скачать моды, временно отключите патч.": "While the patch is active, the Steam Workshop does not work. To download mods, turn the patch off temporarily.",
     "Обновить и перезапустить": "Update and restart",
     "Отложить на 5 запусков": "Remind me after 5 launches",
     "Отменить обновление": "Cancel update",

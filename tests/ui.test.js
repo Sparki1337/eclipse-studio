@@ -2448,6 +2448,9 @@ async function run() {
     assert((await page.textContent("#sp-status")) === "Патч не активен", "нет стокового статуса");
     assert(await page.getAttribute("#sp-status", "data-kind") === "info", "статус окрашен без причины");
     assert(await page.isHidden("#sp-prompt-backdrop"), "окно патча показано повторно");
+    // Пометка о мастерской Steam видна всегда: активный патч блокирует загрузку модов
+    const note = await page.textContent("#sp-workshop-note");
+    assert(note.includes("мастерская") && note.includes("временно отключите патч"), "нет пометки о мастерской Steam: " + note);
     // Включение: команда получает путь Steam, переключатель и бейдж подтверждают патч
     await page.click("#sp-enabled");
     await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч активен");
@@ -2455,6 +2458,8 @@ async function run() {
     assert(applyCall?.args.steamPath === "C:\\Program Files (x86)\\Steam", "не передан путь Steam: " + JSON.stringify(applyCall?.args));
     assert(await page.isChecked("#sp-enabled"), "переключатель не отражает активный патч");
     assert((await page.textContent("#sp-status")).includes("Патч применён"), "нет подтверждения патча");
+    // Активный патч выделяет пометку о мастерской (CSS-хук data-state)
+    assert(await page.getAttribute("#steam-patch-panel", "data-state") === "patched", "панель не отражает активный патч");
     // Выключение возвращает оригиналы
     await page.click("#sp-enabled");
     await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч выключен");
@@ -2466,6 +2471,7 @@ async function run() {
     const english = await page.innerText("#steam-patch-panel");
     assert(!/[А-Яа-яЁё]/.test(english), "в панели патча осталась кириллица: " + english);
     assert(english.includes("0 bytes / no connection fix"), "нет перевода панели патча");
+    assert(english.includes("Steam Workshop"), "пометка о мастерской не переведена");
     assert(errors.length === 0, errors.join("\n"));
   });
 

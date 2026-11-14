@@ -998,6 +998,11 @@ html.no-motion .app-update-progress-bar.indeterminate .app-update-progress-fill 
   background-position: right 12px center;
   transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
 }
+/* ── Светлая тема: тёмный шеврон вместо серого, иначе стрелка теряется на белом поле */
+html[data-theme="light"] .archive-format select {
+  color-scheme: light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
 .archive-format select:hover {
   border-color: rgba(var(--accent-rgb), 0.4);
 }

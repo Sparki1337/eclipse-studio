@@ -2072,6 +2072,11 @@ html[data-font="minecraft"]:root[data-weight="light"] :is(p, span, div, a, butto
   background-size: 14px;
   transition: all 0.18s ease;
 }
+/* ── Светлая тема: шеврон выбора шрифта и звука должен читаться на белом поле */
+html[data-theme="light"] :is(.ui-font-select, .ui-audio-select) {
+  color-scheme: light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+}
 .ui-font-select:hover,
 .ui-audio-select:hover {
   border-color: rgba(var(--accent-rgb), 0.38);

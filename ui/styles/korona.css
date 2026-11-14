@@ -116,8 +116,8 @@ html[data-theme="light"] {
   --k-bg: #eef0f4;
   --k-text: #0c0d12;
   --k-text-2: rgba(12, 13, 18, .74);
-  --k-muted: rgba(12, 13, 18, .58);
-  --k-muted-2: rgba(12, 13, 18, .44);
+  --k-muted: rgba(12, 13, 18, .62);
+  --k-muted-2: rgba(12, 13, 18, .48);
   --k-panel: rgba(255, 255, 255, .82);
   --k-panel-2: rgba(12, 13, 18, .05);
   --k-panel-3: rgba(12, 13, 18, .08);
@@ -657,6 +657,10 @@ html[data-theme="light"] #korona .premium-panel:not(.saves-hero, .files-hero, .u
   cursor: not-allowed !important;
   transform: none !important;
 }
+/* ── Светлая тема: на белом фоне выключенные кнопки почти растворялись — поднимаем плотность */
+html[data-theme="light"] #korona :is(.primary-button, .install-button, .file-download, .hv-launch-button, .manifest-loader-apply-btn, .vbs-enable-button, .vbs-enable-all-button, .audio-profile-submit-btn, #modal-confirm, .secondary-button, .ghost-button, .uninstall-button, .dlc-button, .scan-button, .svc-tool-btn, .vbs-tool-fix-btn, .vbs-scan-button, .manifest-loader-sync-btn, .file-copy, .file-cancel, .file-reinstall-btn, .download-action-btn, .vbs-uefi-button, .vbs-test-button, .vbs-disable-button, .vbs-conflict-fix-btn, .vbs-card-action, .hv-shortcut-button, .hv-control-button, .hv-add-button, .home-customize, .files-refresh, .ac-scan-button, .ac-restore-button, .ac-remove-button, .ac-remove-all, .loader-update-action, .audio-profile-cancel-btn, .home-item-action, .home-settings-button, .svc-card-ext-btn):disabled {
+  opacity: .58 !important;
+}
 html[data-theme="light"] #korona :is(.secondary-button, .ghost-button, .uninstall-button, .dlc-button, .scan-button, .svc-tool-btn, .vbs-tool-fix-btn, .vbs-scan-button, .manifest-loader-sync-btn, .file-copy, .file-cancel, .file-reinstall-btn, .download-action-btn, .vbs-uefi-button, .vbs-test-button, .vbs-disable-button, .vbs-conflict-fix-btn, .vbs-card-action, .hv-shortcut-button, .hv-control-button, .hv-add-button, .home-customize, .files-refresh, .ac-scan-button, .ac-restore-button, .ac-remove-button, .ac-remove-all, .loader-update-action, .audio-profile-cancel-btn, .home-item-action, .home-settings-button, .svc-card-ext-btn) {
   background: #ffffff !important;
 }
@@ -878,9 +882,11 @@ html[data-theme="light"] #korona .custom-select-dropdown { box-shadow: 0 20px 50
 #korona .switch input:disabled + i { opacity: .45; }
 #korona .switch input:focus-visible + i { outline: 2px solid rgba(var(--accent-rgb), .7); outline-offset: 2px; }
 :root[data-glow="off"] #korona .switch input:checked + i { box-shadow: none !important; }
-html[data-theme="light"] #korona .switch i { background: rgba(12, 13, 18, .14) !important; border-color: rgba(12, 13, 18, .06) !important; box-shadow: none !important; }
-html[data-theme="light"] #korona .switch i::after { background: #ffffff !important; }
+html[data-theme="light"] #korona .switch i { background: rgba(12, 13, 18, .2) !important; border-color: rgba(12, 13, 18, .14) !important; box-shadow: none !important; }
+/* ── Светлая тема: белая шляпка на светлом треке сливалась с фоном — добавляем контур и тень */
+html[data-theme="light"] #korona .switch i::after { background: #ffffff !important; box-shadow: 0 0 0 1px rgba(12, 13, 18, .22), 0 1px 3px rgba(15, 23, 42, .28) !important; }
 html[data-theme="light"] #korona .switch input:checked + i { background: var(--accent) !important; }
+html[data-theme="light"] #korona .switch input:checked + i::after { background: var(--accent-contrast, #ffffff) !important; box-shadow: 0 0 0 1px rgba(255, 255, 255, .55), 0 1px 3px rgba(15, 23, 42, .3) !important; }
 
 /* ── Ползунок */
 #korona input[type="range"] {
@@ -3782,3 +3788,9 @@ html[data-theme="light"] #korona .dock-btn.active { --dp-main: var(--accent); ba
 @media (max-width: 480px) {
   #korona .vbs-external-button { width: 100%; }
 }
+
+/* ── Пометка о мастерской Steam: пока патч активен, моды не скачиваются.
+   Слой «Корона» перекрывает цвет текста у абзацев, поэтому подсветка задаётся здесь. */
+#korona .main-area .steam-patch-note { color: var(--k-muted); border-top-color: var(--k-border); }
+#korona .main-area .steam-patch-panel[data-state="patched"] .steam-patch-note,
+#korona .main-area .steam-patch-panel[data-state="partial"] .steam-patch-note { color: var(--k-warn); }
