@@ -106,7 +106,7 @@
         loader.classList.add('done');
         resolve();
       };
-      if (reduced) { finish(); return; }
+      if (reduced || document.documentElement.classList.contains('no-loader')) { finish(); return; }
 
       // Повторный визит в рамках сессии — сразу показываем сайт без заставки
       let repeat = false;
@@ -304,11 +304,11 @@
     // При переходе на широкий экран мобильное меню закрываем
     window.matchMedia('(min-width: 961px)').addEventListener?.('change', (e) => { if (e.matches) setMenu(false); });
     burger?.addEventListener('click', () => setMenu(!nav.classList.contains('open')));
-    // Порядковый номер пункта — для каскадного появления в мобильном меню
-    $$('a', nav).forEach((a, k) => {
-      a.style.setProperty('--k', k);
-      a.addEventListener('click', () => setMenu(false));
-    });
+    // Порядковый номер пункта — для каскадного появления в мобильном меню.
+    // Нумеруем только прямые пункты: блок действий внизу меню остаётся без задержки.
+    $$(':scope > a', nav).forEach((a, k) => a.style.setProperty('--k', k));
+    // Любая ссылка в меню закрывает его — включая кнопку загрузки и GitHub
+    $$('a', nav).forEach((a) => a.addEventListener('click', () => setMenu(false)));
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && nav.classList.contains('open')) { setMenu(false); burger?.focus(); }
     });
@@ -325,7 +325,8 @@
     });
 
     // Активен раздел на отметке 45% высоты окна, в том числе после перехода по якорю
-    const links = $$('a[href^="#"]', nav);
+    // Подсвечиваем текущий раздел только по прямым пунктам меню, без вложенных действий
+    const links = $$(':scope > a[href^="#"]', nav);
     const targets = links.map((l) => [l, $(l.getAttribute('href'))]).filter(([, sec]) => sec);
     let current = null;
     const updateActive = () => {
@@ -354,11 +355,10 @@
       const vh = window.innerHeight;
       header.classList.toggle('scrolled', y > 20);
       document.querySelector('.scroll-hint')?.classList.toggle('gone', y > 40);
-      const menuOpen = nav.classList.contains('open');
-      header.classList.toggle('hide', !menuOpen && y > 700 && y > lastY + 2);
-      if (y < lastY - 2) { header.classList.remove('hide'); goingUp = true; }
+      // Шапка всегда на месте: язык и GitHub доступны в любой момент
+      header.classList.remove('hide');
+      if (y < lastY - 2) goingUp = true;
       else if (y > lastY + 2) goingUp = false;
-      document.documentElement.classList.toggle('hdr-hidden', header.classList.contains('hide'));
       lastY = y;
       // Индикатор прочитанного и появление кнопки «Наверх»
       const max = document.documentElement.scrollHeight - vh;
@@ -884,10 +884,14 @@
       'ui.next': 'Следующий снимок',
       'ui.close': 'Закрыть',
       'header.download': 'Скачать',
-      'hero.tag': 'Eclipse Studio',
+      'ui.lang': 'Выбор языка',
+      'ui.github': 'GitHub — исходный код Eclipse Studio',
+      'nav.aria': 'Основная навигация',
+      'nav.oss': 'Открытый исходный код · Rust + Tauri v2',
+      'page.title': 'Eclipse Studio — центр управления Steam и гипервизором',
       'hero.title1': 'Игровая лаборатория',
       'hero.title2': 'для Steam.',
-      'hero.lead': 'Приложение на Rust и Tauri v2: фиксы онлайна, DLC, сохранения, манифесты Eclipse Manifest и гипервизор взломы — в одном окне.',
+      'hero.lead': 'Онлайн-фиксы, DLC, сохранения, манифесты и гипервизор — в одном портативном окне.',
       'hero.download': 'Скачать',
       'hero.modules': 'Смотреть модули',
       'hero.meta1': 'Windows 10 / 11 · 64-bit',
@@ -912,6 +916,8 @@
       'compare.orig': 'Оригинал',
       'compare.new': 'Eclipse Studio',
       'compare.aria': 'Сравнение: оригинал и Eclipse Studio',
+      'compare.more': 'Показать все отличия (+{n})',
+      'compare.less': 'Свернуть отличия',
       'compare.diffOrig1': '<strong>Ручная установка:</strong> скачивание архива и распаковка ZIP/RAR с выбором нужной папки внутри и подтверждением шагов',
       'compare.diffOrig2': '<strong>Внешний helper-апдейтер:</strong> бесшовный перезапуск через извлекаемый CgsUpdater.exe — без пробы здоровья новой версии и автоотката',
       'compare.diffOrig3': '<strong>11 тем и 4 акцента:</strong> масштаб до 125%, фиксированная ширина сайдбара и статичное расположение панелей',
@@ -947,6 +953,8 @@
       'dl.genaDesc': 'Оригинальный проект и релизы от основного автора.',
       'dl.btnDownloadOrig': 'Скачать оригинал',
       'dl.authorRepo': 'Репозиторий автора',
+      'dl.ossTitle': 'Открытый исходный код',
+      'dl.ossText': 'Исходники, релизы и звёзды проекта — на GitHub',
       'dl.itemDownload': 'Скачать ↓',
       'dl.recommended': 'Рекомендуем',
       'dl.startK': 'Быстрый старт',
@@ -980,6 +988,7 @@
       'footer.docs': 'Документация',
       'footer.dev': 'Разработчик',
       'footer.toTop': 'Наверх ↑',
+      'footer.oss': 'Открытый исходный код · без телеметрии · Portable',
       'footer.copy': '© 2026 Eclipse Studio. Распространяется свободно в образовательных и исследовательских целях.'
     },
     en: {
@@ -1050,10 +1059,14 @@
       'ui.next': 'Next screenshot',
       'ui.close': 'Close',
       'header.download': 'Download',
-      'hero.tag': 'Eclipse Studio',
+      'ui.lang': 'Language',
+      'ui.github': 'GitHub — Eclipse Studio source code',
+      'nav.aria': 'Main navigation',
+      'nav.oss': 'Open source · Rust + Tauri v2',
+      'page.title': 'Eclipse Studio — Steam & hypervisor control center',
       'hero.title1': 'Gaming laboratory',
       'hero.title2': 'for Steam.',
-      'hero.lead': 'Built with Rust & Tauri v2: online fixes, DLCs, save games, Eclipse Manifest manifests and hypervisor unlocks — all in one window.',
+      'hero.lead': 'Online fixes, DLC, save games, manifests and the hypervisor — in one portable window.',
       'hero.download': 'Download',
       'hero.modules': 'Explore modules',
       'hero.meta1': 'Windows 10 / 11 · 64-bit',
@@ -1078,6 +1091,8 @@
       'compare.orig': 'Original',
       'compare.new': 'Eclipse Studio',
       'compare.aria': 'Comparison: original vs Eclipse Studio',
+      'compare.more': 'Show all differences (+{n})',
+      'compare.less': 'Collapse differences',
       'compare.diffOrig1': '<strong>Manual installation:</strong> archive download and ZIP/RAR extraction with manual folder selection inside the archive and step confirmation',
       'compare.diffOrig2': '<strong>External updater helper:</strong> seamless restart via an extracted CgsUpdater.exe — no health probe of the new build and no automatic rollback',
       'compare.diffOrig3': '<strong>11 themes and 4 accents:</strong> scaling up to 125%, fixed sidebar width and static panel placement',
@@ -1113,6 +1128,8 @@
       'dl.genaDesc': 'Original upstream project and releases from the main author.',
       'dl.btnDownloadOrig': 'Download original',
       'dl.authorRepo': "Author's repository",
+      'dl.ossTitle': 'Open source',
+      'dl.ossText': 'Sources, releases and stars — on GitHub',
       'dl.itemDownload': 'Download ↓',
       'dl.recommended': 'Recommended',
       'dl.startK': 'Quick start',
@@ -1146,6 +1163,7 @@
       'footer.docs': 'Documentation',
       'footer.dev': 'Developer',
       'footer.toTop': 'Back to top ↑',
+      'footer.oss': 'Open source · zero telemetry · Portable',
       'footer.copy': '© 2026 Eclipse Studio. Distributed freely for educational and research purposes.'
     }
   };
@@ -1215,7 +1233,6 @@
       btn.classList.toggle('is-active', btn.dataset.lang === lang);
       btn.setAttribute('aria-pressed', String(btn.dataset.lang === lang));
     });
-    updateLangInd();
 
     const dict = I18N[lang];
     $$('[data-i18n]').forEach((el) => {
@@ -1289,10 +1306,14 @@
         ? dict['sync.err']
         : dict['sync.ok'];
     }
+
+    // Язык влияет и на служебные подписи: заголовок вкладки, числа GitHub, кнопку сравнения
+    if (dict['page.title']) document.title = dict['page.title'];
+    paintGhMeta();
+    syncDiffMore();
   }
 
   // Смена языка без «мигания»: видимые тексты гаснут, подменяются и проявляются заново
-  let updateLangInd = () => {};
   let langSwapId = 0;
   const LANG_FX_SEL = '[data-i18n], .sc-item h3, .sc-item p, #showcaseLabel, #showcaseDesc, #gamesGrid, #gamesSortLabel, #gamesCountBadge';
   function langTargets() {
@@ -1306,9 +1327,8 @@
     if (!I18N[lang] || lang === currentLang) return;
     if (!canAnimate) { setLanguage(lang); return; }
     const id = ++langSwapId;
-    // Подложка переключателя едет сразу, не дожидаясь смены текстов
+    // Активный пункт переключаем сразу, не дожидаясь смены текстов
     $$('#langSwitch .lang-btn').forEach((btn) => btn.classList.toggle('is-active', btn.dataset.lang === lang));
-    updateLangInd();
     const blur = fine ? 'blur(2px)' : 'blur(0px)';
     const targets = langTargets();
     const outs = targets.map((el) => el.animate(
@@ -1328,13 +1348,100 @@
   }
 
   function initLanguage() {
-    updateLangInd = makeIndicator($('#langSwitch'), '.lang-btn');
     $$('#langSwitch .lang-btn').forEach((btn) => {
       btn.addEventListener('click', () => switchLanguage(btn.dataset.lang));
     });
     if (currentLang !== 'ru') {
       setLanguage(currentLang);
     }
+  }
+
+  /* GitHub: звёзды и форки репозитория
+     Ответ кэшируем на час: анонимный API GitHub даёт 60 запросов в час на IP,
+     а при сбое показываем последний удачный ответ вместо пустого места. */
+  const GH_REPO = 'Sparki1337/eclipse-studio';
+  const GH_CACHE_KEY = 'es-gh-repo';
+  const GH_TTL = 60 * 60 * 1000;
+  let ghMeta = null;
+
+  // Компактная запись числа: в шапке «1,3 тыс.», в крупном счётчике «1 284»
+  function formatGhCount(value, short = false) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    const locale = currentLang === 'en' ? 'en-US' : 'ru-RU';
+    try {
+      return new Intl.NumberFormat(locale, short
+        ? { notation: 'compact', maximumFractionDigits: 0 }
+        : { maximumFractionDigits: 0 }).format(n);
+    } catch (_) {
+      return String(n);
+    }
+  }
+
+  // Счётчики есть в шапке, меню, блоке загрузки и подвале — обновляем все сразу
+  function paintGhMeta() {
+    const stars = ghMeta ? ghMeta.stars : null;
+    const ready = Number.isFinite(stars);
+    $$('[data-gh-chip]').forEach((el) => { el.hidden = !ready; });
+    $$('[data-gh-stars]').forEach((el) => { el.textContent = formatGhCount(stars); });
+    $$('[data-gh-stars-short]').forEach((el) => { el.textContent = formatGhCount(stars, true); });
+  }
+
+  async function initGitHubMeta() {
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(GH_CACHE_KEY) || 'null'); } catch (_) { cached = null; }
+    if (cached && Number.isFinite(cached.stars)) {
+      ghMeta = { stars: cached.stars };
+      paintGhMeta();
+      if (Date.now() - (Number(cached.t) || 0) < GH_TTL) return;
+    }
+    try {
+      // Репозиторий публичный: токен не нужен, достаточно анонимного запроса
+      const res = await fetch(`https://api.github.com/repos/${GH_REPO}`, {
+        headers: { Accept: 'application/vnd.github+json' },
+        cache: 'no-store'
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data || typeof data !== 'object') throw new Error('Empty');
+      ghMeta = {
+        stars: Number(data.stargazers_count) || 0
+      };
+      paintGhMeta();
+      try { localStorage.setItem(GH_CACHE_KEY, JSON.stringify({ t: Date.now(), ...ghMeta })); } catch (_) { /* Хранилище переполнено */ }
+    } catch (err) {
+      // Офлайн или лимит API: остаёмся на кэше, иначе просто скрываем счётчики
+      console.warn('GitHub repository meta unavailable:', err);
+      paintGhMeta();
+    }
+  }
+
+  /* Сравнение: на телефоне сначала четыре отличия, остальные — по кнопке */
+  let diffExpanded = false;
+
+  function syncDiffMore() {
+    const btn = $('#diffMore');
+    const box = $('#diff');
+    const label = $('#diffMoreLabel');
+    if (!btn || !box || !label) return;
+    const total = $$('.diff-col li:nth-child(n+5)').length;
+    const dict = I18N[currentLang] || I18N.ru;
+    label.textContent = fmt(dict[diffExpanded ? 'compare.less' : 'compare.more'], { n: total });
+    btn.setAttribute('aria-expanded', String(diffExpanded));
+    btn.classList.toggle('is-open', diffExpanded);
+    box.classList.toggle('is-open', diffExpanded);
+  }
+
+  function initDiffMore() {
+    const btn = $('#diffMore');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      diffExpanded = !diffExpanded;
+      syncDiffMore();
+      // После сворачивания списка возвращаем кнопку в кадр, чтобы не улететь вниз страницы
+      if (!diffExpanded) btn.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+    });
+    syncDiffMore();
   }
 
   /* Релизы GitHub (динамический парсинг всех версий) */
@@ -1563,7 +1670,8 @@
   }
 
   /* Каталог кряков (Crack Vault) */
-  const PAGE_SIZE = 24;
+  // На телефоне первая порция меньше: длинный каталог не превращает страницу в бесконечную ленту
+  const PAGE_SIZE = window.innerWidth < 700 ? 8 : 24;
   let allGames = [];
   let filteredGames = [];
   let displayedCount = PAGE_SIZE;
@@ -2517,6 +2625,8 @@
   /* Запуск */
   document.addEventListener('DOMContentLoaded', () => {
     initLanguage();
+    initGitHubMeta();
+    initDiffMore();
     splitText();
     initTitleGradient();
     initHeader();

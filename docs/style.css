@@ -142,7 +142,6 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   transition: background .4s ease, border-color .4s ease, transform .5s var(--ease);
 }
 .header.scrolled { background: rgba(5,5,5,.72); backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px); border-color: var(--line); }
-.header.hide { transform: translateY(-100%); }
 .header-in { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-icon { width: 28px; height: 28px; border-radius: 7px; }
@@ -157,44 +156,37 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 .header-cta { display: flex; align-items: center; gap: 8px; }
 .lang-switch {
   display: inline-flex;
-  align-items: center;
+  align-items: stretch;
   gap: 2px;
-  padding: 3px 4px;
+  padding: 3px;
   background: rgba(255, 255, 255, .03);
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: .02em;
   user-select: none;
 }
-.lang-divider {
-  color: var(--line-2);
-  font-size: 10px;
-  opacity: .5;
-  pointer-events: none;
-}
 .lang-btn {
-  background: transparent;
-  border: 0;
-  color: var(--mut);
-  padding: 4px 7px;
-  border-radius: 5px;
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: inherit;
-  cursor: pointer;
-  transition: color .2s ease, background .2s ease;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 34px; height: 30px; padding: 0 7px;
+  border: 0; border-radius: 7px;
+  background: transparent; color: var(--mut);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .2s ease, background .2s ease, box-shadow .2s ease;
 }
-.lang-btn:hover {
+.lang-btn:hover { color: var(--fg); background: rgba(255, 255, 255, .07); }
+.lang-btn.is-active,
+.lang-btn.is-active:hover {
   color: var(--fg);
+  background: rgba(255, 255, 255, .14);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
 }
-.lang-btn.is-active {
-  color: var(--fg);
-  background: rgba(255, 255, 255, .1);
-}
+.lang-btn:focus-visible { outline-offset: 1px; }
 .icon-link { width: 40px; height: 40px; display: grid; place-items: center; color: var(--mut); border-radius: 8px; transition: color .3s, background .3s; }
 .icon-link:hover { color: var(--fg); background: rgba(255,255,255,.06); }
 .burger { display: none; width: 40px; height: 40px; position: relative; }
@@ -298,7 +290,7 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 }
 
 /* Первый экран */
-.hero { position: relative; min-height: 100vh; padding: 148px 0 0; overflow: hidden; }
+.hero { position: relative; min-height: 100vh; padding: 116px 0 0; overflow: hidden; }
 .hero-bg { position: absolute; inset: 0; pointer-events: none; }
 .hero-croc {
   position: absolute; right: -6%; top: 40px; width: min(62vw, 980px); height: auto;
@@ -319,17 +311,10 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   transform-origin: 50% 0;
 }
 .hero-bg { transform: translate3d(0, calc(var(--ho, 0) * 110px), 0); }
-.hero-tag {
-  display: inline-flex; align-items: center; gap: 10px; height: 32px; padding: 0 14px;
-  border: 1px solid var(--line-2); border-radius: 999px; font-size: 13px; color: var(--mut);
-  background: rgba(255,255,255,.02); backdrop-filter: blur(8px);
-}
-.hero-tag .sep { width: 1px; height: 12px; background: var(--line-2); }
-.hero-tag .mono { color: var(--fg); font-size: 11px; }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); position: relative; }
 .dot::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1px solid var(--accent); animation: ping 2s var(--ease) infinite; }
 @keyframes ping { from { transform: scale(.5); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
-.hero-title { margin: 28px 0 0; font-size: clamp(44px, 7.6vw, 112px); line-height: 1.12; font-weight: 500; letter-spacing: .01em; }
+.hero-title { margin: 0; font-size: clamp(44px, 7.6vw, 112px); line-height: 1.12; font-weight: 500; letter-spacing: .01em; }
 .hero-title .muted { color: var(--mut-3); }
 .hero-lead { max-width: 600px; margin: 28px auto 0; font-size: 18px; color: var(--mut); }
 .hero-actions { display: flex; gap: 12px; margin-top: 36px; flex-wrap: wrap; justify-content: center; }
@@ -1043,7 +1028,6 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 /* Вид «Список»: плотная таблица для быстрого просмотра */
 @media (min-width: 601px) {
   .games-toolbar { position: sticky; top: 80px; z-index: 30; transition: top .5s var(--ease); }
-  .hdr-hidden .games-toolbar { top: 12px; }
 
   .games-grid[data-view="list"] {
     grid-template-columns: 1fr;
@@ -1315,9 +1299,8 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
   border-radius: 999px; background: rgba(255, 255, 255, .1); opacity: 0;
   transition: transform .55s var(--ease), width .55s var(--ease), height .55s var(--ease), opacity .3s ease;
 }
-.games-view.has-ind .games-view-btn, .lang-switch.has-ind .lang-btn { position: relative; z-index: 1; }
-.games-view.has-ind .games-view-btn.is-active, .lang-switch.has-ind .lang-btn.is-active { background: transparent; }
-.lang-switch .seg-ind { border-radius: 5px; }
+.games-view.has-ind .games-view-btn { position: relative; z-index: 1; }
+.games-view.has-ind .games-view-btn.is-active { background: transparent; }
 /* Фильтры: белая подложка в режиме difference — текст под ней темнеет прямо во время движения */
 .seg-ind-blend { z-index: 3; background: #fff; mix-blend-mode: difference; }
 .games-filters.has-ind .games-chip.is-active,
@@ -1544,13 +1527,6 @@ html:not(.js) .loader, .no-loader .loader { display: none; }
 /* ── Заголовок героя: чуть заметнее объёмное свечение ── */
 .hero-title { filter: drop-shadow(0 10px 46px rgba(255, 255, 255, .1)); }
 
-/* ── Бейдж первого экрана: стеклянная глубина ── */
-.hero-tag {
-  border-color: rgba(255, 255, 255, .2);
-  background: rgba(255, 255, 255, .03);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .4), 0 8px 30px -10px rgba(0, 0, 0, .6);
-}
-
 /* ── Окно приложения: верхняя световая кромка и мягкий ореол ── */
 .window {
   box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 40px 120px -20px rgba(0,0,0,.9), 0 0 100px -40px rgba(255,255,255,.08);
@@ -1638,3 +1614,313 @@ html { scrollbar-color: #232323 #050505; }
 ::-webkit-scrollbar-track { background: #050505; }
 ::-webkit-scrollbar-thumb { background: #1f1f1f; border-radius: 99px; border: 2px solid #050505; }
 ::-webkit-scrollbar-thumb:hover { background: #2c2c2c; }
+
+/* ═══════════════════════════════════════════════════════════════
+   ОТКРЫТЫЙ КОД, GITHUB И МОБИЛЬНАЯ ПЕРЕСБОРКА
+   Блок стоит последним: здешние правила осознанно перекрывают
+   базовые, включая старые медиазапросы выше по файлу.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Якоря не заезжают под фиксированную шапку */
+section[id], main[id] { scroll-margin-top: 78px; }
+
+/* ── Кнопка GitHub со счётчиком звёзд ── */
+.gh-btn {
+  display: inline-flex; align-items: center; gap: 8px; flex: none;
+  height: 40px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 9px;
+  background: rgba(255, 255, 255, .03); color: var(--fg);
+  font: 500 12px/1 var(--mono);
+  transition: background .25s ease, color .2s ease, border-color .25s ease, transform .35s var(--ease);
+}
+.gh-btn:hover { background: var(--fg); color: var(--bg); border-color: var(--fg); transform: translateY(-1px); }
+.gh-mark { flex: none; }
+.gh-count {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding-left: 8px; border-left: 1px solid var(--line-2);
+  color: var(--mut); font-weight: 500;
+}
+.gh-btn:hover .gh-count { color: rgba(5, 5, 5, .72); border-color: rgba(5, 5, 5, .22); }
+.gh-count b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.gh-btn-lg { height: 44px; padding: 0 15px; gap: 10px; }
+
+/* ── Первый экран: ссылка на модули и звезды на кнопке ── */
+.hero-link {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 18px;
+  font-size: 14px; color: var(--mut); transition: color .25s ease;
+}
+.hero-link:hover { color: var(--fg); }
+.hero-link svg { transition: transform .3s var(--ease); }
+.hero-link:hover svg { transform: translateX(4px); }
+.btn-stars {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-left: 2px; padding-left: 10px; border-left: 1px solid var(--line-2);
+  font: 500 12px var(--mono); color: var(--mut);
+}
+.btn-github:hover .btn-stars { color: var(--fg); border-color: rgba(255, 255, 255, .28); }
+/* У кнопки GitHub иконка не должна уезжать вбок/вниз при наведении */
+.btn-github:hover svg { transform: none; }
+
+/* ── Баннер открытого кода в блоке загрузки ── */
+.dl-oss {
+  display: flex; align-items: center; gap: 14px;
+  margin-top: 16px; padding: 16px 20px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--bg-1);
+  transition: border-color .3s ease, background .3s ease;
+}
+.dl-oss:hover { border-color: var(--line-2); background: #0f0f0f; }
+.dl-oss-ico {
+  width: 42px; height: 42px; flex: none; display: grid; place-items: center;
+  border: 1px solid var(--line-2); border-radius: 11px; color: var(--fg);
+}
+.dl-oss-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dl-oss-txt strong { font-size: 15px; font-weight: 500; }
+.dl-oss-txt span { color: var(--mut); font-size: 13px; }
+.dl-oss-stars {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  margin-left: auto; padding: 7px 10px;
+  border: 1px solid var(--line-2); border-radius: 8px;
+  color: var(--fg); font: 500 12px var(--mono);
+}
+.dl-oss-go { flex: none; color: var(--mut); transition: transform .3s var(--ease), color .2s ease; }
+.dl-oss:hover .dl-oss-go { color: var(--fg); transform: translate(2px, -2px); }
+
+/* ── Подвал: GitHub и строка об открытом коде ── */
+.footer-oss {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 14px;
+  margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line);
+}
+.footer-oss p { margin: 0; color: var(--mut-2); font-size: 10.5px; letter-spacing: .04em; }
+
+/* Кнопка полного списка отличий нужна только на узких экранах */
+.diff-more { display: none; }
+
+/* Блок действий живёт только в мобильном меню */
+.nav-mobile { display: none; }
+
+/* ── Шапка на средних экранах: язык, GitHub и загрузка помещаются без переносов ── */
+@media (min-width: 961px) and (max-width: 1180px) {
+  .header-in { gap: 12px; }
+  .nav a { padding: 8px 9px; font-size: 13px; }
+  .nav a::after { left: 9px; right: 9px; }
+  .gh-btn { padding: 0 10px; gap: 6px; }
+}
+
+/* ── Планшеты и телефоны ── */
+@media (max-width: 960px) {
+  .header-in { gap: 10px; }
+  .brand { min-width: 0; }
+  .brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-ver { display: none; }
+  .header-cta { flex: none; gap: 6px; }
+  .gh-btn { height: 36px; padding: 0 10px; }
+  .gh-btn .gh-mark { width: 16px; height: 16px; }
+  .burger { flex: none; }
+
+  /* Мобильное меню: внизу — загрузка, GitHub и статус открытого кода */
+  .nav-mobile { display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 28px; }
+  .nav .nav-mobile a { border: 0; padding: 0; font-size: 14px; color: var(--mut); }
+  .nav .nav-mobile .nav-dl {
+    justify-content: center; gap: 8px; color: var(--bg);
+    font-size: 15px; font-weight: 500;
+  }
+  .nav-dl-ver { font-size: 10px; opacity: .55; }
+  .nav .nav-mobile .nav-gh {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px;
+    background: rgba(255, 255, 255, .03);
+  }
+  .nav-gh-main { display: flex; flex-direction: column; gap: 1px; }
+  .nav-gh-main > span:first-child { color: var(--fg); font-size: 15px; }
+  .nav-gh-main .mono { color: var(--mut-2); font-size: 10px; }
+  .nav-gh-stars { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: var(--fg); font: 500 12px var(--mono); }
+  .nav-oss { display: flex; align-items: center; gap: 8px; margin: 2px 0 0; color: var(--mut-2); font-size: 10px; text-transform: none; letter-spacing: .02em; }
+  .nav-oss .dot { width: 5px; height: 5px; }
+  .nav-oss .dot::after { display: none; }
+
+  /* Витрина модулей плотной сеткой: подпись под кадром на телефоне не нужна */
+  .showcase { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+  .showcase-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; border-top: 0; }
+  .sc-item {
+    grid-template-columns: 26px minmax(0, 1fr); gap: 8px; align-items: start;
+    padding: 12px 10px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg-1);
+  }
+  .sc-item::before { display: none; }
+  .sc-item.is-active { padding-left: 10px; border-color: rgba(255, 255, 255, .3); background: #101010; }
+  .sc-item h3 { font-size: 14px; line-height: 1.25; }
+  .sc-item p { display: none; }
+  .sc-num { padding-top: 2px; font-size: 10px; }
+  .showcase-window { max-width: 320px; margin-inline: auto; }
+
+  /* Сравнение: четыре отличия сразу, остальные — по кнопке */
+  .diff-more {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; margin-top: 12px; padding: 14px 16px;
+    border: 1px solid var(--line-2); border-radius: 10px;
+    color: var(--fg); font-size: 13px;
+    transition: background .25s ease, border-color .25s ease;
+  }
+  .diff-more:hover { background: rgba(255, 255, 255, .05); }
+  .diff-more svg { transition: transform .35s var(--ease); }
+  .diff-more.is-open svg { transform: rotate(180deg); }
+  .diff-col li:nth-child(n+5) { display: none; }
+  .diff.is-open .diff-col li:nth-child(n+5) { display: block; }
+}
+
+/* На планшете карточки модулей встают в три колонки */
+@media (min-width: 601px) and (max-width: 960px) {
+  .showcase-list { grid-template-columns: repeat(3, 1fr); }
+  .showcase-window { max-width: 560px; }
+}
+
+/* ── Телефоны ── */
+@media (max-width: 600px) {
+  .wrap { width: min(100% - 28px, var(--wrap)); }
+
+  /* Шапка: компактные размеры, загрузка живёт в меню */
+  .brand-name { font-size: 13px; }
+  .brand { gap: 8px; }
+  .brand-icon { width: 24px; height: 24px; }
+  .header-cta { gap: 4px; }
+  .lang-switch { padding: 2px; font-size: 10px; }
+  .lang-btn { padding: 4px 5px; }
+  .gh-btn { height: 34px; padding: 0 8px; gap: 5px; font-size: 11px; }
+  .gh-btn .gh-mark { width: 15px; height: 15px; }
+  .gh-count { gap: 3px; padding-left: 6px; }
+  .burger { width: 34px; height: 34px; }
+  .burger span { left: 9px; right: 9px; }
+
+  /* Первый экран: короче и спокойнее */
+  .hero { min-height: 0; padding-top: 88px; }
+  .hero-title { margin-top: 0; font-size: clamp(34px, 11.4vw, 54px); line-height: 1.07; }
+  .hero-lead { margin-top: 16px; max-width: 34ch; font-size: 15.5px; line-height: 1.5; }
+  .hero-actions { margin-top: 24px; gap: 9px; }
+  .hero-actions .btn { width: 100%; }
+  .hero-link { margin-top: 14px; font-size: 13px; }
+  .hero-meta { margin-top: 20px; gap: 7px 14px; font-size: 10.5px; }
+  .hero-meta li { gap: 6px; }
+  .hero-window { margin-top: 34px; }
+  .hero::after { height: 120px; }
+  .marquee { display: none; }
+
+  .section { padding: 54px 0; }
+  .section-head { margin-bottom: 26px; }
+  .section-title { font-size: clamp(28px, 9vw, 42px); }
+  .section-lead { margin-top: 14px; font-size: 14px; }
+  .kicker { font-size: 10px; }
+
+  /* Факты: четыре компактные плитки вместо простыни текста */
+  .facts-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+    border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    background: var(--line);
+  }
+  .fact { padding: 14px 16px 16px; border: 0 !important; background: var(--bg); }
+  .fact p { display: none; }
+  .fact-k { font-size: 9px; }
+  .fact-v { margin: 10px 0 0; font-size: 26px; }
+
+  /* Модули */
+  .showcase-view { top: 68px; }
+  .showcase-sticky { padding-bottom: 8px; }
+  .showcase-list { gap: 7px; margin-top: 8px; }
+  .sc-item { padding: 11px 9px; }
+  .sc-item h3 { font-size: 13px; }
+
+  /* Сравнение */
+  .compare-box { aspect-ratio: 16 / 12; }
+  .diff { margin-top: 16px; border-radius: 12px; }
+  .diff-col { padding: 20px 16px; }
+  .diff ul { gap: 10px; margin-top: 14px; }
+  .diff li { font-size: 13px; line-height: 1.5; }
+  .diff-more { font-size: 12.5px; padding: 13px 14px; }
+
+  /* Загрузка */
+  .dl-grid { gap: 12px; }
+  .dl-card { padding: 20px 18px; }
+  .dl-icon { width: 46px; height: 46px; border-radius: 12px; }
+  .dl-card h3 { margin: 22px 0 6px; font-size: 24px; }
+  .dl-desc { font-size: 13.5px; }
+  .dl-meta { margin: 20px 0 22px; }
+  .dl-meta div { padding: 9px 0; font-size: 12.5px; }
+  .dl-meta dd { text-align: right; }
+  .dl-actions { gap: 12px; }
+  .dl-oss { margin-top: 12px; padding: 13px 14px; gap: 10px; }
+  .dl-oss-ico { width: 36px; height: 36px; border-radius: 9px; }
+  .dl-oss-txt strong { font-size: 13.5px; }
+  .dl-oss-txt span { font-size: 11.5px; }
+  .dl-oss-stars { padding: 5px 8px; font-size: 11px; }
+  .dl-oss-go { display: none; }
+  .sync { margin-top: 18px; font-size: 10px; }
+  .dl-start { margin-top: 30px; }
+  .dl-steps li { padding: 14px 16px; gap: 12px; }
+  .dl-steps strong { font-size: 14px; }
+  .dl-steps p { margin-top: 3px; font-size: 12.5px; }
+
+  /* Сообщество, благодарность, подвал */
+  .comm-row { padding: 18px 0; }
+  .comm-main h3 { font-size: 22px; }
+  .comm-main p { font-size: 13px; }
+  .comm-go { width: 44px; height: 44px; }
+  .tribute { padding: 24px 0 40px; }
+  .tribute-card { padding: 20px 16px; }
+  .tribute-title { font-size: 22px; }
+  .tribute-text { font-size: 13.5px; }
+  .footer { padding: 56px 0 24px; }
+  .footer-links { gap: 14px 22px; }
+  .footer-oss { margin-top: 22px; padding-top: 18px; gap: 10px; }
+  .footer-oss .gh-btn { height: 38px; }
+  .footer-oss p { font-size: 9.5px; }
+}
+
+/* Совсем узкие экраны: имя бренда уступает место звездам и языку */
+@media (max-width: 360px) {
+  .brand-name { display: none; }
+  .brand { gap: 0; }
+  .header-cta { gap: 3px; }
+  .gh-btn { padding: 0 8px; }
+  .gh-count { padding-left: 6px; }
+}
+
+/* ── Элементы шапки одного размера ──
+   Язык, GitHub и «Скачать» выстраиваются в один ряд одинаковой высоты,
+   а две кнопки получают общую ширину: ряд не «пляшет» от длины числа звёзд. */
+@media (min-width: 961px) {
+  .header-cta { gap: 8px; }
+  .header-cta .lang-switch { height: 40px; padding: 3px; }
+  .header-cta .lang-btn { height: 100%; display: inline-flex; align-items: center; padding: 0 8px; }
+  .header-cta .gh-btn,
+  .header-cta .header-dl { height: 40px; width: 136px; padding: 0 12px; justify-content: center; }
+}
+@media (min-width: 601px) and (max-width: 960px) {
+  .header-cta { gap: 6px; }
+  .header-cta .lang-switch { height: 36px; padding: 2px; }
+  .header-cta .lang-btn { height: 100%; display: inline-flex; align-items: center; padding: 0 7px; }
+  .header-cta .gh-btn,
+  .header-cta .header-dl { height: 36px; width: 106px; padding: 0 10px; justify-content: center; }
+  .header-cta .burger { width: 36px; height: 36px; }
+  .header-cta .burger span:first-child { top: 14px; }
+  .header-cta .burger span:last-child { top: 21px; }
+}
+@media (max-width: 600px) {
+  .header-cta .lang-switch { height: 34px; padding: 2px; }
+  .header-cta .lang-btn { height: 100%; display: inline-flex; align-items: center; padding: 0 6px; }
+  .header-cta .gh-btn { height: 34px; min-width: 0; padding: 0 8px; }
+  .header-cta .burger { width: 34px; height: 34px; }
+  .header-cta .burger span:first-child { top: 13px; }
+  .header-cta .burger span:last-child { top: 20px; }
+}
+
+/* Кнопки первого экрана тоже одной ширины: пара выглядит как единый ряд */
+@media (min-width: 601px) {
+  .hero-actions .btn { min-width: 210px; }
+}
+
+/* Узкий десктоп: убираем бейдж версии и поджимаем навигацию, чтобы шапка не ломалась */
+@media (min-width: 961px) and (max-width: 1180px) {
+  .brand-ver { display: none; }
+  .nav a { padding: 8px 7px; font-size: 12.5px; }
+  .nav a::after { left: 7px; right: 7px; }
+  .header-cta { gap: 6px; }
+  .header-cta .gh-btn,
+  .header-cta .header-dl { width: 120px; }
+}
