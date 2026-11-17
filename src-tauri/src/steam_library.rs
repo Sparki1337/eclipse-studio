@@ -571,7 +571,11 @@ pub(crate) fn read_appinfo(steam: &Path) -> Result<Arc<BTreeMap<u64, Value>>, St
     }
     let stamp = (metadata.len(), metadata.modified().ok());
 
-    type AppInfoCache = Option<(PathBuf, (u64, Option<SystemTime>), Arc<BTreeMap<u64, Value>>)>;
+    type AppInfoCache = Option<(
+        PathBuf,
+        (u64, Option<SystemTime>),
+        Arc<BTreeMap<u64, Value>>,
+    )>;
     static CACHE: OnceLock<Mutex<AppInfoCache>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(None));
 

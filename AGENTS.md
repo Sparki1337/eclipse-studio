@@ -490,7 +490,7 @@ All scripts are started from the repository root; paths inside them are resolved
 
 | **`build.py`** | Automated build script (`python scripts/build.py`). Supports interactive menu or CLI flags (`--type portable/nsis/all/debug`, `--out <dir>`, `--clean`, `--no-open`). Saves output path in `scripts/build_config.json` (defaults to `C:\Users\Sparki\Desktop\Programms\Hypervisor`), checks prerequisites, calculates SHA-256 hashes, and offers to open Windows Explorer. |
 
-| **`bump_version.py`** | Updates the project version across the repository (`python scripts/bump_version.py 10.1.0`): `tauri.conf.json`, `Cargo.toml`, `package.json`, `package-lock.json`, `ui/index.html`, `ui/core/app.js`, `ui/core/i18n.js`, `dlc_catalog.rs`, `files.rs`, `tauri-mock.js`, `ui.test.js`, `README.md`, `BUILD.md`, `docs/`, the scripts in `scripts/` and `.agents/skills/build/SKILL.md`. Refreshes `Cargo.lock` automatically. |
+| **`bump_version.py`** | Updates the project version across the repository (`python scripts/bump_version.py 10.2.0`): `tauri.conf.json`, `Cargo.toml`, `package.json`, `package-lock.json`, `ui/index.html`, `ui/core/app.js`, `ui/core/i18n.js`, `dlc_catalog.rs`, `files.rs`, `tauri-mock.js`, `ui.test.js`, `README.md`, `BUILD.md`, `docs/`, the scripts in `scripts/` and `.agents/skills/build/SKILL.md`. Refreshes `Cargo.lock` automatically. |
 
 | **`build_local_cloud.ps1`** | Rebuilds `src-tauri/resources/local-cloud/cgs_cloud_redirect.dll` from `third_party/cloudredirect` (port of upstream `tools/Build-LocalCloud.ps1`; run from an x64 Developer PowerShell, needs `cl.exe`, C++20, Windows SDK; static CRT). Copies the MIT license and prints the SHA-256. Not needed for regular builds. |
 
@@ -676,7 +676,7 @@ python scripts/bump_version.py
 
 # Or pass the new version directly:
 
-python scripts/bump_version.py 10.1.0
+python scripts/bump_version.py 10.2.0
 
 ```
 

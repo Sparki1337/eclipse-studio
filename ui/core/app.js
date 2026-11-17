@@ -62,6 +62,8 @@
   const LUA_STATUS_TTL_MS = 10000;
   let luaStatusFetchedAt = 0;
   let luaStatusInFlight = null;
+  // Запрос статуса, отложенный до конца текущего: переключение фильтра не теряется
+  let luaRefreshPending = false;
 
   function loadStoredLuaNames() {
     try {
@@ -108,7 +110,7 @@
   }
 
   const state = {
-    version: "10.1.0",
+    version: "10.2.0",
     gameDir: "",
     appid: null,
     gameName: "",
@@ -2087,9 +2089,17 @@
       window.cgsPerf?.log("Статус пропущен: данные свежие");
       return;
     }
-    if (luaStatusInFlight) return luaStatusInFlight;
+    if (luaStatusInFlight) {
+      // Пока запрос идёт, пользователь мог переключить фильтр — повторяем после него
+      luaRefreshPending = true;
+      return luaStatusInFlight;
+    }
     luaStatusInFlight = fetchLuaStatus().finally(() => {
       luaStatusInFlight = null;
+      if (luaRefreshPending) {
+        luaRefreshPending = false;
+        luaRefresh();
+      }
     });
     return luaStatusInFlight;
   }
@@ -2844,7 +2854,7 @@
     // Версия без суффикса Portable x64 — других сборок нет
     const appVerEl = $("#about-app-version");
     if (appVerEl) {
-      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "10.1.0";
+      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "10.2.0";
       state.version = currentVer;
       appVerEl.textContent = currentVer;
     }
@@ -2856,7 +2866,7 @@
         try {
           const hvStatus = await call("eclipse_hv_status");
           if (hvStatus && hvStatus.installed) {
-            const rawVer = hvStatus.version || "10.1.0";
+            const rawVer = hvStatus.version || "10.2.0";
             hvVerEl.textContent = rawVer.replace(/^v/i, "");
           } else {
             hvVerEl.textContent = "Не установлен";
@@ -4061,7 +4071,7 @@
     updateRyuuKeyStatus();
     renderLoaderInfo();
     updateAboutInfo();
-    log("Eclipse Studio 10.1.0 инициализирован", "system");
+    log("Eclipse Studio 10.2.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный показ окна, если заставка отключена

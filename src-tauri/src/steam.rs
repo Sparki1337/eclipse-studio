@@ -127,10 +127,12 @@ fn feature_label(feature: &str) -> &'static str {
 fn drm_kind(features: &[String]) -> &'static str {
     if features.iter().any(|feature| feature == "denuvo") {
         "denuvo"
-    } else if features
-        .iter()
-        .any(|feature| matches!(feature.as_str(), "ea_app" | "ea_account" | "ubisoft" | "rockstar"))
-    {
+    } else if features.iter().any(|feature| {
+        matches!(
+            feature.as_str(),
+            "ea_app" | "ea_account" | "ubisoft" | "rockstar"
+        )
+    }) {
         "launcher"
     } else if features.iter().any(|feature| feature == "steam_drm") {
         "steam"
@@ -148,7 +150,10 @@ fn drm_label(drm_notice: &str, account_notice: &str) -> (String, String) {
     if features.is_empty() {
         return ("Не указано".into(), kind.into());
     }
-    let labels: Vec<&str> = features.iter().map(|feature| feature_label(feature)).collect();
+    let labels: Vec<&str> = features
+        .iter()
+        .map(|feature| feature_label(feature))
+        .collect();
     (labels.join(" + "), kind.into())
 }
 
@@ -631,7 +636,10 @@ mod tests {
             "Steam не указывает сведения о защите для этой игры."
         );
         let combined = drm_features("Denuvo", "EA Account");
-        assert_eq!(combined, vec!["denuvo".to_string(), "ea_account".to_string()]);
+        assert_eq!(
+            combined,
+            vec!["denuvo".to_string(), "ea_account".to_string()]
+        );
         assert_eq!(
             drm_notice_text(&combined),
             "В игре используется защита Denuvo. Для запуска требуется аккаунт EA."

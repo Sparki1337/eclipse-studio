@@ -496,7 +496,7 @@ fn format_build_string(tag: &str) -> String {
 fn download_catalog() -> Result<String, String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/10.1.0")
+        .user_agent("EclipseStudio/10.2.0")
         .build()
         .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
     let refs_url =
@@ -542,7 +542,13 @@ fn parse_head_revision(advertisement: &str) -> Option<&str> {
 fn canonical_game_name(name: &str) -> String {
     let key = name
         .chars()
-        .map(|character| if character.is_alphanumeric() { character } else { ' ' })
+        .map(|character| {
+            if character.is_alphanumeric() {
+                character
+            } else {
+                ' '
+            }
+        })
         .collect::<String>()
         .to_lowercase()
         .split_whitespace()
@@ -1037,10 +1043,7 @@ mod tests {
             super::canonical_game_name("Call of Duty: Black Ops 7"),
             "Call of Duty: Black Ops 7"
         );
-        assert_eq!(
-            super::canonical_game_name("Sonic Origins"),
-            "Sonic Origins"
-        );
+        assert_eq!(super::canonical_game_name("Sonic Origins"), "Sonic Origins");
     }
 
     #[test]

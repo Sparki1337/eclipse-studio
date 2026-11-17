@@ -798,7 +798,11 @@ fn external_games(
     };
     let mut found: BTreeMap<String, PathBuf> = BTreeMap::new();
     for entry in entries.flatten() {
-        if !entry.file_type().map(|kind| kind.is_file()).unwrap_or(false) {
+        if !entry
+            .file_type()
+            .map(|kind| kind.is_file())
+            .unwrap_or(false)
+        {
             continue;
         }
         let name = entry.file_name().to_string_lossy().into_owned();
@@ -2089,20 +2093,16 @@ mod tests {
         let ids: Vec<&str> = games.iter().map(|game| game.appid.as_str()).collect();
         assert_eq!(ids, vec!["570", "730"], "состав сторонних игр");
         assert!(games.iter().all(|game| game.external), "метка внешней игры");
-        assert!(
-            games
-                .iter()
-                .find(|game| game.appid == "570")
-                .map(|game| game.enabled)
-                .unwrap_or(false)
-        );
-        assert!(
-            !games
-                .iter()
-                .find(|game| game.appid == "730")
-                .map(|game| game.enabled)
-                .unwrap_or(true)
-        );
+        assert!(games
+            .iter()
+            .find(|game| game.appid == "570")
+            .map(|game| game.enabled)
+            .unwrap_or(false));
+        assert!(!games
+            .iter()
+            .find(|game| game.appid == "730")
+            .map(|game| game.enabled)
+            .unwrap_or(true));
 
         let _ = fs::remove_dir_all(&root);
     }

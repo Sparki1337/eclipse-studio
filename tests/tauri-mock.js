@@ -99,7 +99,7 @@
     files_pause_download: () => {window.__pendingDownload?.reject("Загрузка приостановлена; проверенные сегменты сохранены для докачки");return true;},
     files_cancel_download: () => {window.__pendingDownload?.reject("Загрузка отменена");return true;},
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "10.1.0", latest_version: "10.1.0", currentVersion: "10.1.0", latestVersion: "10.1.0" }),
+    check_for_update: () => ({ available: false, current_version: "10.2.0", latest_version: "10.2.0", currentVersion: "10.2.0", latestVersion: "10.2.0" }),
     platform_info: () => ({ os: "windows", windows: true, windowsOnlyModules: [], sessionId: config.sessionId || "test-session" }),
     update_launch_ready: () => config.launchOutcome ?? null,
     // Установка обновления: с installPending остаётся ожидающей, ход задаётся через __mockEmit

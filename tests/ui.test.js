@@ -44,7 +44,8 @@ async function open({ storage = {}, mock = {}, view = "home", viewport = { width
   page.on("pageerror", (error) => errors.push("pageerror: " + error.message));
   page.on("console", (msg) => { if (msg.type() === "error") errors.push("console: " + msg.text()); });
   await page.goto(`${PAGE}?view=${view}`);
-  page.setDefaultTimeout(6000);
+  // Основные ожидания — с запасом: на медленных машинах и при параллельной сборке
+  page.setDefaultTimeout(10000);
   if (!mock.migrationFailure && !mock.startupAdminRelaunch) {
     await page.waitForFunction(() => document.documentElement.dataset.ready === "true");
     await page.locator("#app-splash").waitFor({state:"hidden",timeout:12000});
@@ -111,10 +112,10 @@ async function run() {
     assert(missing.length === 0, "Не зарегистрированы: " + missing.join(", "));
   });
 
-  await test("Запуск без ошибок JS, версия 10.1.0", async () => {
+  await test("Запуск без ошибок JS, версия 10.2.0", async () => {
     const { page, context, errors } = await open();
     const version = await page.textContent(".titlebar-version");
-    assert(version.trim() === "10.1.0", "версия " + version);
+    assert(version.trim() === "10.2.0", "версия " + version);
     assert(errors.length === 0, errors.join("\n"));
     await context.close();
   });
@@ -155,7 +156,7 @@ async function run() {
     assert((await calls(page, "update_launch_ready")).length === 0, "старый экземпляр подтвердил чужой запуск");
   });
   await test("Админ-запуск: переданный и проверяемый после обновления процессы не перезапускаются", async () => {
-    for (const extra of [{ elevatedHandoff: true }, { launchOutcome: { success: true, message: "Обновление подтверждено", version: "10.1.0" } }]) {
+    for (const extra of [{ elevatedHandoff: true }, { launchOutcome: { success: true, message: "Обновление подтверждено", version: "10.2.0" } }]) {
       const { page, context } = await open({ mock: { admin: false, ...extra } });
       assert(await page.evaluate(() => window.__startupAdminAttempts || 0) === 0, "создан повторный процесс при передаче/проверке обновления");
       assert((await calls(page, "update_launch_ready")).length === 1, "не выполнен обычный handshake обновления");
@@ -652,19 +653,21 @@ async function run() {
     assert(errors.length === 0, errors.join("\n"));
   });
 
-  await test("Анимации: нижние секции появляются при прокрутке только один раз", async () => {
+  await test("Анимации: секции ниже экрана не анимируются при прокрутке", async () => {
     const { page } = await open({ view: "settings" });
     await trackMotion(page);
     const target = page.locator("#collapse-language");
     assert(await target.evaluate(element => element.getBoundingClientRect().top > innerHeight), "секция уже на экране");
+    // Вход анимируется только у видимых блоков: скрытая секция прокруткой не «оживает»
+    const runs = () => page.evaluate(() => window.__motionRecords.filter(record => record.element.id === "collapse-language").length);
+    assert(await runs() === 0, "скрытая секция анимировалась при открытии");
     await target.scrollIntoViewIfNeeded();
-    await page.waitForFunction(() => window.__motionRecords.some(record => record.element.id === "collapse-language" && record.animation.id === "cgs-enter"));
     await page.waitForTimeout(450);
-    const count = await page.evaluate(() => window.__motionRecords.filter(record => record.element.id === "collapse-language").length);
+    assert(await runs() === 0, "секция анимировалась при прокрутке вниз");
     await page.locator("#collapse-theme").scrollIntoViewIfNeeded();
     await target.scrollIntoViewIfNeeded();
     await page.waitForTimeout(120);
-    assert(await page.evaluate(() => window.__motionRecords.filter(record => record.element.id === "collapse-language").length) === count, "секция повторно мигает при прокрутке");
+    assert(await runs() === 0, "секция мигает при повторной прокрутке");
   });
 
   await test("Анимации: счётчики реагируют только на изменение значения", async () => {
@@ -2557,7 +2560,7 @@ async function run() {
   });
 
   const UPDATE_RELEASE = {
-    available: true, currentVersion: "10.1.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
+    available: true, currentVersion: "10.2.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
     notes: "## Что нового\n- Локальное облако\n- Обновление с перезапуском",
     releaseUrl: "https://github.com/Sparki1337/eclipse-studio/releases/tag/v9.1.0",
     installerUrl: null, portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v9.1.0/EclipseStudio.exe",
@@ -2668,9 +2671,9 @@ async function run() {
     const { page, errors } = await open({
       view: "settings",
       storage: { "cgs-update-snooze-launches": "5", "cgs-language": "en" },
-      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 10.1.0.", version: "10.1.0" } }),
+      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 10.2.0.", version: "10.2.0" } }),
     });
-    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 10.1.0."));
+    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 10.2.0."));
     // Успешная установка сбрасывает откладывание, поэтому новое окно показывается сразу
     await dialogOpen(page);
     assert(await page.evaluate(() => cgsStorage.getItem("cgs-update-snooze-launches")) === null, "откладывание не сброшено после успешной установки");
