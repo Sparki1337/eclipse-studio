@@ -36,14 +36,33 @@ pub fn replace(staged: &Path, target: &Path) -> Result<(), String> {
         };
         let source: Vec<u16> = staged.as_os_str().encode_wide().chain(Some(0)).collect();
         let destination: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
-        unsafe {
-            MoveFileExW(
-                PCWSTR(source.as_ptr()),
-                PCWSTR(destination.as_ptr()),
-                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-            )
+        let mut last_err = None;
+        for attempt in 0..5 {
+            match unsafe {
+                MoveFileExW(
+                    PCWSTR(source.as_ptr()),
+                    PCWSTR(destination.as_ptr()),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+                )
+            } {
+                Ok(()) => {
+                    last_err = None;
+                    break;
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    if attempt < 4 {
+                        std::thread::sleep(std::time::Duration::from_millis(15));
+                    }
+                }
+            }
         }
-        .map_err(|e| format!("Не удалось атомарно заменить {}: {e}", target.display()))?;
+        if let Some(e) = last_err {
+            return Err(format!(
+                "Не удалось атомарно заменить {}: {e}",
+                target.display()
+            ));
+        }
     }
     #[cfg(not(windows))]
     fs::rename(staged, target)

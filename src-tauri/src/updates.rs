@@ -167,12 +167,9 @@ pub async fn check_for_update() -> Result<UpdateInfo, String> {
 
 fn check_for_update_blocking() -> Result<UpdateInfo, String> {
     let current = env!("CARGO_PKG_VERSION").to_string();
-    let client = Client::builder()
-        .timeout(Duration::from_secs(15))
-        .build()
-        .map_err(|error| format!("Не удалось подготовить проверку обновлений: {error}"))?;
+    let client = crate::http_pool::client()?;
 
-    let release = check_for_update_via_web(&client)?;
+    let release = check_for_update_via_web(client)?;
 
     let latest = release
         .tag_name
@@ -482,10 +479,7 @@ fn install_blocking(app: &AppHandle, version: &str, install: &Install) -> Result
         percent: 100,
         ..UpdateProgress::phase("verifying")
     });
-    let bytes =
-        fs::read(&payload).map_err(|error| format!("Не удалось прочитать обновление: {error}"))?;
-    core::verify_payload(&bytes, version)?;
-    drop(bytes);
+    core::verify_payload_file(&payload, version)?;
     let new_hash = crate::durable::hash_file(&payload)?;
     if !new_hash.eq_ignore_ascii_case(&sha256) {
         return Err("SHA-256 скачанного EXE не совпадает с опубликованной в релизе.".into());

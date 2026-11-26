@@ -6,7 +6,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::{atomic::Ordering, Arc, Mutex, OnceLock},
-    time::Duration,
 };
 use tauri::{Emitter, Manager};
 
@@ -427,14 +426,9 @@ fn find_eclipse_release_asset(assets: &[serde_json::Value]) -> Option<&serde_jso
 }
 
 fn fetch_latest_eclipse_studio_file() -> Option<FileItem> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(8))
-        .user_agent("Eclipse-Studio-Update-Checker")
-        .build()
-        .ok()?;
-
+    let client = crate::http_pool::client().ok()?;
     // Прямой парсинг веб-релиза без использования GitHub API (во избежание rate limit)
-    fetch_latest_eclipse_studio_file_via_web(&client)
+    fetch_latest_eclipse_studio_file_via_web(client)
 }
 
 fn fetch_latest_eclipse_studio_file_via_web(
@@ -494,11 +488,7 @@ fn format_build_string(tag: &str) -> String {
 }
 
 fn download_catalog() -> Result<String, String> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .user_agent("EclipseStudio/10.2.0")
-        .build()
-        .map_err(|error| format!("HTTP-клиент не создан: {error}"))?;
+    let client = crate::http_pool::client()?;
     let refs_url =
         format!("https://gist.github.com/{GIST_ID}.git/info/refs?service=git-upload-pack");
     let refs = client
@@ -745,11 +735,13 @@ pub(crate) async fn files_install_crack(
 
 // Поиск локального или прямая загрузка актуального Eclipse-HV.exe с GitHub без API
 fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // Локальные пути: папка Hypervisor или локальная сборка eclipse-hv
-    let candidates = [
-        PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-HV.exe"),
-        PathBuf::from("eclipse-hv/target/release/eclipse-hv.exe"),
-    ];
+    let mut candidates = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("Eclipse-HV.exe"));
+        }
+    }
+    candidates.push(PathBuf::from("eclipse-hv/target/release/eclipse-hv.exe"));
 
     for path in &candidates {
         if path.is_file()
@@ -776,14 +768,10 @@ fn resolve_or_download_eclipse_hv(app: &tauri::AppHandle) -> Result<PathBuf, Str
         return Ok(cached_exe);
     }
 
-    // Прямая загрузка с GitHub, без API
+    // Прямая загрузка с GitHub через общий пул соединений
     let download_url =
         "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .user_agent(concat!("Eclipse-Studio/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| format!("Ошибка создания HTTP клиента: {e}"))?;
+    let client = crate::http_pool::client()?;
 
     let response = client
         .get(download_url)

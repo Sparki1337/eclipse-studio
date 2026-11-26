@@ -375,15 +375,16 @@
         && !document.hidden;
     }
 
+    let dpr = 1;
     function resize() {
       width = canvas.clientWidth || 1;
       height = canvas.clientHeight || 1;
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.round(width * ratio);
-      canvas.height = Math.round(height * ratio);
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = "high";
+      context.imageSmoothingQuality = "medium";
       particles = createParticles();
     }
 
@@ -394,6 +395,7 @@
       const seconds = time / 1000;
       const delta = previous ? Math.min((time - previous) / 1000, 0.05) : 0;
       previous = time;
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, width, height);
       // Порывы ветра слегка меняют наклон дождевых штрихов
       const slant = 0.16 + 0.08 * Math.sin(seconds * 0.32);
@@ -434,15 +436,12 @@
           context.drawImage(glowFor(p.ink), x - p.size * 1.4, y - p.size * 1.4, p.size * 2.8, p.size * 2.8);
         }
         context.globalAlpha = alpha;
-        context.save();
-        context.translate(x, y);
-        context.rotate(p.rotation);
-        if (p.kind !== "snow") {
-          // Разворот вокруг вертикальной оси: листья и лепестки переворачиваются в полёте
-          context.scale(Math.max(0.25, Math.abs(Math.sin(seconds * 1.6 + p.twinkle))), 1);
-        }
+        const sx = p.kind !== "snow" ? Math.max(0.25, Math.abs(Math.sin(seconds * 1.6 + p.twinkle))) : 1;
+        const cos = Math.cos(p.rotation);
+        const sin = Math.sin(p.rotation);
+        context.setTransform(cos * sx * dpr, sin * sx * dpr, -sin * dpr, cos * dpr, x * dpr, y * dpr);
         context.drawImage(spriteFor(p.kind, p.variant, p.ink), -p.size / 2, -p.size / 2, p.size, p.size);
-        context.restore();
+        context.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
     }
 

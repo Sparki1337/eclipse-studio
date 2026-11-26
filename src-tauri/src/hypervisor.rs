@@ -5,12 +5,8 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
     process::Command,
-    time::Duration,
 };
 use tauri::Emitter;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 #[cfg(target_os = "windows")]
 use windows::{
@@ -26,9 +22,6 @@ use windows::{
         },
     },
 };
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const ECLIPSE_HV_LAUNCHER_ID: &str = "eclipse_hv";
@@ -122,10 +115,8 @@ fn set_steam_launch_inner(
     crate::steam_hv::restart_around(
         was_running,
         || {
-            let mut cmd = Command::new(&client);
+            let mut cmd = crate::process_util::hidden_path_command(&client);
             cmd.arg("-shutdown").current_dir(&steam);
-            #[cfg(target_os = "windows")]
-            cmd.creation_flags(CREATE_NO_WINDOW);
             cmd.spawn()
                 .map_err(|error| format!("Не удалось завершить Steam: {error}"))?;
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
@@ -478,7 +469,7 @@ pub(crate) fn is_selected_game_running() -> Result<bool, String> {
     process_name_running(&game.loader_name)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn list_games() -> Result<LibraryView, String> {
     let library = refresh_library(load_library()?);
     save_library(&library)?;
@@ -514,7 +505,7 @@ pub(crate) async fn select_game_exe(window: tauri::Window) -> Result<Option<Stri
 }
 
 // Добавление игры в библиотеку и размещение в ней Eclipse-HV.exe
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn add_game(
     app: tauri::AppHandle,
     exe_path: String,
@@ -604,7 +595,7 @@ pub(crate) fn add_game(
 }
 
 // Заглушка смены профиля (в системе используется исключительно единый метод Eclipse-HV)
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn set_game_launcher(
     _app: tauri::AppHandle,
     _id: String,
@@ -614,7 +605,7 @@ pub(crate) fn set_game_launcher(
     Ok(library_view(library))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn set_selected_game(id: String) -> Result<LibraryView, String> {
     let mut library = load_library()?;
     if library.games.iter().any(|game| game.id == id) {
@@ -625,7 +616,7 @@ pub(crate) fn set_selected_game(id: String) -> Result<LibraryView, String> {
     Ok(library_view(library))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn remove_game(id: String) -> Result<LibraryView, String> {
     if steam_launch_accounts()
         .unwrap_or_default()
@@ -654,7 +645,7 @@ pub(crate) fn remove_game(id: String) -> Result<LibraryView, String> {
     Ok(library_view(library))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn verify_game(
     app: tauri::AppHandle,
     id: String,
@@ -685,7 +676,7 @@ pub(crate) fn verify_game(
     Ok(library_view(library))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn create_game_shortcut(
     _app: tauri::AppHandle,
     id: String,
@@ -709,7 +700,7 @@ pub(crate) fn create_game_shortcut(
     Ok(library_view(library))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub(crate) fn remove_game_shortcut(id: String) -> Result<LibraryView, String> {
     let mut library = load_library()?;
     let game = library
@@ -1018,26 +1009,14 @@ fn emit(
 }
 
 fn is_admin() -> bool {
-    let mut command = Command::new("net.exe");
-    command.arg("session");
-
-    #[cfg(target_os = "windows")]
-    command.creation_flags(CREATE_NO_WINDOW);
-
-    command
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
+    crate::elevation::is_elevated().unwrap_or(false)
 }
 
 fn process_name_running(name: &str) -> Result<bool, String> {
-    let mut command = Command::new("tasklist.exe");
-    command.arg("/FO").arg("CSV").arg("/NH");
-
-    #[cfg(target_os = "windows")]
-    command.creation_flags(CREATE_NO_WINDOW);
-
-    let output = command
+    let output = crate::process_util::hidden_command("tasklist.exe")
+        .arg("/FO")
+        .arg("CSV")
+        .arg("/NH")
         .output()
         .map_err(|error| format!("Не удалось запустить tasklist: {error}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1137,13 +1116,7 @@ pub(crate) async fn eclipse_hv_check_update(
         let mut remote_size: Option<u64> = None;
         let remote_version = "1.1.0".to_string();
 
-        let client = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(4))
-            .user_agent(concat!("Eclipse-Studio/", env!("CARGO_PKG_VERSION")))
-            .redirect(reqwest::redirect::Policy::limited(5))
-            .build();
-
-        if let Ok(client) = client {
+        if let Ok(client) = crate::http_pool::client() {
             let download_url = "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
             if let Ok(resp) = client.head(download_url).send() {
                 if resp.status().is_success() {
@@ -1206,26 +1179,25 @@ pub(crate) async fn eclipse_hv_download(target_dir: Option<String>) -> Result<St
             ));
         }
 
-        // Резервный поиск в локальной папке Hypervisor
-        let local_path =
-            PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor\Eclipse-HV.exe");
-        if local_path.is_file() {
-            fs::copy(&local_path, &target_exe)
-                .map_err(|e| format!("Не удалось скопировать Eclipse-HV.exe: {e}"))?;
-            return Ok(format!(
-                "Eclipse-HV.exe успешно скопирован в {}",
-                dest.display()
-            ));
+        // Резервный поиск рядом с исполняемым файлом Eclipse Studio
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(exe_dir) = exe.parent() {
+                let sibling_hv = exe_dir.join("Eclipse-HV.exe");
+                if sibling_hv.is_file() && sibling_hv != target_exe {
+                    fs::copy(&sibling_hv, &target_exe)
+                        .map_err(|e| format!("Не удалось скопировать Eclipse-HV.exe: {e}"))?;
+                    return Ok(format!(
+                        "Eclipse-HV.exe успешно скопирован в {}",
+                        dest.display()
+                    ));
+                }
+            }
         }
 
         // Прямая загрузка с GitHub при отсутствии локальных бинарников
         let download_url =
             "https://github.com/Sparki1337/eclipse-studio/releases/latest/download/Eclipse-HV.exe";
-        let client = reqwest::blocking::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .user_agent(concat!("Eclipse-Studio/", env!("CARGO_PKG_VERSION")))
-            .build()
-            .map_err(|e| format!("Ошибка создания HTTP клиента: {e}"))?;
+        let client = crate::http_pool::client()?;
 
         let response = client.get(download_url).send();
         match response {
@@ -1270,7 +1242,15 @@ fn resolve_eclipse_hv_dest(target_dir: Option<&str>) -> PathBuf {
         }
     }
 
-    PathBuf::from(r"C:\Users\Sparki\Desktop\Programms\Hypervisor")
+    if let Ok(local) = env::var("LOCALAPPDATA") {
+        return PathBuf::from(local)
+            .join("Eclipse Studio")
+            .join("Hypervisor");
+    }
+    env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+        .unwrap_or_else(|| PathBuf::from("Hypervisor"))
 }
 
 #[cfg(test)]

@@ -9,13 +9,9 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Component, Path, PathBuf},
-    process::Command,
 };
 use tauri::AppHandle;
 use walkdir::{DirEntry, WalkDir};
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 
 const IGNORED_DIRS: &[&str] = &[
     "engine",
@@ -275,18 +271,18 @@ fn kill_game_processes(game_dir: &Path, logs: &mut Vec<String>) {
             }
         }
     }
-    for name in names {
-        let mut command = Command::new("taskkill.exe");
-        command.args(["/F", "/IM", &name]);
-        #[cfg(target_os = "windows")]
-        command.creation_flags(0x08000000);
-        if command
+    let names = names.into_iter().collect::<Vec<_>>();
+    // Завершаем все найденные процессы игры параллельно, чтобы не задерживать подготовку файлов
+    let killed = crate::http_pool::parallel_map(&names, 8, |name| {
+        crate::process_util::hidden_command("taskkill.exe")
+            .args(["/F", "/IM", name])
             .output()
             .map(|output| output.status.success())
             .unwrap_or(false)
-        {
-            logs.push(format!("Завершён процесс, блокировавший файлы: {name}"));
-        }
+            .then(|| format!("Завершён процесс, блокировавший файлы: {name}"))
+    });
+    for entry in killed.into_iter().flatten() {
+        logs.push(entry);
     }
 }
 
@@ -496,8 +492,26 @@ fn scan_game_directory_blocking(path: String) -> Result<ScanResult, String> {
     }
     exes.sort();
     steam_api_paths.sort();
-    let engine = detect_game_engine(&game_dir);
-    let detected_game = steam::auto_detect_from_path(&game_dir);
+    // Определение движка и запрос метаданных Steam выполняем параллельно
+    let (engine, detected_game) = std::thread::scope(|scope| {
+        let engine_task = scope.spawn(|| detect_game_engine(&game_dir));
+        let steam_task = scope.spawn(|| steam::auto_detect_from_path(&game_dir));
+        (
+            engine_task
+                .join()
+                .unwrap_or_else(|_| "Другой / Собственный".into()),
+            steam_task
+                .join()
+                .unwrap_or_else(|_| crate::models::DetectedGame {
+                    detected: false,
+                    appid: None,
+                    name: None,
+                    header_image: None,
+                    source: None,
+                    dlcs: BTreeMap::new(),
+                }),
+        )
+    });
     Ok(ScanResult {
         game_dir: game_dir.display().to_string(),
         exes,

@@ -25,6 +25,7 @@
     setItem(key, value) {
       key = String(key); value = String(value);
       if (secrets.has(key)) throw new Error("Для ключей используется защищённая команда");
+      if (values.get(key) === value) return;
       values.set(key, value);
       if (rawInvoke) enqueue(key, () => rawInvoke("state_apply", { changes: { [key]: value } }));
     },

@@ -3,7 +3,7 @@
 use crate::{dlc::DlcEntry, luatools, steam_library};
 use serde::Serialize;
 use serde_json::Value;
-use std::{collections::BTreeMap, time::Duration};
+use std::collections::BTreeMap;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -91,38 +91,18 @@ fn scan(appid: u64, steam_path: Option<String>) -> Result<DlcCatalog, String> {
             Err(_) => warnings.push("Локальный кэш Steam недоступен".into()),
         }
     }
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .connect_timeout(Duration::from_secs(4))
-        .user_agent("EclipseStudio/10.2.0")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = crate::http_pool::client()?;
     let urls = [
         format!("https://store.steampowered.com/api/appdetails?appids={appid}&l=english&cc=US"),
         format!("https://store.steampowered.com/dlc/{appid}/ajaxgetdlclist/?l=english&cc=US"),
     ];
-    let results = std::thread::scope(|scope| {
-        let handles: Vec<_> = urls
-            .iter()
-            .map(|url| {
-                let client = &client;
-                scope.spawn(move || {
-                    client
-                        .get(url)
-                        .send()
-                        .and_then(|r| r.error_for_status())
-                        .and_then(|r| r.json::<Value>())
-                        .map_err(|e| e.to_string())
-                })
-            })
-            .collect();
-        handles
-            .into_iter()
-            .map(|h| {
-                h.join()
-                    .unwrap_or_else(|_| Err("Запрос Steam прерван".into()))
-            })
-            .collect::<Vec<_>>()
+    let results = crate::http_pool::parallel_map(&urls, 2, |url| {
+        client
+            .get(url)
+            .send()
+            .and_then(|r| r.error_for_status())
+            .and_then(|r| r.json::<Value>())
+            .map_err(|e| e.to_string())
     });
     let mut online = false;
     for (index, data) in results.into_iter().enumerate() {
@@ -150,34 +130,27 @@ fn scan(appid: u64, steam_path: Option<String>) -> Result<DlcCatalog, String> {
         return Err("Не удалось получить каталог DLC. Проверьте соединение со Steam и повторите сканирование.".into());
     }
     // Ограничение запросов названий DLC для предотвращения зависания
-    let unresolved: Vec<_> = catalog
+    let unresolved: Vec<u64> = catalog
         .iter()
         .filter(|(id, name)| **name == format!("DLC {id}"))
         .filter_map(|(id, _)| id.parse::<u64>().ok())
+        .take(48)
         .collect();
-    let names_client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(4))
-        .connect_timeout(Duration::from_secs(2))
-        .build()
-        .map_err(|e| e.to_string())?;
-    if online {
-        for chunk in unresolved
-            .iter()
-            .take(48)
-            .copied()
-            .collect::<Vec<_>>()
-            .chunks(8)
-        {
-            let names = std::thread::scope(|scope| {
-                let handles: Vec<_> = chunk.iter().map(|id| { let client = &names_client; (*id, scope.spawn(move || client.get(format!("https://store.steampowered.com/api/appdetails?appids={id}&l=english&cc=US")).send().ok()?.json::<Value>().ok()?.get(id.to_string())?.pointer("/data/name")?.as_str().map(str::to_string))) }).collect();
-                handles
-                    .into_iter()
-                    .map(|(id, h)| (id, h.join().ok().flatten()))
-                    .collect::<Vec<_>>()
-            });
-            for (id, name) in names {
-                merge(&mut catalog, id, name.as_deref(), appid);
-            }
+    if online && !unresolved.is_empty() {
+        let names = crate::http_pool::parallel_map(&unresolved, 8, |&id| {
+            let name = client
+                .get(format!(
+                    "https://store.steampowered.com/api/appdetails?appids={id}&l=english&cc=US"
+                ))
+                .send()
+                .ok()
+                .and_then(|r| r.json::<Value>().ok())
+                .and_then(|v| v.get(id.to_string()).cloned())
+                .and_then(|v| v.pointer("/data/name")?.as_str().map(str::to_string));
+            (id, name)
+        });
+        for (id, name) in names {
+            merge(&mut catalog, id, name.as_deref(), appid);
         }
     }
     if !online {

@@ -4,11 +4,12 @@ use crate::luatools::resolve_steam_path;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::{
-    collections::BTreeMap,
-    fs,
+    collections::{BTreeMap, HashMap},
+    fs::{self, File},
+    io::{BufReader, Read, Seek, SeekFrom},
     path::{Component, Path, PathBuf},
     sync::{Arc, Mutex, OnceLock},
-    time::SystemTime,
+    time::{Duration, Instant, SystemTime},
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -221,8 +222,8 @@ fn games_in_library(root: &Path, warnings: &mut Vec<String>) -> Vec<InstalledSte
         ));
         return Vec::new();
     };
-    let mut games = Vec::new();
-    for entry in entries.flatten() {
+    let entries: Vec<_> = entries.flatten().collect();
+    let results = crate::http_pool::parallel_map(&entries, 8, |entry| {
         let path = entry.path();
         let file = entry.file_name().to_string_lossy().to_lowercase();
         let Some(id) = file
@@ -230,23 +231,20 @@ fn games_in_library(root: &Path, warnings: &mut Vec<String>) -> Vec<InstalledSte
             .and_then(|s| s.strip_suffix(".acf"))
             .and_then(|s| s.parse::<u64>().ok())
         else {
-            continue;
+            return (None, None);
         };
         if id == 0 || id == 228980 {
-            continue;
+            return (None, None);
         }
         let data = match fs::read_to_string(&path)
             .map_err(|e| e.to_string())
             .and_then(|s| parse_vdf(&s))
         {
             Ok(data) => data,
-            Err(error) => {
-                warnings.push(format!("{}: {error}", path.display()));
-                continue;
-            }
+            Err(error) => return (None, Some(format!("{}: {error}", path.display()))),
         };
         let Some(app) = data.get("appstate") else {
-            continue;
+            return (None, None);
         };
         if app
             .get("appid")
@@ -254,7 +252,7 @@ fn games_in_library(root: &Path, warnings: &mut Vec<String>) -> Vec<InstalledSte
             .and_then(|s| s.parse::<u64>().ok())
             != Some(id)
         {
-            continue;
+            return (None, None);
         }
         let flags = app
             .get("stateflags")
@@ -262,14 +260,14 @@ fn games_in_library(root: &Path, warnings: &mut Vec<String>) -> Vec<InstalledSte
             .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(0);
         if flags & 4 == 0 {
-            continue;
+            return (None, None);
         } // бит 4 в stateflags — игра полностью установлена
         let Some(install) = app
             .get("installdir")
             .and_then(Value::as_str)
             .filter(|s| !s.is_empty())
         else {
-            continue;
+            return (None, None);
         };
         let relative = Path::new(install);
         if relative.is_absolute()
@@ -277,11 +275,11 @@ fn games_in_library(root: &Path, warnings: &mut Vec<String>) -> Vec<InstalledSte
                 .components()
                 .any(|p| !matches!(p, Component::Normal(_)))
         {
-            continue;
+            return (None, None);
         }
         let dir = common.join(relative);
         if !dir.is_dir() {
-            continue;
+            return (None, None);
         }
         let name = app
             .get("name")
@@ -289,10 +287,27 @@ fn games_in_library(root: &Path, warnings: &mut Vec<String>) -> Vec<InstalledSte
             .filter(|s| !s.is_empty() && !s.starts_with("appid_"))
             .unwrap_or(install)
             .to_string();
-        games.push(InstalledSteamGame {
-            appid: id, name, game_dir: display_path(&dir), library_path: display_path(root),
-            header_image: format!("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{id}/header.jpg"),
-        });
+        (
+            Some(InstalledSteamGame {
+                appid: id,
+                name,
+                game_dir: display_path(&dir),
+                library_path: display_path(root),
+                header_image: format!(
+                    "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{id}/header.jpg"
+                ),
+            }),
+            None,
+        )
+    });
+    let mut games = Vec::new();
+    for (game, warn) in results {
+        if let Some(w) = warn {
+            warnings.push(w);
+        }
+        if let Some(g) = game {
+            games.push(g);
+        }
     }
     games
 }
@@ -312,24 +327,20 @@ pub(crate) fn scan_libraries(
     let cache = steam
         .and_then(|path| read_appinfo(path).ok())
         .unwrap_or_default();
+    let per_root = crate::http_pool::parallel_map(&roots, 4, |root| {
+        let mut local_warnings = Vec::new();
+        let games = games_in_library(root, &mut local_warnings);
+        (games, local_warnings)
+    });
     let mut found = BTreeMap::new();
-    for root in &roots {
-        for mut game in games_in_library(root, &mut warnings) {
-            if let Some(data) = cache.get(&game.appid) {
-                if matches!(
-                    data.pointer("/common/type")
-                        .and_then(Value::as_str)
-                        .map(str::to_lowercase)
-                        .as_deref(),
-                    Some("dlc" | "tool" | "music" | "application" | "video")
-                ) {
+    for (root_games, root_warnings) in per_root {
+        warnings.extend(root_warnings);
+        for mut game in root_games {
+            if let Some(summary) = cache.get(&game.appid) {
+                if summary.is_non_game {
                     continue;
                 }
-                if let Some(name) = data
-                    .pointer("/common/name")
-                    .and_then(Value::as_str)
-                    .filter(|s| !s.is_empty())
-                {
+                if let Some(name) = summary.name.as_deref().filter(|s| !s.is_empty()) {
                     game.name = name.into();
                 }
             }
@@ -441,6 +452,39 @@ pub(crate) fn installed_game_for_path(dir: &Path) -> Option<InstalledSteamGame> 
     None
 }
 
+#[derive(Default)]
+pub(crate) struct AppSummary {
+    pub name: Option<String>,
+    pub is_non_game: bool,
+    pub list_of_dlc: Vec<u64>,
+}
+
+/// Компактный индекс appinfo.vdf: вместо полного дерева serde_json::Value хранит только имена, типы и связи DLC.
+#[derive(Default)]
+pub(crate) struct AppInfoIndex {
+    pub apps: HashMap<u64, AppSummary>,
+    pub dlc_children: HashMap<u64, Vec<u64>>,
+}
+
+impl AppInfoIndex {
+    pub(crate) fn contains_key(&self, appid: &u64) -> bool {
+        self.apps.contains_key(appid)
+    }
+
+    pub(crate) fn get(&self, appid: &u64) -> Option<&AppSummary> {
+        self.apps.get(appid)
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum AppSection {
+    Root,
+    AppInfo,
+    Common,
+    Extended,
+    Ignored,
+}
+
 struct BinaryReader<'a> {
     bytes: &'a [u8],
     pos: usize,
@@ -461,6 +505,23 @@ impl<'a> BinaryReader<'a> {
     fn u32(&mut self) -> Result<u32, String> {
         Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
     }
+    fn skip_cstr(&mut self) -> Result<(), String> {
+        let len = self
+            .bytes
+            .get(self.pos..)
+            .and_then(|b| b.iter().position(|b| *b == 0))
+            .ok_or("Незавершённая строка appinfo")?;
+        self.take(len + 1)?;
+        Ok(())
+    }
+    fn skip_wstr(&mut self) -> Result<(), String> {
+        loop {
+            let ch = u16::from_le_bytes(self.take(2)?.try_into().unwrap());
+            if ch == 0 {
+                return Ok(());
+            }
+        }
+    }
     fn text(&mut self) -> Result<String, String> {
         let len = self
             .bytes
@@ -471,99 +532,239 @@ impl<'a> BinaryReader<'a> {
         self.take(1)?;
         Ok(text)
     }
-    fn object(&mut self, keys: Option<&[String]>, depth: usize) -> Result<Value, String> {
+    fn text_str(&mut self) -> Result<&'a str, String> {
+        let len = self
+            .bytes
+            .get(self.pos..)
+            .and_then(|b| b.iter().position(|b| *b == 0))
+            .ok_or("Незавершённая строка appinfo")?;
+        let slice = self.take(len)?;
+        self.take(1)?;
+        std::str::from_utf8(slice).map_err(|_| String::new())
+    }
+    fn parse_summary_section(
+        &mut self,
+        keys: Option<&[String]>,
+        section: AppSection,
+        depth: usize,
+        summary: &mut AppSummary,
+        dlc_for_appid: &mut Option<u64>,
+    ) -> Result<(), String> {
         if depth > 64 {
             return Err("Слишком глубокий appinfo".into());
         }
-        let mut result = Map::new();
         loop {
             let kind = self.take(1)?[0];
             if kind == 8 || kind == 11 {
-                return Ok(Value::Object(result));
+                return Ok(());
             }
-            let key = if let Some(keys) = keys {
+            let key_buf: String;
+            let key: &str = if let Some(keys) = keys {
                 keys.get(self.u32()? as usize)
                     .ok_or("Некорректный индекс appinfo")?
-                    .to_lowercase()
+                    .as_str()
+            } else if section == AppSection::Ignored {
+                self.skip_cstr()?;
+                ""
             } else {
-                self.text()?.to_lowercase()
+                key_buf = self.text()?;
+                &key_buf
             };
-            let value = match kind {
-                0 => self.object(keys, depth + 1)?,
-                1 => Value::String(self.text()?),
-                2 => Value::from(i32::from_le_bytes(self.take(4)?.try_into().unwrap())),
-                3 => Value::from(f32::from_le_bytes(self.take(4)?.try_into().unwrap()) as f64),
-                4 | 6 => Value::from(self.u32()?),
-                5 => {
-                    let mut text = Vec::new();
-                    loop {
-                        let ch = u16::from_le_bytes(self.take(2)?.try_into().unwrap());
-                        if ch == 0 {
-                            break;
-                        }
-                        text.push(ch);
+
+            if kind == 0 {
+                let next_section = match section {
+                    AppSection::Root if key.eq_ignore_ascii_case("appinfo") => AppSection::AppInfo,
+                    AppSection::AppInfo if key.eq_ignore_ascii_case("common") => AppSection::Common,
+                    AppSection::AppInfo if key.eq_ignore_ascii_case("extended") => {
+                        AppSection::Extended
                     }
-                    Value::String(String::from_utf16_lossy(&text))
+                    _ => AppSection::Ignored,
+                };
+                self.parse_summary_section(keys, next_section, depth + 1, summary, dlc_for_appid)?;
+                continue;
+            }
+
+            let wanted = match section {
+                AppSection::Common => {
+                    key.eq_ignore_ascii_case("name") || key.eq_ignore_ascii_case("type")
                 }
-                7 => Value::from(u64::from_le_bytes(self.take(8)?.try_into().unwrap())),
-                10 => Value::from(i64::from_le_bytes(self.take(8)?.try_into().unwrap())),
+                AppSection::Extended => {
+                    key.eq_ignore_ascii_case("listofdlc") || key.eq_ignore_ascii_case("dlcforappid")
+                }
+                _ => false,
+            };
+
+            if !wanted {
+                match kind {
+                    1 => self.skip_cstr()?,
+                    2..=4 | 6 => {
+                        self.take(4)?;
+                    }
+                    5 => self.skip_wstr()?,
+                    7 | 10 => {
+                        self.take(8)?;
+                    }
+                    _ => return Err(format!("Неизвестный тип appinfo: {kind}")),
+                }
+                continue;
+            }
+
+            let str_val = match kind {
+                1 => Some(self.text_str().unwrap_or_default().to_string()),
+                2 => Some(i32::from_le_bytes(self.take(4)?.try_into().unwrap()).to_string()),
+                3 => {
+                    self.take(4)?;
+                    None
+                }
+                4 | 6 => Some(self.u32()?.to_string()),
+                5 => {
+                    self.skip_wstr()?;
+                    None
+                }
+                7 => Some(u64::from_le_bytes(self.take(8)?.try_into().unwrap()).to_string()),
+                10 => Some(i64::from_le_bytes(self.take(8)?.try_into().unwrap()).to_string()),
                 _ => return Err(format!("Неизвестный тип appinfo: {kind}")),
             };
-            result.insert(key, value);
+
+            if let Some(val) = str_val {
+                match section {
+                    AppSection::Common if key.eq_ignore_ascii_case("name") => {
+                        if !val.is_empty() {
+                            summary.name = Some(val);
+                        }
+                    }
+                    AppSection::Common if key.eq_ignore_ascii_case("type") => {
+                        summary.is_non_game = matches!(
+                            val.to_ascii_lowercase().as_str(),
+                            "dlc" | "tool" | "music" | "application" | "video"
+                        );
+                    }
+                    AppSection::Extended if key.eq_ignore_ascii_case("listofdlc") => {
+                        summary.list_of_dlc = val
+                            .split(',')
+                            .filter_map(|s| s.trim().parse::<u64>().ok())
+                            .filter(|id| *id > 0)
+                            .collect();
+                    }
+                    AppSection::Extended if key.eq_ignore_ascii_case("dlcforappid") => {
+                        *dlc_for_appid = val.trim().parse::<u64>().ok().filter(|id| *id > 0);
+                    }
+                    _ => {}
+                }
+            }
         }
     }
 }
 
-fn parse_appinfo(bytes: &[u8]) -> Result<BTreeMap<u64, Value>, String> {
-    let mut reader = BinaryReader { bytes, pos: 0 };
-    let version = reader.u32()?;
+fn read_u32_le<R: Read>(r: &mut R) -> Result<u32, String> {
+    let mut buf = [0_u8; 4];
+    r.read_exact(&mut buf)
+        .map_err(|_| "Обрезанный appinfo.vdf".to_string())?;
+    Ok(u32::from_le_bytes(buf))
+}
+
+fn read_u64_le<R: Read>(r: &mut R) -> Result<u64, String> {
+    let mut buf = [0_u8; 8];
+    r.read_exact(&mut buf)
+        .map_err(|_| "Обрезанный appinfo.vdf".to_string())?;
+    Ok(u64::from_le_bytes(buf))
+}
+
+fn read_cstr_from_reader<R: Read>(r: &mut R) -> Result<String, String> {
+    let mut bytes = Vec::with_capacity(32);
+    let mut byte = [0_u8; 1];
+    loop {
+        r.read_exact(&mut byte)
+            .map_err(|_| "Незавершённая строка appinfo".to_string())?;
+        if byte[0] == 0 {
+            break;
+        }
+        if bytes.len() > 4096 {
+            return Err("Слишком длинный ключ appinfo".into());
+        }
+        bytes.push(byte[0]);
+    }
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Потоковый разбор appinfo.vdf без загрузки всего 100-250 МБ файла в оперативную память.
+fn parse_appinfo_file(path: &Path) -> Result<AppInfoIndex, String> {
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let mut reader = BufReader::with_capacity(64 * 1024, file);
+    let version = read_u32_le(&mut reader)?;
     if ![0x07564427, 0x07564428, 0x07564429].contains(&version) {
         return Err("Неизвестная версия appinfo.vdf".into());
     }
-    reader.u32()?;
+    let _universe = read_u32_le(&mut reader)?;
     let keys = if version == 0x07564429 {
-        let offset = u64::from_le_bytes(reader.take(8)?.try_into().unwrap());
-        let offset = usize::try_from(offset).map_err(|_| "Некорректный offset appinfo")?;
-        let mut table = BinaryReader { bytes, pos: offset };
-        let count = table.u32()? as usize;
+        let table_offset = read_u64_le(&mut reader)?;
+        let entries_start = reader.stream_position().map_err(|e| e.to_string())?;
+        reader
+            .seek(SeekFrom::Start(table_offset))
+            .map_err(|_| "Некорректный offset appinfo".to_string())?;
+        let count = read_u32_le(&mut reader)? as usize;
         if count > 1_000_000 {
             return Err("Слишком большая таблица appinfo".into());
         }
         let mut keys = Vec::with_capacity(count);
         for _ in 0..count {
-            keys.push(table.text()?);
+            keys.push(read_cstr_from_reader(&mut reader)?.to_ascii_lowercase());
         }
+        reader
+            .seek(SeekFrom::Start(entries_start))
+            .map_err(|e| e.to_string())?;
         Some(keys)
     } else {
         None
     };
-    let mut apps = BTreeMap::new();
+
+    let fixed = if version >= 0x07564428 { 60 } else { 40 };
+    let mut index = AppInfoIndex::default();
+    let mut record_buf = Vec::with_capacity(32 * 1024);
+
     loop {
-        let appid = reader.u32()? as u64;
+        let appid = read_u32_le(&mut reader)? as u64;
         if appid == 0 {
             break;
         }
-        let size = reader.u32()? as usize;
-        let fixed = if version >= 0x07564428 { 60 } else { 40 };
-        let payload = reader.take(size)?;
-        if payload.len() < fixed {
+        let size = read_u32_le(&mut reader)? as usize;
+        if size < fixed || size > 16 * 1024 * 1024 {
             return Err("Некорректная запись appinfo".into());
         }
+        record_buf.resize(size, 0);
+        reader
+            .read_exact(&mut record_buf)
+            .map_err(|_| "Обрезанный appinfo.vdf".to_string())?;
+
         let mut data = BinaryReader {
-            bytes: &payload[fixed..],
+            bytes: &record_buf[fixed..],
             pos: 0,
         };
-        if let Ok(value) = data.object(keys.as_deref(), 0) {
-            let app = value.get("appinfo").cloned().unwrap_or(value);
-            apps.insert(appid, app);
+        let mut summary = AppSummary::default();
+        let mut dlc_for_appid = None;
+        if data
+            .parse_summary_section(
+                keys.as_deref(),
+                AppSection::Root,
+                0,
+                &mut summary,
+                &mut dlc_for_appid,
+            )
+            .is_ok()
+        {
+            if let Some(parent) = dlc_for_appid.filter(|p| *p != appid) {
+                index.dlc_children.entry(parent).or_default().push(appid);
+            }
+            if summary.name.is_some() || summary.is_non_game || !summary.list_of_dlc.is_empty() {
+                index.apps.insert(appid, summary);
+            }
         }
     }
-    Ok(apps)
+    Ok(index)
 }
 
-// Разбор appinfo.vdf дорогой, поэтому результат кэшируется до изменения файла:
-// библиотека и каталог DLC читают один и тот же разобранный словарь
-pub(crate) fn read_appinfo(steam: &Path) -> Result<Arc<BTreeMap<u64, Value>>, String> {
+// Компактный кэш appinfo с TTL: экономит ОЗУ после закрытия вкладки DLC/библиотеки
+pub(crate) fn read_appinfo(steam: &Path) -> Result<Arc<AppInfoIndex>, String> {
     let path = steam.join("appcache/appinfo.vdf");
     let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
     if metadata.len() > 256 * 1024 * 1024 {
@@ -574,66 +775,55 @@ pub(crate) fn read_appinfo(steam: &Path) -> Result<Arc<BTreeMap<u64, Value>>, St
     type AppInfoCache = Option<(
         PathBuf,
         (u64, Option<SystemTime>),
-        Arc<BTreeMap<u64, Value>>,
+        Instant,
+        Arc<AppInfoIndex>,
     )>;
     static CACHE: OnceLock<Mutex<AppInfoCache>> = OnceLock::new();
     let cache = CACHE.get_or_init(|| Mutex::new(None));
 
     if let Ok(guard) = cache.lock() {
-        if let Some((cached_path, cached_stamp, parsed)) = guard.as_ref() {
-            if cached_path == &path && cached_stamp == &stamp {
+        if let Some((cached_path, cached_stamp, cached_at, parsed)) = guard.as_ref() {
+            if cached_path == &path
+                && cached_stamp == &stamp
+                && cached_at.elapsed() < Duration::from_secs(180)
+            {
                 return Ok(Arc::clone(parsed));
             }
         }
     }
 
-    let parsed = Arc::new(parse_appinfo(
-        &fs::read(&path).map_err(|error| error.to_string())?,
-    )?);
+    let parsed = Arc::new(parse_appinfo_file(&path)?);
     if let Ok(mut guard) = cache.lock() {
-        *guard = Some((path, stamp, Arc::clone(&parsed)));
+        *guard = Some((path, stamp, Instant::now(), Arc::clone(&parsed)));
     }
     Ok(parsed)
 }
 
-pub(crate) fn cached_dlc_names(
-    apps: &BTreeMap<u64, Value>,
-    appid: u64,
-) -> BTreeMap<String, String> {
+pub(crate) fn cached_dlc_names(index: &AppInfoIndex, appid: u64) -> BTreeMap<String, String> {
     let mut dlcs = BTreeMap::new();
-    let ids = apps
-        .get(&appid)
-        .and_then(|v| v.pointer("/extended/listofdlc"))
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    for id in ids
-        .split(',')
-        .filter_map(|s| s.trim().parse::<u64>().ok())
-        .filter(|id| *id > 0 && *id != appid)
-    {
-        let name = apps
-            .get(&id)
-            .and_then(|v| v.pointer("/common/name"))
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("DLC {id}"));
-        dlcs.insert(id.to_string(), name);
-    }
-    for (id, data) in apps {
-        let parent = data.pointer("/extended/dlcforappid");
-        if parent.and_then(|v| {
-            v.as_u64()
-                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
-        }) != Some(appid)
-        {
-            continue;
+    if let Some(summary) = index.get(&appid) {
+        for &id in &summary.list_of_dlc {
+            if id == 0 || id == appid {
+                continue;
+            }
+            let name = index
+                .get(&id)
+                .and_then(|s| s.name.clone())
+                .unwrap_or_else(|| format!("DLC {id}"));
+            dlcs.insert(id.to_string(), name);
         }
-        let name = data
-            .pointer("/common/name")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("DLC {id}"));
-        dlcs.insert(id.to_string(), name);
+    }
+    if let Some(children) = index.dlc_children.get(&appid) {
+        for &id in children {
+            if id == 0 || id == appid {
+                continue;
+            }
+            let name = index
+                .get(&id)
+                .and_then(|s| s.name.clone())
+                .unwrap_or_else(|| format!("DLC {id}"));
+            dlcs.insert(id.to_string(), name);
+        }
     }
     dlcs
 }
@@ -687,21 +877,33 @@ mod tests {
 
     #[test]
     fn local_dlc_sources_merge_and_do_not_include_depot_ids() {
-        let apps = BTreeMap::from([
-            (
-                10,
-                serde_json::json!({"extended":{"listofdlc":"11,12,11"},"depots":{"999":{}}}),
-            ),
-            (
-                11,
-                serde_json::json!({"common":{"name":"Pack One"},"extended":{"dlcforappid":"10"}}),
-            ),
-            (
-                13,
-                serde_json::json!({"common":{"name":"Hidden Pack"},"extended":{"dlcforappid":10}}),
-            ),
-        ]);
-        let dlcs = cached_dlc_names(&apps, 10);
+        let mut index = AppInfoIndex::default();
+        index.apps.insert(
+            10,
+            AppSummary {
+                name: Some("Base Game".into()),
+                is_non_game: false,
+                list_of_dlc: vec![11, 12, 11],
+            },
+        );
+        index.apps.insert(
+            11,
+            AppSummary {
+                name: Some("Pack One".into()),
+                is_non_game: true,
+                list_of_dlc: vec![],
+            },
+        );
+        index.apps.insert(
+            13,
+            AppSummary {
+                name: Some("Hidden Pack".into()),
+                is_non_game: true,
+                list_of_dlc: vec![],
+            },
+        );
+        index.dlc_children.insert(10, vec![11, 13]);
+        let dlcs = cached_dlc_names(&index, 10);
         assert_eq!(dlcs.len(), 3);
         assert_eq!(dlcs.get("13").map(String::as_str), Some("Hidden Pack"));
         assert!(!dlcs.contains_key("999"));
@@ -714,7 +916,7 @@ mod tests {
         };
         let root = PathBuf::from(root);
         let apps = read_appinfo(&root).unwrap();
-        assert!(!apps.is_empty());
+        assert!(!apps.apps.is_empty());
         let result = scan_libraries(Some(&root), None).unwrap();
         assert!(!result.games.is_empty());
         assert!(result.games.iter().all(|g| Path::new(&g.game_dir).is_dir()));

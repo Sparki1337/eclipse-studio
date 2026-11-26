@@ -112,10 +112,10 @@ async function run() {
     assert(missing.length === 0, "Не зарегистрированы: " + missing.join(", "));
   });
 
-  await test("Запуск без ошибок JS, версия 10.2.0", async () => {
+  await test("Запуск без ошибок JS, версия 10.3.0", async () => {
     const { page, context, errors } = await open();
     const version = await page.textContent(".titlebar-version");
-    assert(version.trim() === "10.2.0", "версия " + version);
+    assert(version.trim() === "10.3.0", "версия " + version);
     assert(errors.length === 0, errors.join("\n"));
     await context.close();
   });
@@ -156,7 +156,7 @@ async function run() {
     assert((await calls(page, "update_launch_ready")).length === 0, "старый экземпляр подтвердил чужой запуск");
   });
   await test("Админ-запуск: переданный и проверяемый после обновления процессы не перезапускаются", async () => {
-    for (const extra of [{ elevatedHandoff: true }, { launchOutcome: { success: true, message: "Обновление подтверждено", version: "10.2.0" } }]) {
+    for (const extra of [{ elevatedHandoff: true }, { launchOutcome: { success: true, message: "Обновление подтверждено", version: "10.3.0" } }]) {
       const { page, context } = await open({ mock: { admin: false, ...extra } });
       assert(await page.evaluate(() => window.__startupAdminAttempts || 0) === 0, "создан повторный процесс при передаче/проверке обновления");
       assert((await calls(page, "update_launch_ready")).length === 1, "не выполнен обычный handshake обновления");
@@ -2560,7 +2560,7 @@ async function run() {
   });
 
   const UPDATE_RELEASE = {
-    available: true, currentVersion: "10.2.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
+    available: true, currentVersion: "10.3.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
     notes: "## Что нового\n- Локальное облако\n- Обновление с перезапуском",
     releaseUrl: "https://github.com/Sparki1337/eclipse-studio/releases/tag/v9.1.0",
     installerUrl: null, portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v9.1.0/EclipseStudio.exe",
@@ -2671,9 +2671,9 @@ async function run() {
     const { page, errors } = await open({
       view: "settings",
       storage: { "cgs-update-snooze-launches": "5", "cgs-language": "en" },
-      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 10.2.0.", version: "10.2.0" } }),
+      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 10.3.0.", version: "10.3.0" } }),
     });
-    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 10.2.0."));
+    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 10.3.0."));
     // Успешная установка сбрасывает откладывание, поэтому новое окно показывается сразу
     await dialogOpen(page);
     assert(await page.evaluate(() => cgsStorage.getItem("cgs-update-snooze-launches")) === null, "откладывание не сброшено после успешной установки");

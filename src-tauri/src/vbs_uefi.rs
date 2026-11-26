@@ -14,7 +14,7 @@ const MAX_JOURNAL: u64 = 20 * 1024 * 1024;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct Status {
+pub(crate) struct Status {
     pub(super) active: bool,
     pub(super) prepared: bool,
     pub(super) can_continue: bool,

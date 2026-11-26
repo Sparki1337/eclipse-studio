@@ -6,8 +6,7 @@ use crate::{
 };
 use std::{
     io::Read,
-    os::windows::process::CommandExt,
-    process::{Command, Stdio},
+    process::Stdio,
     thread,
     time::{Duration, Instant},
 };
@@ -366,12 +365,11 @@ fn tool(name: &str, args: &[&str]) -> Result<String, String> {
     }
     let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
     let path = std::path::PathBuf::from(root).join("System32").join(name);
-    let mut child = Command::new(path)
+    let mut child = crate::process_util::hidden_path_command(&path)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .creation_flags(0x08000000)
         .spawn()
         .map_err(|e| format!("{name}: {e}"))?;
     fn drain(mut input: impl Read) -> Result<Vec<u8>, String> {

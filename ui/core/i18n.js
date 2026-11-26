@@ -99,7 +99,8 @@
     "Сброс и восстановление репозитория WMI при сбоях отчётов": "Reset and repair the WMI repository when report failures occur",
     "Запуск sfc /scannow для проверки системных файлов": "Run sfc /scannow to check system files",
     "Восстановление целостности хранилища компонентов Windows": "Restore the integrity of the Windows component store",
-    "Выберите, какую встроенную версию OpenSteamTool использовать при интеграции манифестов в клиент Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.": "Choose which embedded OpenSteamTool version to use when integrating manifests into the Steam client. Switch to the alternative version if the primary version fails or Steam does not load manifests.",
+    "Выберите расположение встроенных библиотек OpenSteamTool при интеграции манифестов в Steam. Режим совместимости стоит включать, если стандартная установка в корень не срабатывает.": "Choose where to place the embedded OpenSteamTool libraries when integrating manifests into Steam. Switch to compatibility mode if the standard root layout fails.",
+    "Выберите расположение библиотек OpenSteamTool для Steam. Режим совместимости стоит включать, если стандартная установка в корень не срабатывает.": "Choose the OpenSteamTool library layout for Steam. Enable compatibility mode if the standard root layout fails.",
     "(осталось": "(remaining",
     "Инструкция по Eclipse-HV": "Eclipse-HV Instructions",
     "Автономный лаунчер игр с обходом DSE и поддержкой Secure Boot": "Standalone game launcher with DSE bypass and Secure Boot support",
@@ -374,11 +375,12 @@
     "Встроенная версия": "Bundled Version",
     "Версия 1 (Основная)": "Version 1 (Primary)",
     "Версия 2 (Альтернативная)": "Version 2 (Alternative)",
-    "Вшита · 1.57 МБ": "Embedded · 1.57 MB",
-    "Вшита · 1.75 МБ": "Embedded · 1.75 MB",
-    "Основная стабильная версия OpenSteamTool из релизной сборки программы": "Primary stable OpenSteamTool build from the app release",
+    "Вшита · 1.66 МБ": "Embedded · 1.66 MB",
+    "Steam/bin · 1.66 МБ": "Steam/bin · 1.66 MB",
+    "Стандартное расположение: все три DLL размещаются в корне Steam": "Standard layout: all three DLLs are placed in the Steam root folder",
+    "Режим совместимости: dwmapi.dll размещается в папке Steam/bin": "Compatibility mode: dwmapi.dll is placed in the Steam/bin folder",
     "Используйте, если не работает основная версия или возникают проблемы с запуском": "Use if the primary version fails or launch issues occur",
-    "Выбор версии OpenSteamTool: основная (1.57 МБ) или альтернативная (если не работает основная)": "OpenSteamTool version: primary (1.57 MB) or alternative (if primary fails)",
+    "Расположение OpenSteamTool: стандартное (корень Steam) или режим совместимости (Steam/bin)": "OpenSteamTool layout: standard (Steam root) or compatibility mode (Steam/bin)",
     "Выберите версию загрузчика для Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.": "Choose loader version for Steam. Enable alternative build if the primary version fails or Steam ignores manifests.",
     "Версия загрузчика изменена": "Loader Version Changed",
     "Файлы с рабочего стола": "Desktop Files",
@@ -1771,7 +1773,7 @@
     ["Резервная копия:", "Backup:"],
     ["Удалено компонентов:", "Components removed:"],
     ["Системный модуль недоступен", "System module is unavailable"],
-    ["Eclipse Studio 10.2.0 инициализирован", "Eclipse Studio 10.2.0 initialized"],
+    ["Eclipse Studio 10.3.0 инициализирован", "Eclipse Studio 10.3.0 initialized"],
     ["Доступна версия", "Version available:"],
     ["Осталось", "Remaining"],
     ["локальная копия", "local copy"],
@@ -1900,16 +1902,74 @@
     return language === "en" ? "en-US" : "ru-RU";
   }
 
-  function scheduleRefresh() {
-    if (applying || scheduled) return;
-    scheduled = true;
-    queueMicrotask(() => {
-      scheduled = false;
-      refresh();
-    });
+  const pendingNodes = new Set();
+  const pendingTexts = new Set();
+  const pendingAttrs = new Map();
+  let flushQueued = false;
+
+  function flushMutations() {
+    flushQueued = false;
+    if (language !== "en") {
+      pendingNodes.clear();
+      pendingTexts.clear();
+      pendingAttrs.clear();
+      return;
+    }
+    applying = true;
+    try {
+      for (const node of pendingNodes) {
+        if (!node.isConnected) continue;
+        if (node.nodeType === Node.TEXT_NODE) {
+          const parent = node.parentElement;
+          if (parent && !parent.closest("script,style,code,pre,[data-i18n-skip]")) processText(node);
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          translateTree(node);
+        }
+      }
+      for (const textNode of pendingTexts) {
+        if (!textNode.isConnected) continue;
+        const parent = textNode.parentElement;
+        if (parent && !parent.closest("script,style,code,pre,[data-i18n-skip]")) processText(textNode);
+      }
+      for (const [element, attrs] of pendingAttrs) {
+        if (!element.isConnected) continue;
+        for (const attr of attrs) processAttribute(element, attr, false);
+      }
+    } finally {
+      pendingNodes.clear();
+      pendingTexts.clear();
+      pendingAttrs.clear();
+      applying = false;
+    }
   }
 
-  const observer = new MutationObserver(scheduleRefresh);
+  function handleMutations(records) {
+    if (applying || language !== "en") return;
+    for (const record of records) {
+      if (record.type === "childList") {
+        for (const node of record.addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.TEXT_NODE) {
+            pendingNodes.add(node);
+          }
+        }
+      } else if (record.type === "characterData") {
+        pendingTexts.add(record.target);
+      } else if (record.type === "attributes" && record.attributeName) {
+        let attrs = pendingAttrs.get(record.target);
+        if (!attrs) {
+          attrs = new Set();
+          pendingAttrs.set(record.target, attrs);
+        }
+        attrs.add(record.attributeName);
+      }
+    }
+    if (!flushQueued && (pendingNodes.size || pendingTexts.size || pendingAttrs.size)) {
+      flushQueued = true;
+      queueMicrotask(flushMutations);
+    }
+  }
+
+  const observer = new MutationObserver(handleMutations);
   observer.observe(document.documentElement, {
     subtree: true,
     childList: true,

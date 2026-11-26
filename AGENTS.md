@@ -272,9 +272,7 @@ E:\Projects\eclipse-studio\
 
 │   │   ├── smokeapi\                   # SmokeAPI64.dll, SmokeAPI86.dll
 
-│   │   ├── opensteamtool\v1\           # OpenSteamTool v1 (standard) + opensteamtool.toml
-
-│   │   ├── opensteamtool\v2\           # OpenSteamTool v2 (compatibility)
+│   │   ├── opensteamtool\              # Unified OpenSteamTool DLL bundle (rev 3) + opensteamtool.toml + loader-revision.txt
 
 │   │   ├── local-cloud\                # cgs_cloud_redirect.dll (CloudRedirect) + LICENSE.txt
 
@@ -378,7 +376,7 @@ All backend operations run asynchronously or via `tauri::async_runtime::spawn_bl
 
 | **`saves.rs`** | Save Manager engine. Scans 15+ save directories (Saved Games, Documents, LocalAppData, LocalLow, AppData, Steam userdata, Goldberg, GSE, SmartSteamEmu, CODEX, EMPRESS, RUNE, FLT, TENOKE, SKIDROW, OnlineFix). Filters out temporary cache and shaders. Creates ZIP or RAR archives with embedded `cgs-save-manifest.json`. Restores saves with path-traversal security checks. |
 
-| **`luatools.rs`** | Eclipse Manifest & Manifest manager. Reads Steam path from Windows Registry (`HKCU\Software\Valve\Steam`). Installs Lua scripts into `config/stplug-in/` and manifest files into `depotcache/`. Features **Dual OpenSteamTool loader versions** (Version 1 Primary v0.5.3 [1.58 МБ] and Version 2 Alternative embedded in binary from `src-tauri/resources/opensteamtool/v1/` and `v2/`), active Steam detection (`luatools_is_steam_running`), 1-click safe shutdown (`luatools_close_steam`), and OS error 32/5 sharing violation protection. Controls game activation, detail inspection, and Steam client restarts. |
+| **`luatools.rs`** | Eclipse Manifest & Manifest manager. Reads Steam path from Windows Registry (`HKCU\Software\Valve\Steam`). Installs Lua scripts into `config/stplug-in/` and manifest files into `depotcache/`. Features **Unified OpenSteamTool loader** (embedded rev 3 from `src-tauri/resources/opensteamtool/` with standard root and compatibility `bin/dwmapi.dll` layouts, online updates via `loader_updates.rs` / `croclua-dll-feed`), active Steam detection (`luatools_is_steam_running`), 1-click safe shutdown (`luatools_close_steam`), and OS error 32/5 sharing violation protection. Controls game activation, detail inspection, and Steam client restarts. |
 
 | **`ryuu.rs`** | Ryuu Generator API (`generator.ryuu.lol`) client with Cloudflare user-agent emulation for searching and downloading manifest files. |
 
@@ -490,7 +488,7 @@ All scripts are started from the repository root; paths inside them are resolved
 
 | **`build.py`** | Automated build script (`python scripts/build.py`). Supports interactive menu or CLI flags (`--type portable/nsis/all/debug`, `--out <dir>`, `--clean`, `--no-open`). Saves output path in `scripts/build_config.json` (defaults to `C:\Users\Sparki\Desktop\Programms\Hypervisor`), checks prerequisites, calculates SHA-256 hashes, and offers to open Windows Explorer. |
 
-| **`bump_version.py`** | Updates the project version across the repository (`python scripts/bump_version.py 10.2.0`): `tauri.conf.json`, `Cargo.toml`, `package.json`, `package-lock.json`, `ui/index.html`, `ui/core/app.js`, `ui/core/i18n.js`, `dlc_catalog.rs`, `files.rs`, `tauri-mock.js`, `ui.test.js`, `README.md`, `BUILD.md`, `docs/`, the scripts in `scripts/` and `.agents/skills/build/SKILL.md`. Refreshes `Cargo.lock` automatically. |
+| **`bump_version.py`** | Updates the project version across the repository (`python scripts/bump_version.py 10.3.0`): `tauri.conf.json`, `Cargo.toml`, `package.json`, `package-lock.json`, `ui/index.html`, `ui/core/app.js`, `ui/core/i18n.js`, `dlc_catalog.rs`, `files.rs`, `tauri-mock.js`, `ui.test.js`, `README.md`, `BUILD.md`, `docs/`, the scripts in `scripts/` and `.agents/skills/build/SKILL.md`. Refreshes `Cargo.lock` automatically. |
 
 | **`build_local_cloud.ps1`** | Rebuilds `src-tauri/resources/local-cloud/cgs_cloud_redirect.dll` from `third_party/cloudredirect` (port of upstream `tools/Build-LocalCloud.ps1`; run from an x64 Developer PowerShell, needs `cl.exe`, C++20, Windows SDK; static CRT). Copies the MIT license and prints the SHA-256. Not needed for regular builds. |
 
@@ -676,7 +674,7 @@ python scripts/bump_version.py
 
 # Or pass the new version directly:
 
-python scripts/bump_version.py 10.2.0
+python scripts/bump_version.py 10.3.0
 
 ```
 

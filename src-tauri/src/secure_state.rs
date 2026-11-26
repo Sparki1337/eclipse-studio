@@ -3,9 +3,10 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::PathBuf, sync::Mutex};
 use tauri::{AppHandle, Manager};
 static STATE_LOCK: Mutex<()> = Mutex::new(());
+static STATE_CACHE: Mutex<Option<(PathBuf, State)>> = Mutex::new(None);
 const SECRET_KEYS: &[&str] = &["hubcapKey", "ryuuKey"];
 const MAX_STATE: usize = 16 * 1024 * 1024;
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct State {
     schema_version: u32,
@@ -56,13 +57,25 @@ pub(crate) fn crypt(_: &[u8], _: bool) -> Result<Vec<u8>, String> {
     Err("Защищённое хранилище доступно только в Windows; открытая копия не создаётся".into())
 }
 fn load(app: &AppHandle) -> Result<State, String> {
-    let data = match fs::read(path(app)?) {
+    let target = path(app)?;
+    if let Ok(cache) = STATE_CACHE.lock() {
+        if let Some((cached_path, cached_state)) = cache.as_ref() {
+            if cached_path == &target {
+                return Ok(cached_state.clone());
+            }
+        }
+    }
+    let data = match fs::read(&target) {
         Ok(data) => data,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(State {
+            let empty = State {
                 schema_version: 1,
                 ..State::default()
-            })
+            };
+            if let Ok(mut cache) = STATE_CACHE.lock() {
+                *cache = Some((target, empty.clone()));
+            }
+            return Ok(empty);
         }
         Err(e) => return Err(e.to_string()),
     };
@@ -74,20 +87,24 @@ fn load(app: &AppHandle) -> Result<State, String> {
     if state.schema_version != 1 {
         return Err("Неизвестная версия хранилища; автоматический сброс запрещён".into());
     }
+    if let Ok(mut cache) = STATE_CACHE.lock() {
+        *cache = Some((target, state.clone()));
+    }
     Ok(state)
 }
-fn save(app: &AppHandle, state: &State) -> Result<(), String> {
+fn save(app: &AppHandle, state: &State, verify_roundtrip: bool) -> Result<(), String> {
+    let target = path(app)?;
     let data = serde_json::to_vec(state).map_err(|e| e.to_string())?;
     if data.len() > MAX_STATE || state.values.len() > 10_000 {
         return Err("Превышен размер состояния".into());
     }
     let encrypted = crypt(&data, true)?;
-    if crypt(&encrypted, false)? != data {
-        return Err("Проверка шифрования состояния не пройдена".into());
-    }
-    crate::durable::write(&path(app)?, &encrypted)?;
-    if crypt(&fs::read(path(app)?).map_err(|e| e.to_string())?, false)? != data {
+    crate::durable::write(&target, &encrypted)?;
+    if verify_roundtrip && crypt(&fs::read(&target).map_err(|e| e.to_string())?, false)? != data {
         return Err("Проверка миграции после записи не пройдена".into());
+    }
+    if let Ok(mut cache) = STATE_CACHE.lock() {
+        *cache = Some((target, state.clone()));
     }
     Ok(())
 }
@@ -131,7 +148,7 @@ pub async fn state_bootstrap(
                 state.values.entry(key).or_insert(value);
             }
             state.migrated = true;
-            save(&app, &state)?;
+            save(&app, &state, true)?;
         }
         Ok(view(state))
     })
@@ -146,20 +163,29 @@ pub async fn state_apply(
     tauri::async_runtime::spawn_blocking(move || {
         let _lock = STATE_LOCK.lock().map_err(|_| "Хранилище занято")?;
         let mut state = load(&app)?;
+        let mut dirty = false;
         for (key, value) in changes {
             if SECRET_KEYS.contains(&key.as_str()) {
                 return Err("API-ключи изменяются отдельной командой".into());
             }
             match value {
                 Some(value) => {
-                    state.values.insert(key, value);
+                    if state.values.get(&key) != Some(&value) {
+                        state.values.insert(key, value);
+                        dirty = true;
+                    }
                 }
                 None => {
-                    state.values.remove(&key);
+                    if state.values.remove(&key).is_some() {
+                        dirty = true;
+                    }
                 }
             }
         }
-        save(&app, &state)
+        if !dirty {
+            return Ok(());
+        }
+        save(&app, &state, false)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -187,7 +213,7 @@ pub async fn state_set_secret(
         } else {
             state.values.remove(key);
         }
-        save(&app, &state)?;
+        save(&app, &state, false)?;
         Ok(configured)
     })
     .await
@@ -229,7 +255,7 @@ pub fn set(app: &AppHandle, key: &str, value: &str) -> Result<(), String> {
     let _lock = STATE_LOCK.lock().map_err(|_| "Хранилище занято")?;
     let mut state = load(app)?;
     state.values.insert(key.into(), value.into());
-    save(app, &state)
+    save(app, &state, false)
 }
 #[cfg(all(test, windows))]
 mod tests {

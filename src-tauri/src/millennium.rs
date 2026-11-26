@@ -37,31 +37,23 @@ const EMBEDDED_PLUGIN_FILES: &[(&str, &[u8])] = &[
     ),
     (
         "backend/loader/OpenSteamTool.dll",
-        include_bytes!("../resources/opensteamtool/v1/OpenSteamTool.dll"),
+        include_bytes!("../resources/opensteamtool/OpenSteamTool.dll"),
     ),
     (
         "backend/loader/dwmapi.dll",
-        include_bytes!("../resources/opensteamtool/v1/dwmapi.dll"),
+        include_bytes!("../resources/opensteamtool/dwmapi.dll"),
     ),
     (
         "backend/loader/xinput1_4.dll",
-        include_bytes!("../resources/opensteamtool/v1/xinput1_4.dll"),
+        include_bytes!("../resources/opensteamtool/xinput1_4.dll"),
     ),
     (
-        "backend/loader/compatibility/OpenSteamTool.dll",
-        include_bytes!("../resources/opensteamtool/v2/OpenSteamTool.dll"),
-    ),
-    (
-        "backend/loader/compatibility/dwmapi.dll",
-        include_bytes!("../resources/opensteamtool/v2/dwmapi.dll"),
-    ),
-    (
-        "backend/loader/compatibility/xinput1_4.dll",
-        include_bytes!("../resources/opensteamtool/v2/xinput1_4.dll"),
+        "backend/loader/revision.txt",
+        include_bytes!("../resources/opensteamtool/loader-revision.txt"),
     ),
     (
         "backend/loader/opensteamtool.toml",
-        include_bytes!("../resources/opensteamtool/v1/opensteamtool.toml"),
+        include_bytes!("../resources/opensteamtool/opensteamtool.toml"),
     ),
     (
         "plugin.json",
@@ -298,7 +290,7 @@ pub fn millennium_plugin_status(steam_path: Option<String>) -> MillenniumPluginS
     status_for(steam_path)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult {
     let _resource_guard =
         match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
@@ -324,7 +316,26 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
         );
     }
 
-    let target_root = plugin_dir(&steam);
+    if let Err(message) = crate::lua_loader::ensure(&steam) {
+        return OperationResult::error(message, vec![]);
+    }
+
+    install_plugin_files(&steam)
+}
+
+fn install_plugin_files(steam: &Path) -> OperationResult {
+    let _lock = match crate::lua_loader::acquire_file_lock(steam) {
+        Ok(lock) => lock,
+        Err(error) => return OperationResult::error(error, vec![]),
+    };
+    let target_root = plugin_dir(steam);
+    let legacy_compat = target_root
+        .join("backend")
+        .join("loader")
+        .join("compatibility");
+    if legacy_compat.is_dir() {
+        let _ = fs::remove_dir_all(&legacy_compat);
+    }
     let previous_version = installed_plugin_version(&target_root);
     let mut logs = Vec::new();
     let mut changed = 0_u32;
@@ -334,7 +345,7 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
         let target = relative
             .split('/')
             .fold(target_root.clone(), |path, part| path.join(part));
-        if let Err(e) = crate::safe_path::child(&steam, &target) {
+        if let Err(e) = crate::safe_path::child(steam, &target) {
             return OperationResult::error(e, logs);
         }
         if let Some(parent) = target.parent() {
@@ -346,7 +357,7 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
             }
         }
 
-        let relative = match target.strip_prefix(&steam) {
+        let relative = match target.strip_prefix(steam) {
             Ok(path) => path.to_string_lossy().into_owned(),
             Err(error) => return OperationResult::error(error.to_string(), logs),
         };
@@ -354,14 +365,14 @@ pub fn millennium_install_plugin(steam_path: Option<String>) -> OperationResult 
         // установленный хеш. Без подтверждения такая запись считалась чужой,
         // и обновление останавливалось с конфликтом. Папка плагина наша,
         // поэтому уже лежащие в ней файлы подтверждаем как установленные.
-        let _ = crate::backup::record_installed(&steam, &relative);
+        let _ = crate::backup::record_installed(steam, &relative);
         if fs::read(&target).ok().as_deref() == Some(*contents) {
             logs.push(format!("Без изменений: {relative}"));
             continue;
         }
-        if let Err(error) = crate::backup::protect(&steam, &relative, "millennium-install")
+        if let Err(error) = crate::backup::protect(steam, &relative, "millennium-install")
             .and_then(|_| crate::durable::write(&target, contents))
-            .and_then(|_| crate::backup::record_installed(&steam, &relative))
+            .and_then(|_| crate::backup::record_installed(steam, &relative))
         {
             return OperationResult::error(
                 format!("Не удалось записать {}: {error}", target.display()),
@@ -403,19 +414,18 @@ pub(crate) fn update_installed_for_loader(steam: &Path) -> Result<(), String> {
         if parts.len() != 3 {
             return Err("Неизвестная версия установленного плагина. Проверьте его вручную.".into());
         }
-        if parts.as_slice() > [0, 5, 2].as_slice() {
+        if parts.as_slice() > [5, 5, 0].as_slice() {
             return Ok(());
         }
     }
     if installed_version.as_deref() == Some(BUNDLED_PLUGIN_VERSION)
-        && fs::read(plugin.join("backend/install-loader.ps1"))
-            .ok()
-            .as_deref()
-            == Some(EMBEDDED_PLUGIN_FILES[0].1)
+        && EMBEDDED_PLUGIN_FILES
+            .iter()
+            .all(|(name, bytes)| fs::read(plugin.join(name)).ok().as_deref() == Some(*bytes))
     {
         return Ok(());
     }
-    let result = millennium_install_plugin(Some(steam.display().to_string()));
+    let result = install_plugin_files(steam);
     if result.success {
         Ok(())
     } else {
@@ -423,7 +433,7 @@ pub(crate) fn update_installed_for_loader(steam: &Path) -> Result<(), String> {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn millennium_remove_plugin(steam_path: Option<String>) -> OperationResult {
     let _resource_guard =
         match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
@@ -479,7 +489,7 @@ pub fn millennium_remove_plugin(steam_path: Option<String>) -> OperationResult {
 }
 
 // Замена устаревшего плагина CrocLua на Eclipse Manifest
-#[tauri::command]
+#[tauri::command(async)]
 pub fn millennium_migrate_from_croclua(steam_path: Option<String>) -> OperationResult {
     let _resource_guard =
         match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
@@ -526,7 +536,7 @@ pub fn millennium_migrate_from_croclua(steam_path: Option<String>) -> OperationR
 }
 
 // Удаление устаревшего плагина CrocLua без немедленной установки
-#[tauri::command]
+#[tauri::command(async)]
 pub fn millennium_remove_legacy_croclua(steam_path: Option<String>) -> OperationResult {
     let _resource_guard =
         match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {
@@ -626,7 +636,7 @@ fn install_bundled_runtime(steam: &Path) -> OperationResult {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn millennium_install_bundled(steam_path: Option<String>) -> OperationResult {
     let _resource_guard =
         match crate::resource_lock::Guard::scope(&[match resolve_steam_path(steam_path.clone()) {

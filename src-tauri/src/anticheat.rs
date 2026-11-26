@@ -5,19 +5,12 @@ use std::{
     collections::HashSet,
     env, fs,
     path::{Path, PathBuf},
-    process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
 use winreg::{
     enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY},
     RegKey,
 };
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Clone, Copy)]
 struct PathProbe {
@@ -426,9 +419,9 @@ fn scan_report() -> Result<AntiCheatReport, String> {
 fn scan_internal() -> Result<Vec<Detection>, String> {
     let uninstall_entries = read_uninstall_entries();
     let services = read_services();
-    let mut result = Vec::with_capacity(DEFINITIONS.len());
 
-    for definition in DEFINITIONS {
+    // Многопоточная проверка всех определений античитов
+    let result = crate::http_pool::parallel_map(DEFINITIONS, 8, |definition| {
         let mut evidence = Vec::new();
         let mut targets = Vec::new();
         let mut seen = HashSet::new();
@@ -499,7 +492,7 @@ fn scan_internal() -> Result<Vec<Detection>, String> {
         }
 
         deduplicate_targets(&mut targets);
-        result.push(Detection {
+        Detection {
             item: AntiCheatItem {
                 id: definition.id.to_string(),
                 name: definition.name.to_string(),
@@ -509,8 +502,8 @@ fn scan_internal() -> Result<Vec<Detection>, String> {
                 evidence,
             },
             targets,
-        });
-    }
+        }
+    });
     Ok(result)
 }
 
@@ -762,15 +755,11 @@ fn remove_service(name: &str, backup: &Path) -> Result<(), String> {
         &backup.join(format!("service-{name}.reg")),
         "64",
     )?;
-    let mut stop = Command::new("sc.exe");
+    let mut stop = crate::process_util::hidden_command("sc.exe");
     stop.args(["stop", name]);
-    #[cfg(target_os = "windows")]
-    stop.creation_flags(CREATE_NO_WINDOW);
     let _ = stop.output();
-    let mut delete = Command::new("sc.exe");
+    let mut delete = crate::process_util::hidden_command("sc.exe");
     delete.args(["delete", name]);
-    #[cfg(target_os = "windows")]
-    delete.creation_flags(CREATE_NO_WINDOW);
     let output = delete
         .output()
         .map_err(|error| format!("не удалось удалить службу {name}: {error}"))?;
@@ -785,18 +774,14 @@ fn remove_registry(path: &str, backup: &Path, index: usize) -> Result<(), String
     for view in ["64", "32"] {
         let export = backup.join(format!("registry-{index}-{view}.reg"));
         // Отсутствующий вид пропускается, ошибка экспорта существующего ключа останавливает удаление
-        let mut probe = Command::new("reg.exe");
+        let mut probe = crate::process_util::hidden_command("reg.exe");
         probe.args(["query", path, &format!("/reg:{view}")]);
-        #[cfg(windows)]
-        probe.creation_flags(CREATE_NO_WINDOW);
         if !probe.output().map_err(|e| e.to_string())?.status.success() {
             continue;
         }
         export_registry(path, &export, view)?;
-        let mut command = Command::new("reg.exe");
+        let mut command = crate::process_util::hidden_command("reg.exe");
         command.args(["delete", path, "/f", &format!("/reg:{view}")]);
-        #[cfg(target_os = "windows")]
-        command.creation_flags(CREATE_NO_WINDOW);
         command
             .output()
             .map_err(|error| format!("не удалось удалить запись {path}: {error}"))?;
@@ -809,12 +794,10 @@ fn remove_registry(path: &str, backup: &Path, index: usize) -> Result<(), String
 }
 
 fn export_registry_raw(path: &str, destination: &Path, view: &str) -> Result<(), String> {
-    let mut command = Command::new("reg.exe");
+    let mut command = crate::process_util::hidden_command("reg.exe");
     command.args(["export", path]);
     command.arg(destination);
     command.args(["/y", &format!("/reg:{view}")]);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(CREATE_NO_WINDOW);
     let output = command
         .output()
         .map_err(|error| format!("не удалось сохранить {path}: {error}"))?;
@@ -1031,8 +1014,7 @@ pub(crate) async fn anticheat_restore(
                     SystemRestoreRecord::Registry { path, view, file, hash } => (|| {
                         // Защищаем текущее содержимое перед импортом, если ключ уже появился заново
                         if registry_key_exists(&path) { export_registry_raw(&path, &parent.join(format!("before-restore-{}.reg", uuid::Uuid::new_v4())), &view)?; }
-                        let mut command = Command::new("reg.exe"); command.arg("import").arg(crate::safe_path::join(&parent, &file)?).arg(format!("/reg:{view}"));
-                        #[cfg(windows)] command.creation_flags(CREATE_NO_WINDOW);
+                        let mut command = crate::process_util::hidden_command("reg.exe"); command.arg("import").arg(crate::safe_path::join(&parent, &file)?).arg(format!("/reg:{view}"));
                         let output = command.output().map_err(|e| e.to_string())?; if !output.status.success() { return Err(format!("Не удалось импортировать {path}")); }
                         let check = parent.join(format!("verify-{}.reg", uuid::Uuid::new_v4())); export_registry_raw(&path, &check, &view)?;
                         if crate::durable::hash_file(&check)? != hash { return Err(format!("Содержимое реестра после восстановления отличается: {path}")); }

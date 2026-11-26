@@ -195,23 +195,12 @@ fn named_dlcs(dlcs: BTreeMap<String, String>) -> Vec<DlcEntry> {
 
 // Параллельный запрос названий DLC
 fn resolve_names(ids: &[u64]) -> BTreeMap<String, String> {
-    let mut names = BTreeMap::new();
-    for chunk in ids.chunks(PARALLEL_REQUESTS) {
-        let resolved = std::thread::scope(|scope| {
-            let handles = chunk
-                .iter()
-                .map(|id| (*id, scope.spawn(move || steam::app_name(*id))))
-                .collect::<Vec<_>>();
-            handles
-                .into_iter()
-                .map(|(id, handle)| (id, handle.join().ok().flatten()))
-                .collect::<Vec<_>>()
-        });
-        for (id, name) in resolved {
-            names.insert(id.to_string(), name.unwrap_or_else(|| format!("DLC {id}")));
-        }
-    }
-    names
+    let resolved =
+        crate::http_pool::parallel_map(ids, PARALLEL_REQUESTS, |id| (*id, steam::app_name(*id)));
+    resolved
+        .into_iter()
+        .map(|(id, name)| (id.to_string(), name.unwrap_or_else(|| format!("DLC {id}"))))
+        .collect()
 }
 
 #[tauri::command]

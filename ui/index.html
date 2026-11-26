@@ -173,7 +173,7 @@
       <div class="titlebar-brand" data-tauri-drag-region>
         <div class="mini-mark" data-tauri-drag-region><span class="eclipse-mark" aria-hidden="true" data-tauri-drag-region></span></div>
         <span data-tauri-drag-region>Eclipse Studio</span>
-        <span class="titlebar-version" data-tauri-drag-region>10.2.0</span>
+        <span class="titlebar-version" data-tauri-drag-region>10.3.0</span>
       </div>
       <button class="titlebar-search" id="titlebar-search" type="button" aria-label="Быстрый поиск" aria-keyshortcuts="Control+K">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
@@ -262,7 +262,7 @@
           <div class="home-hero premium-panel">
             <div class="home-glow"></div>
             <div class="hero-copy">
-              <span class="hero-kicker">ECLIPSE STUDIO 10.2.0</span>
+              <span class="hero-kicker">ECLIPSE STUDIO 10.3.0</span>
               <h2>Ваша игровая<br/><span>лаборатория.</span></h2>
               <p>Единое пространство для настройки игр, управления сетевыми компонентами и будущих инструментов.</p>
             </div>
@@ -600,7 +600,7 @@
                   <span class="manifest-loader-badge checking" id="manifest-loader-active-badge">Проверка…</span>
                 </div>
                 <h3>Версия OpenSteamTool</h3>
-                <p>Выберите версию загрузчика для Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.</p>
+                <p>Выберите расположение библиотек OpenSteamTool для Steam. Режим совместимости стоит включать, если стандартная установка в корень не срабатывает.</p>
               </div>
               <div class="manifest-loader-actions equal-button-group">
                 <button type="button" class="manifest-loader-sync-btn" id="manifest-loader-sync-btn" title="Проверить и синхронизировать DLL с GitHub">
@@ -617,16 +617,16 @@
               <div class="loader-option active" data-loader-source="v1" role="button" tabindex="0">
                 <div class="svc-option-header">
                   <strong>Версия 1 (Основная)</strong>
-                  <span class="loader-src-tag">Вшита · 1.57 МБ</span>
+                  <span class="loader-src-tag">Вшита · 1.66 МБ</span>
                 </div>
-                <small>Основная стабильная версия OpenSteamTool из релизной сборки программы</small>
+                <small>Стандартное расположение: все три DLL размещаются в корне Steam</small>
               </div>
               <div class="loader-option" data-loader-source="v2" role="button" tabindex="0">
                 <div class="svc-option-header">
                   <strong>Версия 2 (Альтернативная)</strong>
-                  <span class="loader-src-tag">Вшита · 1.75 МБ</span>
+                  <span class="loader-src-tag">Steam/bin · 1.66 МБ</span>
                 </div>
-                <small>Используйте, если не работает основная версия или возникают проблемы с запуском</small>
+                <small>Режим совместимости: dwmapi.dll размещается в папке Steam/bin</small>
               </div>
             </div>
           </section>
@@ -2144,7 +2144,7 @@
                     </span>
                     <div class="settings-collapsible-title">
                       <strong>Загрузчик манифестов Steam</strong>
-                      <small>Выбор версии OpenSteamTool: основная (1.57 МБ) или альтернативная (если не работает основная)</small>
+                      <small>Расположение OpenSteamTool: стандартное (корень Steam) или режим совместимости (Steam/bin)</small>
                     </div>
                   </div>
                   <span class="settings-collapsible-chevron">
@@ -2154,7 +2154,7 @@
                 <div class="settings-collapsible-content">
                   <div class="manifest-loader-head">
                     <div class="manifest-loader-copy">
-                      <p class="settings-loader-desc">Выберите, какую встроенную версию OpenSteamTool использовать при интеграции манифестов в клиент Steam. Альтернативную версию стоит включать, если основная версия не работает или Steam не подхватывает манифесты.</p>
+                      <p class="settings-loader-desc">Выберите расположение встроенных библиотек OpenSteamTool при интеграции манифестов в Steam. Режим совместимости стоит включать, если стандартная установка в корень не срабатывает.</p>
                     </div>
                     <div class="manifest-loader-actions equal-button-group">
                       <button type="button" class="manifest-loader-sync-btn" id="settings-loader-sync-btn" title="Синхронизировать файлы загрузчика с облаком GitHub">
@@ -2171,16 +2171,16 @@
                     <div class="loader-option active" data-loader-source="v1" role="button" tabindex="0">
                       <div class="svc-option-header">
                         <strong>Версия 1 (Основная)</strong>
-                        <span class="loader-src-tag">Вшита · 1.57 МБ</span>
+                        <span class="loader-src-tag">Вшита · 1.66 МБ</span>
                       </div>
-                      <small>Основная стабильная версия OpenSteamTool из релизной сборки программы</small>
+                      <small>Стандартное расположение: все три DLL размещаются в корне Steam</small>
                     </div>
                     <div class="loader-option" data-loader-source="v2" role="button" tabindex="0">
                       <div class="svc-option-header">
                         <strong>Версия 2 (Альтернативная)</strong>
-                        <span class="loader-src-tag">Вшита · 1.75 МБ</span>
+                        <span class="loader-src-tag">Steam/bin · 1.66 МБ</span>
                       </div>
-                      <small>Используйте, если не работает основная версия или возникают проблемы с запуском</small>
+                      <small>Режим совместимости: dwmapi.dll размещается в папке Steam/bin</small>
                     </div>
                   </div>
                 </div>
@@ -2391,7 +2391,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">10.2.0</b></div>
+                  <div class="about-row"><span>Текущая версия</span><b id="update-current-version">10.3.0</b></div>
                   <div class="update-actions">
                     <button class="ghost-button" id="check-update-button">Проверить обновления</button>
                     <span id="update-status">Проверка ещё не выполнялась</span>
@@ -2420,7 +2420,7 @@
                   </span>
                 </summary>
                 <div class="settings-collapsible-content">
-                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">10.2.0</b></div>
+                  <div class="about-row"><span>Версия программы</span><b id="about-app-version">10.3.0</b></div>
                   <div class="about-row"><span>Версия Eclipse HV</span><b id="about-hv-version">Проверка…</b></div>
                   <div class="about-row"><span>Права доступа</span><b id="about-admin-rights">Проверка…</b></div>
                   <div class="about-row"><span>Путь к Steam</span><b id="about-steam-path" class="about-path">Определение…</b></div>

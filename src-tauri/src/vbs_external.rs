@@ -25,7 +25,7 @@ struct ExternalBackup {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(super) struct ExternalStatus {
+pub(crate) struct ExternalStatus {
     pub detected: bool,
     pub can_restore: bool,
     pub tracked_changes: usize,

@@ -6,7 +6,7 @@
 
 **Автономный центр управления Steam-библиотекой, дополнениями, сетевыми фиксами и системной средой**
 
-[![Версия](https://img.shields.io/badge/Версия-10.2.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases/latest)
+[![Версия](https://img.shields.io/badge/Версия-10.3.0-63f5c2?style=for-the-badge&logo=tauri&logoColor=black)](https://github.com/Sparki1337/eclipse-studio/releases/latest)
 [![Платформа](https://img.shields.io/badge/Платформа-Windows_10_|_11_(x64)-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
 [![Процессоры](https://img.shields.io/badge/CPU-Поддержка_AVX2-5c6bc0?style=for-the-badge)](#-о-проекте)
 [![Стек](https://img.shields.io/badge/Стек-Rust_Tauri_v2-f74c00?style=for-the-badge&logo=rust&logoColor=white)](https://tauri.app/)
@@ -63,7 +63,7 @@
 ### 📜 Eclipse Manifest & Загрузка манифестов
 * **Интеграция с источниками манифестов (Ryuu & HubCap)**: прямой поиск и загрузка файлов через сервисы **HubCap** (рекомендуется для стабильной работы без блокировок, с отслеживанием лимита) и **Ryuu Generator** (с поддержкой авторизации по API-ключу).
 * **Автоматическая раскладка**: перемещение `.lua`-скриптов в `config/stplug-in/` и `.manifest` в `depotcache/` без ручных действий.
-* **Встроенный OpenSteamTool (v1 и v2)**: переключение между основной (v0.5.3, 1.58 МБ) и альтернативной версиями загрузчика, поддержка Схемы 2 файловой структуры и автозавершение зависших процессов Steam для предотвращения ошибок занятости файлов (`os error 32`).
+* **Встроенный OpenSteamTool (ревизия 3, 1.66 МБ)**: единый комплект загрузчика с переключением между стандартным расположением (корень Steam) и режимом совместимости (`Steam/bin/dwmapi.dll`), поддержкой Схемы 2 файловой структуры, онлайн-обновлением через `croclua-dll-feed` и автозавершением зависших процессов Steam для предотвращения ошибок занятости файлов (`os error 32`).
 * **Локальное облако (CloudRedirect)**: сохранения игр, добавленных через Lua и манифесты, синхронизируются как облачные, но хранятся в выбранной папке на вашем диске — без Google Drive, OneDrive и регистрации. Включается одним переключателем: программа проверяет совместимость загрузчика OpenSteamTool, делает резервную копию `opensteamtool.toml`, откатывает изменения при ошибке и сама перезапускает Steam. Обычные игры Steam продолжают пользоваться своим облаком.
 * **Плагин для Millennium («Eclipse Manifest» v5.5.0)**: встроенный плагин, добавляющий кнопку «Получить манифест» прямо на страницы игр внутри официального клиента Steam.
 
@@ -112,7 +112,7 @@
 | **Диагностика и ремонт Windows** | Пакетные команды восстановления | **Раздельная диагностика и ремонт WMI, SFC, DISM** с живым потоковым логом |
 | **Безопасность BitLocker и UEFI** | Стандартный системный перезапуск | Проверка BitLocker; отдельные EFI/BCD-объекты, DPAPI-журнал, проверяемый откат и явное согласие на UEFI relock |
 | **Установка кряков** | Скачивание в Загрузки и ручная распаковка | **Автоустановка в 1 клик**: умный разбор структуры и бэкап |
-| **Поддержка OpenSteamTool** | Единственная внешняя версия | **Двойной встроенный загрузчик (v1 / v2) + Схема 2** |
+| **Поддержка OpenSteamTool** | Единый комплект через `croclua-dll-feed` | **Встроенный единый комплект (rev 3) + Схема 2**, стандартное и `bin/dwmapi.dll` расположение, безопасное закрытие Steam |
 | **Автообновление** | Встроенный апдейтер через отдельную утилиту `CgsUpdater.exe` | **Обновление в 1 клик без сторонних утилит**: проверка SHA-256 из релиза GitHub, замена EXE на месте (ярлыки и путь сохраняются), откат при сбое и напоминание через 5 запусков |
 | **Интерфейс и темы** | Базовые темы (до 125% масштабирования) | **14 тем оформления**, 12 неоновых акцентов, зум 85%–140%, настраиваемая главная |
 
@@ -134,7 +134,7 @@
 > [!NOTE]
 > **Аппаратные требования**: требуется процессор с поддержкой инструкций **AVX2** (поддерживаются как старые линейки CPU, начиная с Intel Core 4-го поколения Haswell и AMD Zen / Excavator, так и новейшие современные платформы).
 
-1. Перейдите в раздел **[Releases](https://github.com/Sparki1337/eclipse-studio/releases/latest)** и скачайте актуальный файл `Eclipse-Studio-v10.2.0.exe`.
+1. Перейдите в раздел **[Releases](https://github.com/Sparki1337/eclipse-studio/releases/latest)** и скачайте актуальный файл `Eclipse-Studio-v10.3.0.exe`.
 2. Поместите исполняемый файл в любую удобную папку (установка не требуется).
 3. Запустите приложение (для доступа к функциям VBS, Test Mode и реестру Steam рекомендуется запуск от имени администратора).
 
@@ -189,6 +189,17 @@ eclipse-studio/
 * **LeoBanned** ([@LeoBanned](https://github.com/LeoBanned)) — автор оригинального проекта Crocodile Gena Studio.
 * Участникам сообщества **Пиратской Станции** за тестирование, поддержку и предоставление базы релизов.
 
+### Используемые компоненты и сервисы (Credits):
+1. **OpenSteamTool** — [GitHub](https://github.com/OpenSteam001/OpenSteamTool). Загрузчик DLL для работы Lua-манифестов.
+2. **CloudRedirect** — [GitHub](https://github.com/crghofficial/cloudredirect). Обеспечивает работу функции «Локальное облако».
+3. **Millennium** — [GitHub](https://github.com/SteamClientHomebrew/Millennium). Фреймворк для плагинов и тем клиента Steam.
+4. **SmokeAPI — acidicoala** — [GitHub](https://github.com/acidicoala/SmokeAPI). Компонент разблокировки DLC.
+5. **CreamAPI** — [Тема на CS.RIN.RU](https://cs.rin.ru/forum/viewtopic.php?t=70576). Альтернативный компонент разблокировки DLC.
+6. **Ryuu Manifests** — [Сайт](https://generator.ryuu.lol/). Сервис получения манифестов.
+7. **HubCap** — [Сайт](https://hubcapmanifest.com/). Сервис получения манифестов.
+8. **FreeTP** — [Сайт](https://freetp.org/). Ресурс для Online-Fix.
+9. **Nemirtingas** — [Тема на CS.RIN.RU](https://cs.rin.ru/forum/viewtopic.php?f=29&t=105551&hilit=Nemirtingas). Инструментарий для гипервизора и эмуляции.
+
 ### Сообщество и каналы связи:
 * 📢 **[Пиратская Станция в Telegram](https://t.me/piratestationn)** — новости, релизы и обсуждение.
 * 💬 **[Eclipse Studio / Sparki](https://t.me/gde_sparki)** — личный Telegram разработчика.
@@ -202,6 +213,6 @@ eclipse-studio/
 
 <div align="center">
 
-**Eclipse Studio v10.2.0** • 2026
+**Eclipse Studio v10.3.0** • 2026
 
 </div>

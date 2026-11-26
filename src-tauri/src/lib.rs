@@ -14,11 +14,12 @@ mod engine;
 mod external_vbs_plan;
 mod files;
 mod game_artwork;
+mod http_pool;
 mod hubcap;
 mod hypervisor;
 mod jobs;
 mod key_menu;
-mod loader_github;
+mod loader_updates;
 mod local_cloud;
 mod local_cloud_core;
 mod lua_loader;
@@ -28,6 +29,7 @@ mod models;
 mod native_dialog;
 mod native_drop;
 mod operation_outcome;
+mod process_util;
 mod resource_lock;
 mod ryuu;
 mod ryuu_auth;
@@ -448,7 +450,7 @@ pub fn run() {
             steam_patch::steam_patch_status,
             steam_patch::steam_patch_apply,
             steam_patch::steam_patch_restore,
-            loader_github::luatools_check_loader_updates,
+            loader_updates::luatools_check_loader_updates,
             lua_loader::luatools_loader_info,
             millennium::millennium_plugin_status,
             millennium::millennium_install_plugin,
@@ -542,6 +544,16 @@ pub fn run() {
             std::thread::spawn(|| {
                 std::thread::sleep(std::time::Duration::from_millis(800));
                 let _ = updates::cleanup_old_versions();
+            });
+
+            // Фоновая синхронизация установленного плагина Eclipse Manifest с ресурсами загрузчика
+            #[cfg(target_os = "windows")]
+            tauri::async_runtime::spawn_blocking(|| {
+                if let Some(steam) = luatools::resolve_steam_path(None) {
+                    if let Err(error) = millennium::update_installed_for_loader(&steam) {
+                        eprintln!("Eclipse Manifest: {error}");
+                    }
+                }
             });
 
             Ok(())

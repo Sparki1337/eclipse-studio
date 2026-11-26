@@ -6,12 +6,9 @@ use crate::{
 };
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 use tauri::AppHandle;
 
 const BASE: &str = "https://hubcapmanifest.com/api/v1";
-const USER_AGENT: &str =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 #[derive(Deserialize)]
 struct SearchResponse {
@@ -39,12 +36,8 @@ pub struct HubcapUsage {
     pub remaining: u64,
 }
 
-fn client() -> Result<Client, String> {
-    Client::builder()
-        .user_agent(USER_AGENT)
-        .timeout(Duration::from_secs(60))
-        .build()
-        .map_err(|error| format!("Не удалось подготовить сетевой клиент: {error}"))
+fn client() -> Result<&'static Client, String> {
+    crate::http_pool::browser_client()
 }
 
 fn encode(value: &str) -> String {

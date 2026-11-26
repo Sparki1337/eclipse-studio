@@ -29,8 +29,8 @@ def get_version() -> str:
     if TAURI_CONF.exists():
         with open(TAURI_CONF, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data.get("version", "10.2.0")
-    return "10.2.0"
+            return data.get("version", "10.3.0")
+    return "10.3.0"
 
 
 def compute_sha256(file_path: Path) -> str:

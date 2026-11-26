@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)][string]$SteamPath,
     [Parameter(Mandatory=$true)][string]$ResourcePath
 )
@@ -122,55 +122,68 @@ if ($null -ne $taskOldSelection) {
     catch { throw 'Некорректный JSON выбора загрузчика. Выберите версию в Eclipse Studio.' }
     Validate-Selection $taskSelection
 }
-$taskVariant = if ($null -ne $taskSelection) { $taskSelection.variant } else { 'standard' }
-if ($null -eq $taskSelection) {
-    if (Same-Bytes (Read-OptionalBytes (Join-Path $taskSteam 'OpenSteamTool.dll')) ([IO.File]::ReadAllBytes((Join-Path $taskResources 'compatibility/OpenSteamTool.dll')))) { $taskVariant = 'compatibility' }
-}
-$taskVariantResources = if ($taskVariant -eq 'compatibility') { Join-Path $taskResources 'compatibility' } else { $taskResources }
-if ($null -eq $taskSelection) {
-    $taskSchema = 2
-    if ($taskVariant -eq 'compatibility' -and -not [IO.File]::Exists((Join-Path $taskSteam 'bin/dwmapi.dll')) -and
-        (Same-Bytes (Read-OptionalBytes (Join-Path $taskSteam 'dwmapi.dll')) ([IO.File]::ReadAllBytes((Join-Path $taskVariantResources 'dwmapi.dll'))))) { $taskSchema = 1 }
-    $taskHashes = [ordered]@{}
-    foreach ($taskName in @('OpenSteamTool.dll','dwmapi.dll','xinput1_4.dll')) {
-        $taskTargetName = if ($taskSchema -eq 2 -and $taskVariant -eq 'compatibility' -and $taskName -eq 'dwmapi.dll') { 'bin/dwmapi.dll' } else { $taskName }
-        $taskHashes[$taskTargetName] = Hash-Bytes ([IO.File]::ReadAllBytes((Join-Path $taskVariantResources $taskName)))
-    }
-    $taskSelection = [pscustomobject]@{schema=$taskSchema;variant=$taskVariant;hashes=[pscustomobject]$taskHashes}
-    Validate-Selection $taskSelection
-}
-$taskCurrent = $true
-foreach ($taskProperty in $taskSelection.hashes.PSObject.Properties) {
-    $taskInstalled = Read-OptionalBytes (Join-Path $taskSteam $taskProperty.Name)
-    if ($null -eq $taskInstalled -or (Hash-Bytes $taskInstalled) -cne $taskProperty.Value) { $taskCurrent = $false }
-}
-$taskDllBytes = @{}
-if (-not $taskCurrent) {
-    [string[]]$taskKeys = @($taskSelection.hashes.PSObject.Properties.Name)
-    [Array]::Sort($taskKeys, [StringComparer]::Ordinal)
-    $taskOrderedHashes = [ordered]@{}
-    foreach ($taskKey in $taskKeys) { $taskOrderedHashes[$taskKey] = $taskSelection.hashes.$taskKey }
-    $taskCanonical = [ordered]@{schema=[int]$taskSelection.schema;variant=[string]$taskVariant;hashes=$taskOrderedHashes}
-    $taskCacheKey = Hash-Bytes ($taskUtf8.GetBytes(($taskCanonical | ConvertTo-Json -Depth 4 -Compress)))
-    $taskCache = Join-Path $taskSteam ('config/cgs-luatools-loader-cache/' + $taskVariant + '/' + $taskCacheKey)
-    foreach ($taskProperty in $taskSelection.hashes.PSObject.Properties) {
-        $taskName = $taskProperty.Name
-        $taskBaseName = [IO.Path]::GetFileName($taskName)
-        $taskBytes = Read-OptionalBytes (Join-Path $taskVariantResources $taskBaseName)
-        if ($null -eq $taskBytes -or (Hash-Bytes $taskBytes) -cne $taskProperty.Value) {
-            $taskBytes = Read-OptionalBytes (Join-Path $taskCache $taskBaseName)
-        }
-        if ($null -eq $taskBytes -or (Hash-Bytes $taskBytes) -cne $taskProperty.Value) {
-            throw 'Закреплённые библиотеки повреждены или отсутствуют в кэше. Обновите DLL вручную в Eclipse Studio.'
-        }
-        if ($taskBytes.Length -lt 1024 -or $taskBytes[0] -ne 77 -or $taskBytes[1] -ne 90) { throw 'Некорректный бинарный файл DLL. Установка отменена.' }
-        $taskDllBytes[$taskName] = $taskBytes
-        $taskParent = Split-Path -Parent (Join-Path $taskSteam $taskName)
-        if ((Test-Path -LiteralPath $taskParent) -and ((Get-Item -LiteralPath $taskParent -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Каталог назначения DLL является ссылкой.' }
-        [IO.Directory]::CreateDirectory($taskParent) | Out-Null
+$taskPrevious = $taskSelection
+$taskVariant = if ($null -ne $taskPrevious) { $taskPrevious.variant } else { 'standard' }
+if ($null -eq $taskPrevious) {
+    if ($null -ne (Read-OptionalBytes (Join-Path $taskSteam 'bin/dwmapi.dll'))) {
+        $taskVariant = 'compatibility'
     }
 }
-$taskSelectionBytes = if ($null -ne $taskOldSelection) { $taskOldSelection } else { $taskUtf8.GetBytes(($taskSelection | ConvertTo-Json -Depth 4)) }
+
+$taskActiveResources = $taskResources
+$taskOnline = Join-Path $taskConfigDir 'cgs-luatools-online'
+$taskOnlineManifest = Read-OptionalBytes (Join-Path $taskOnline 'latest.json')
+$taskOnlineHashes = $null
+if ($null -ne $taskOnlineManifest) {
+    $taskOnlineInfo = $taskUtf8.GetString($taskOnlineManifest) | ConvertFrom-Json
+    $taskBundledRevPath = Join-Path $taskResources 'revision.txt'
+    $taskBundledRev = if ([IO.File]::Exists($taskBundledRevPath)) { [uint32]([IO.File]::ReadAllText($taskBundledRevPath).Trim()) } else { [uint32]1 }
+    if ($taskOnlineInfo.revision -gt $taskBundledRev) {
+        if (@($taskOnlineInfo.files.PSObject.Properties).Count -ne 3) { throw 'Некорректный пакет кэшированных DLL.' }
+        $taskOnlineHashes = $taskOnlineInfo.files
+        $taskActiveResources = $taskOnline
+    }
+}
+
+$taskDllBytes = [ordered]@{}
+$taskHashes = [ordered]@{}
+foreach ($taskName in @('OpenSteamTool.dll','dwmapi.dll','xinput1_4.dll')) {
+    $taskTargetName = if ($taskVariant -eq 'compatibility' -and $taskName -eq 'dwmapi.dll') { 'bin/dwmapi.dll' } else { $taskName }
+    $taskBytes = Read-OptionalBytes (Join-Path $taskActiveResources $taskName)
+    if ($null -eq $taskBytes -or $taskBytes.Length -gt 16MB -or
+        ($null -ne $taskOnlineHashes -and (Hash-Bytes $taskBytes) -cne $taskOnlineHashes.$taskName)) {
+        throw "Некорректная кэшированная или встроенная DLL: $taskName"
+    }
+    if ($taskBytes.Length -lt 1024 -or $taskBytes[0] -ne 77 -or $taskBytes[1] -ne 90) {
+        throw "Некорректный бинарный файл DLL: $taskName"
+    }
+    $taskParent = Split-Path -Parent (Join-Path $taskSteam $taskTargetName)
+    if ((Test-Path -LiteralPath $taskParent) -and ((Get-Item -LiteralPath $taskParent -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'Каталог назначения DLL является ссылкой.'
+    }
+    $taskDllBytes[$taskTargetName] = $taskBytes
+    $taskHashes[$taskTargetName] = Hash-Bytes $taskBytes
+}
+
+$taskSelection = [pscustomobject]@{schema=2;variant=$taskVariant;hashes=[pscustomobject]$taskHashes}
+$taskSelectionBytes = $taskOldSelection
+if ($null -eq $taskPrevious -or $taskPrevious.schema -ne $taskSelection.schema -or
+    @($taskHashes.Keys | Where-Object { $taskPrevious.hashes.$_ -cne $taskHashes[$_] }).Count -gt 0) {
+    $taskSelectionBytes = $taskUtf8.GetBytes(($taskSelection | ConvertTo-Json -Depth 4))
+}
+
+# Предыдущую прокси-DLL удаляем только если её байты совпадают со старым выбором.
+if ($null -ne $taskPrevious) {
+    foreach ($taskProperty in $taskPrevious.hashes.PSObject.Properties) {
+        if ($taskHashes.Contains($taskProperty.Name)) { continue }
+        $taskInstalled = Read-OptionalBytes (Join-Path $taskSteam $taskProperty.Name)
+        if ($null -eq $taskInstalled) { continue }
+        if ((Hash-Bytes $taskInstalled) -cne $taskProperty.Value) {
+            throw "Предыдущая прокси-DLL изменена сторонним процессом: $($taskProperty.Name)"
+        }
+        $taskDllBytes[$taskProperty.Name] = $null
+    }
+}
 
 $taskConfigPath = Join-Path $taskSteam 'opensteamtool.toml'
 $taskOldConfig = Read-OptionalBytes $taskConfigPath
@@ -178,17 +191,14 @@ $taskUtf8 = New-Object Text.UTF8Encoding($false, $true)
 $taskConfigText = if ($null -ne $taskOldConfig) { $taskUtf8.GetString($taskOldConfig).TrimStart([char]0xfeff) } else { '' }
 $taskConfigBytes = $taskUtf8.GetBytes((Configure-Lua $taskConfigText))
 $taskChanges = @()
-foreach ($taskName in (@($taskSelection.hashes.PSObject.Properties.Name) + @('opensteamtool.toml', 'config/cgs-luatools-loader.json'))) {
-    if ($taskCurrent -and $taskName -like '*.dll') { continue }
+foreach ($taskName in (@($taskDllBytes.Keys) + @('opensteamtool.toml', 'config/cgs-luatools-loader.json'))) {
     $taskTarget = Join-Path $taskSteam $taskName
     $taskOriginal = Read-OptionalBytes $taskTarget
     $taskBytes = if ($taskName -eq 'opensteamtool.toml') { $taskConfigBytes }
         elseif ($taskName -eq 'config/cgs-luatools-loader.json') { $taskSelectionBytes }
         else { $taskDllBytes[$taskName] }
-    if ($taskName -like '*.dll' -and ($taskBytes.Length -lt 1024 -or $taskBytes[0] -ne 77 -or $taskBytes[1] -ne 90)) {
-        throw "Некорректная библиотека DLL: $taskName"
-    }
     if (-not (Same-Bytes $taskOriginal $taskBytes)) {
+        [IO.Directory]::CreateDirectory((Split-Path -Parent $taskTarget)) | Out-Null
         $taskChanges += [pscustomobject]@{ Name=$taskName; Target=$taskTarget; Original=$taskOriginal; Bytes=$taskBytes }
     }
 }
@@ -208,7 +218,8 @@ if ($taskChanges.Count -gt 0) {
             if (-not (Same-Bytes (Read-OptionalBytes $taskChange.Target) $taskChange.Original)) {
                 throw "Файл изменён сторонним процессом: $($taskChange.Name)"
             }
-            Write-Atomic $taskChange.Target $taskChange.Bytes
+            if ($null -eq $taskChange.Bytes) { [IO.File]::Delete($taskChange.Target) }
+            else { Write-Atomic $taskChange.Target $taskChange.Bytes }
             $taskCommitted += $taskChange
         }
     } catch {

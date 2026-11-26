@@ -64,7 +64,7 @@
   }
 
   function visible(element) {
-    return !!element?.getClientRects().length && !element.closest(".hidden,[hidden],.view:not(.active),[data-hv-tab-panel]:not(.active)") && getComputedStyle(element).visibility !== "hidden";
+    return !!element && !element.closest(".hidden,[hidden],.view:not(.active),[data-hv-tab-panel]:not(.active)") && element.getClientRects().length > 0;
   }
 
   function enteringParent(element) {
@@ -84,15 +84,23 @@
 
   function enterSequence(elements, horizontal = 0) {
     const main = document.querySelector(".main-area")?.getBoundingClientRect();
-    let index = 0;
+    const topBound = main?.top || 0;
+    const bottomBound = Math.min(innerHeight, main?.bottom || innerHeight);
+    // Сначала читаем геометрию одним проходом, затем запускаем анимации без принудительного reflow
+    const queue = [];
     for (const element of elements.slice(0, 60)) {
-      if (!visible(element)) continue;
+      if (!visible(element) || enteringParent(element)) continue;
       const rect = element.getBoundingClientRect();
-      const inFrame = rect.bottom > (main?.top || 0) && rect.top < Math.min(innerHeight, main?.bottom || innerHeight);
-      // Анимируем только уже видимые элементы: панель со списком игр
-      // не должна «обновляться» при прокрутке к ней.
-      if (inFrame) enter(element, Math.min(index++, 6) * 26, horizontal);
+      if (rect.bottom > topBound && rect.top < bottomBound) {
+        queue.push(element);
+      }
     }
+    queue.forEach((element, index) => {
+      animate(element, [
+        { opacity: 0, translate: horizontal ? `${horizontal}px 0` : "0 8px" },
+        { opacity: 1, translate: "0 0" },
+      ], { delay: Math.min(index, 6) * 26, duration: 320 });
+    });
   }
 
   function animateSection(scope, horizontal = 0) {

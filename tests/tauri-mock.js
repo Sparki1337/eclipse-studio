@@ -99,7 +99,7 @@
     files_pause_download: () => {window.__pendingDownload?.reject("Загрузка приостановлена; проверенные сегменты сохранены для докачки");return true;},
     files_cancel_download: () => {window.__pendingDownload?.reject("Загрузка отменена");return true;},
     files_reveal: () => null,
-    check_for_update: () => ({ available: false, current_version: "10.2.0", latest_version: "10.2.0", currentVersion: "10.2.0", latestVersion: "10.2.0" }),
+    check_for_update: () => ({ available: false, current_version: "10.3.0", latest_version: "10.3.0", currentVersion: "10.3.0", latestVersion: "10.3.0" }),
     platform_info: () => ({ os: "windows", windows: true, windowsOnlyModules: [], sessionId: config.sessionId || "test-session" }),
     update_launch_ready: () => config.launchOutcome ?? null,
     // Установка обновления: с installPending остаётся ожидающей, ход задаётся через __mockEmit
@@ -163,9 +163,9 @@
     luatools_get_loader_info: () => ({
       loaderSource: "v1",
       v1Name: "Версия 1 (Основная)",
-      v1Desc: "Основная стабильная сборка OpenSteamTool (1.57 МБ)",
-      v2Name: "Версия 2 (Альтернативная)",
-      v2Desc: "Альтернативная встроенная сборка OpenSteamTool (1.75 МБ). Включайте, если не работает основная версия.",
+      v1Desc: "Стандартное расположение OpenSteamTool (1.66 МБ): все DLL размещаются в корне Steam.",
+      v2Name: "Версия 2 (Режим совместимости)",
+      v2Desc: "Единый комплект OpenSteamTool с размещением dwmapi.dll в папке Steam/bin. Включайте, если основное расположение не срабатывает.",
       activeInSteam: "v1",
       activeInSteamLabel: "Версия 1 (Основная)",
       steamDetected: true,

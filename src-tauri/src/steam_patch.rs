@@ -110,11 +110,38 @@ fn appcache_dir(steam: &Path) -> PathBuf {
     steam.join("appcache")
 }
 
-fn backup_dir(app: &AppHandle) -> Result<PathBuf, String> {
+fn legacy_backup_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_local_data_dir()
         .map(|dir| dir.join(BACKUP_DIR_NAME))
         .map_err(|error| format!("Не удалось определить папку данных приложения: {error}"))
+}
+
+fn backup_dir(app: &AppHandle, steam: &Path) -> Result<PathBuf, String> {
+    let key = format!("{:x}", Sha256::digest(normalized_path(steam).as_bytes()));
+    legacy_backup_dir(app).map(|dir| dir.join(key))
+}
+
+fn validate_appcache(appcache: &Path) -> Result<(), String> {
+    crate::lua_loader::reject_link(appcache)?;
+    for name in TARGET_FILES {
+        crate::lua_loader::reject_link(&appcache.join(name))?;
+    }
+    Ok(())
+}
+
+fn resolve_existing_backup(app: &AppHandle, steam: &Path) -> Option<(PathBuf, PatchBackup)> {
+    if let Ok(scoped) = backup_dir(app, steam) {
+        if let Some(manifest) = read_backup(&scoped, steam) {
+            return Some((scoped, manifest));
+        }
+    }
+    if let Ok(legacy) = legacy_backup_dir(app) {
+        if let Some(manifest) = read_backup(&legacy, steam) {
+            return Some((legacy, manifest));
+        }
+    }
+    None
 }
 
 fn normalized_path(path: &Path) -> String {
@@ -362,6 +389,13 @@ fn read_backup(backup: &Path, steam: &Path) -> Option<PatchBackup> {
     if !same_path(Path::new(&manifest.steam_path), steam) {
         return None;
     }
+    if manifest.files.len() != TARGET_FILES.len()
+        || !TARGET_FILES
+            .iter()
+            .all(|name| manifest.files.iter().any(|file| &file.name == name))
+    {
+        return None;
+    }
     for file in &manifest.files {
         if !file.existed {
             continue;
@@ -468,7 +502,7 @@ fn status_snapshot(app: &AppHandle, steam_path: Option<String>) -> SteamPatchSta
         return SteamPatchStatus::unknown();
     };
     let appcache = appcache_dir(&steam);
-    let appcache_found = appcache.is_dir();
+    let appcache_found = appcache.is_dir() && validate_appcache(&appcache).is_ok();
     let files = if appcache_found {
         inspect_appcache(&appcache)
     } else {
@@ -488,12 +522,9 @@ fn status_snapshot(app: &AppHandle, steam_path: Option<String>) -> SteamPatchSta
     } else {
         "unknown"
     };
-    let (backup_available, backup_at) = match backup_dir(app) {
-        Ok(dir) => match read_backup(&dir, &steam) {
-            Some(manifest) => (true, Some(manifest.created_unix)),
-            None => (false, None),
-        },
-        Err(_) => (false, None),
+    let (backup_available, backup_at) = match resolve_existing_backup(app, &steam) {
+        Some((_, manifest)) => (true, Some(manifest.created_unix)),
+        None => (false, None),
     };
 
     SteamPatchStatus {
@@ -517,6 +548,7 @@ fn apply_blocking(app: AppHandle, steam_path: Option<String>) -> Result<SteamPat
         return Err("В папке Steam не найден appcache. Запустите Steam и повторите.".to_string());
     }
     let _guard = crate::resource_lock::Guard::scope(std::slice::from_ref(&steam))?;
+    validate_appcache(&appcache)?;
 
     let before = status_snapshot(&app, Some(steam.display().to_string()));
     if before.state == "patched" {
@@ -537,7 +569,7 @@ fn apply_blocking(app: AppHandle, steam_path: Option<String>) -> Result<SteamPat
     }
 
     with_steam_restart_on_error(&steam, was_running, || {
-        let backup = backup_dir(&app)?;
+        let backup = backup_dir(&app, &steam)?;
         let has_backup = read_backup(&backup, &steam).is_some();
         if !has_backup || before.state == "stock" {
             backup_originals(&appcache, &backup, &steam, before.state == "partial")?;
@@ -576,6 +608,7 @@ fn restore_blocking(
         return Err("В папке Steam не найден appcache. Запустите Steam и повторите.".to_string());
     }
     let _guard = crate::resource_lock::Guard::scope(std::slice::from_ref(&steam))?;
+    validate_appcache(&appcache)?;
 
     let before = status_snapshot(&app, Some(steam.display().to_string()));
     if before.state == "stock" || before.state == "unknown" {
@@ -595,8 +628,7 @@ fn restore_blocking(
     }
 
     with_steam_restart_on_error(&steam, was_running, || {
-        let backup = backup_dir(&app)?;
-        let used_backup = if read_backup(&backup, &steam).is_some() {
+        let used_backup = if let Some((backup, _)) = resolve_existing_backup(&app, &steam) {
             restore_from_backup(&appcache, &backup, &steam)?;
             true
         } else {
@@ -753,5 +785,24 @@ mod tests {
         restore_from_backup(&appcache, &backup, steam).unwrap();
         assert!(!appcache.join("appinfo.vdf").exists());
         assert!(!appcache.join("packageinfo.vdf").exists());
+    }
+
+    #[test]
+    fn incomplete_backup_manifest_is_rejected() {
+        let temp = make_appcache();
+        let steam = temp.path();
+        let appcache = appcache_dir(steam);
+        let backup = temp.path().join("backup");
+        write_stock(&appcache, "appinfo.vdf", b"stock");
+        write_stock(&appcache, "packageinfo.vdf", b"stock");
+        let mut manifest = backup_originals(&appcache, &backup, steam, false).unwrap();
+        manifest.files.pop();
+        fs::write(
+            backup.join(BACKUP_MANIFEST),
+            serde_json::to_vec_pretty(&manifest).unwrap(),
+        )
+        .unwrap();
+
+        assert!(read_backup(&backup, steam).is_none());
     }
 }

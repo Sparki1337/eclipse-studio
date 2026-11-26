@@ -58,39 +58,21 @@
       "provenance": "local-source-build; see adjacent build-provenance.json"
     },
     {
-      "path": "src-tauri/resources/opensteamtool/v1/OpenSteamTool.dll",
-      "size": 1580544,
-      "sha256": "3bced3b2a5363f58c9e7c07d4795d64252c832a56f7c67e78e14989da440516e",
+      "path": "src-tauri/resources/opensteamtool/OpenSteamTool.dll",
+      "size": 1742848,
+      "sha256": "705b31dc1c0335f5519bcb938ed589ba6909f3aab6b7b89495c1569a951210d5",
       "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
     },
     {
-      "path": "src-tauri/resources/opensteamtool/v1/dwmapi.dll",
-      "size": 112128,
-      "sha256": "81d11523a5ae35a374cc797ca3d3db924169064510acfa9940f61c609431d6b3",
+      "path": "src-tauri/resources/opensteamtool/dwmapi.dll",
+      "size": 109568,
+      "sha256": "fe82f35c02cb81febf070ef3b9194ff5d52ee526608bf3de76d09e04c5b20df1",
       "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
     },
     {
-      "path": "src-tauri/resources/opensteamtool/v1/xinput1_4.dll",
-      "size": 123392,
-      "sha256": "287cbea6b1139bf5a3b5239a66bed670bb17b9afe8bd4f6a68ef1c5ceada8142",
-      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
-    },
-    {
-      "path": "src-tauri/resources/opensteamtool/v2/OpenSteamTool.dll",
-      "size": 1758720,
-      "sha256": "0bc5cb7734ae7b4f7cb1150006a4bcba570ec1db0df6fd4293ed8a2cb8a2a899",
-      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
-    },
-    {
-      "path": "src-tauri/resources/opensteamtool/v2/dwmapi.dll",
-      "size": 134656,
-      "sha256": "e86f95bef98c2ce8f0e1c83faa18bb62e9b2c540e9f82aa194c3f04d1a8146f2",
-      "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
-    },
-    {
-      "path": "src-tauri/resources/opensteamtool/v2/xinput1_4.dll",
-      "size": 133632,
-      "sha256": "5c55bb96c66064dc42677d0984ca4c8d3187ea6daed73fdea9c809ceaa6517de",
+      "path": "src-tauri/resources/opensteamtool/xinput1_4.dll",
+      "size": 122880,
+      "sha256": "0234a56a72121fd3dd50ff533f1a6e670033dbc2d92ef98551e8903cff402250",
       "provenance": "vendored binary; not rebuilt or independently source-verified in this audit"
     },
     {

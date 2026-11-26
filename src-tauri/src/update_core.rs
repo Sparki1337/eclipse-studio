@@ -181,6 +181,7 @@ fn u32_at(bytes: &[u8], offset: usize) -> Option<u32> {
 
 const NOT_PE: &str = "Файл обновления не является программой Windows.";
 
+#[allow(dead_code)]
 pub fn inspect_pe(bytes: &[u8]) -> Result<PeInfo, String> {
     let header = || NOT_PE.to_string();
     if bytes.get(..2) != Some(b"MZ".as_slice()) {
@@ -281,7 +282,113 @@ fn version_resource(
     ])
 }
 
+/// Проверяет PE-заголовок и версию из ресурсов файла без загрузки всего EXE в память.
+pub fn verify_payload_file(path: &Path, version: &str) -> Result<(), String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut file = fs::File::open(path)
+        .map_err(|error| format!("Не удалось прочитать обновление: {error}"))?;
+    let total_len = file
+        .metadata()
+        .map_err(|error| format!("Не удалось прочитать обновление: {error}"))?
+        .len();
+    let head_len = total_len.min(16 * 1024) as usize;
+    let mut head = vec![0_u8; head_len];
+    file.read_exact(&mut head)
+        .map_err(|error| format!("Не удалось прочитать обновление: {error}"))?;
+
+    let header = || NOT_PE.to_string();
+    if head.get(..2) != Some(b"MZ".as_slice()) {
+        return Err(header());
+    }
+    let pe = u32_at(&head, 0x3c).ok_or_else(header)? as usize;
+    if head.get(pe..pe.saturating_add(4)) != Some(b"PE\0\0".as_slice()) {
+        return Err(header());
+    }
+    let coff = pe + 4;
+    let machine = u16_at(&head, coff).ok_or_else(header)?;
+    let sections = u16_at(&head, coff + 2).ok_or_else(header)? as usize;
+    let optional_size = u16_at(&head, coff + 16).ok_or_else(header)? as usize;
+    let characteristics = u16_at(&head, coff + 18).ok_or_else(header)?;
+    let optional = coff + 20;
+    let pe32_plus = u16_at(&head, optional).ok_or_else(header)? == 0x20b;
+    let subsystem = u16_at(&head, optional + 68).ok_or_else(header)?;
+    let (count_at, directories) = if pe32_plus { (108, 112) } else { (92, 96) };
+    let directory_count = u32_at(&head, optional + count_at).unwrap_or(0);
+    let (res_rva, res_size) = if directory_count > 2 {
+        (
+            u32_at(&head, optional + directories + 16).unwrap_or(0),
+            u32_at(&head, optional + directories + 20).unwrap_or(0),
+        )
+    } else {
+        (0, 0)
+    };
+    let table = optional + optional_size;
+    let mut section_raw_offset = None;
+    let mut section_raw_size = 0usize;
+    let mut section_rva = 0u32;
+    for index in 0..sections.min(96) {
+        let section = table + index * 40;
+        let Some(virtual_size) = u32_at(&head, section + 8) else {
+            break;
+        };
+        let Some(address) = u32_at(&head, section + 12) else {
+            break;
+        };
+        let Some(raw_size) = u32_at(&head, section + 16) else {
+            break;
+        };
+        let Some(raw) = u32_at(&head, section + 20) else {
+            break;
+        };
+        let span = virtual_size.max(raw_size);
+        if res_rva != 0 && res_rva >= address && res_rva - address < span {
+            section_raw_offset = Some(raw as u64);
+            section_raw_size = raw_size.min(16 * 1024 * 1024) as usize;
+            section_rva = address;
+            break;
+        }
+    }
+
+    let x64 = machine == 0x8664 && pe32_plus;
+    let executable = characteristics & 0x0002 != 0 && characteristics & 0x2000 == 0;
+    let gui = subsystem == 2;
+    if !x64 || !executable {
+        return Err("Файл обновления не является 64-битной программой Windows.".into());
+    }
+    if !gui {
+        return Err("Файл обновления не является оконной программой Windows.".into());
+    }
+
+    let file_version = if let Some(raw_base) = section_raw_offset {
+        let read_len = section_raw_size
+            .max(res_size.min(16 * 1024 * 1024) as usize)
+            .min(total_len.saturating_sub(raw_base) as usize);
+        let mut rsrc = vec![0_u8; read_len];
+        file.seek(SeekFrom::Start(raw_base))
+            .map_err(|error| format!("Не удалось прочитать ресурсы обновления: {error}"))?;
+        file.read_exact(&mut rsrc)
+            .map_err(|error| format!("Не удалось прочитать ресурсы обновления: {error}"))?;
+        let to_local = |rva: u32| -> Option<usize> {
+            let delta = rva.checked_sub(section_rva)? as usize;
+            (delta < rsrc.len()).then_some(delta)
+        };
+        version_resource(&rsrc, res_rva, &to_local)
+    } else {
+        None
+    };
+
+    let found = file_version.ok_or("В файле обновления нет сведений о версии.")?;
+    let found_text = found.map(|part| part.to_string()).join(".");
+    if !same_version(&found_text, version) {
+        return Err(format!(
+            "Версия файла обновления {found_text} не совпадает с ожидаемой {version}."
+        ));
+    }
+    Ok(())
+}
+
 /// Новый EXE должен быть 64-битной оконной программой с версией из релиза
+#[allow(dead_code)]
 pub fn verify_payload(bytes: &[u8], version: &str) -> Result<(), String> {
     let info = inspect_pe(bytes)?;
     if !info.x64 || !info.executable {
@@ -355,6 +462,34 @@ fn staged_path(target: &Path, nonce: &str) -> PathBuf {
 
 fn failed_path(target: &Path, nonce: &str) -> PathBuf {
     target.with_file_name(format!("{STAGE_PREFIX}{nonce}.failed.exe"))
+}
+
+/// Если EXE носит каноничное имя `Eclipse-Studio-v<версия>.exe`, возвращаем путь с новой версией.
+/// Пользовательские имена (например `Eclipse Studio.exe`) и существующие соседние файлы сохраняются.
+pub fn target_after_update(current: &Path, new_version: &str) -> PathBuf {
+    let clean_version = new_version.trim().trim_start_matches(['v', 'V']);
+    if version_parts(clean_version).is_none() {
+        return current.to_path_buf();
+    }
+    let Some(name) = current.file_name().and_then(|value| value.to_str()) else {
+        return current.to_path_buf();
+    };
+    let lower = name.to_ascii_lowercase();
+    let Some(old_ver) = lower
+        .strip_prefix("eclipse-studio-v")
+        .and_then(|rest| rest.strip_suffix(".exe"))
+    else {
+        return current.to_path_buf();
+    };
+    if version_parts(old_ver).is_none() {
+        return current.to_path_buf();
+    }
+    let desired = current.with_file_name(format!("Eclipse-Studio-v{clean_version}.exe"));
+    if desired != current && !desired.exists() {
+        desired
+    } else {
+        current.to_path_buf()
+    }
 }
 
 fn sha256_bytes(bytes: &[u8]) -> String {
@@ -731,7 +866,8 @@ fn replace_flow(
     if let Err(error) = hashes_match() {
         return fail(error, Relaunch::None);
     }
-    // Новый EXE копируется рядом с программой, затем занимает её место переименованием
+    // Новый EXE копируется рядом с программой, затем занимает место с актуальным именем
+    let final_target = target_after_update(&target, &plan.version);
     let staged = staged_path(&target, &plan.nonce);
     let backup = backup_path(&target, &plan.nonce);
     if let Err(error) = crate::durable::copy(&payload, &staged) {
@@ -748,7 +884,7 @@ fn replace_flow(
             Relaunch::None,
         );
     }
-    if let Err(error) = retry(|| fs::rename(&staged, &target)) {
+    if let Err(error) = retry(|| fs::rename(&staged, &final_target)) {
         let restored = retry(|| fs::rename(&backup, &target)).is_ok();
         let _ = fs::remove_file(&staged);
         return fail(
@@ -762,7 +898,7 @@ fn replace_flow(
     }
     log.line("EXE заменён, проверяю запуск новой версии");
     let stage_text = stage.to_string_lossy();
-    let probe = match launch(&target, &[PROBE_ARG, &stage_text, &plan.nonce]) {
+    let probe = match launch(&final_target, &[PROBE_ARG, &stage_text, &plan.nonce]) {
         Ok(child) => wait_healthy(child, stage, &plan.nonce, options),
         Err(error) => Err(error),
     };
@@ -785,7 +921,7 @@ fn replace_flow(
         Err(error) => {
             log.line(&format!("Новая версия не подтвердила запуск: {error}"));
             let failed = failed_path(&target, &plan.nonce);
-            let restored = retry(|| fs::rename(&target, &failed))
+            let restored = retry(|| fs::rename(&final_target, &failed))
                 .and_then(|_| retry(|| fs::rename(&backup, &target)))
                 .is_ok();
             let _ = fs::remove_file(&failed);
@@ -944,6 +1080,23 @@ mod tests {
             NOT_PE
         );
         assert!(verify_payload(&good[..0x90], "9.1.0").is_err());
+    }
+
+    #[test]
+    fn renames_canonical_version_exe_and_preserves_custom_names() {
+        let temp = tempfile::tempdir().unwrap();
+        let old_canonical = temp.path().join("Eclipse-Studio-v10.1.0.exe");
+        assert_eq!(
+            target_after_update(&old_canonical, "10.2.0"),
+            temp.path().join("Eclipse-Studio-v10.2.0.exe")
+        );
+        // Пользовательское имя не переименовывается, чтобы не сломать ярлыки
+        let custom = temp.path().join("MyStudio.exe");
+        assert_eq!(target_after_update(&custom, "10.2.0"), custom);
+        // Если файл новой версии уже занят, остаётся прежний путь
+        let occupied = temp.path().join("Eclipse-Studio-v10.2.0.exe");
+        fs::write(&occupied, b"existing").unwrap();
+        assert_eq!(target_after_update(&old_canonical, "10.2.0"), old_canonical);
     }
 
     #[test]

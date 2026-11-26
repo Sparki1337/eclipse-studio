@@ -6,7 +6,6 @@ use std::{
     ffi::OsStr,
     fs::{self, File},
     path::{Path, PathBuf},
-    process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
 use walkdir::{DirEntry, WalkDir};
@@ -33,6 +32,7 @@ struct SaveManifestItem {
 }
 
 #[cfg(target_os = "windows")]
+#[allow(unused_imports)]
 use std::os::windows::process::CommandExt;
 
 #[derive(Clone)]
@@ -748,7 +748,7 @@ fn create_rar(stage: &Path, destination: &Path) -> Result<(), String> {
         "WinRAR не найден. Установите WinRAR или выберите формат ZIP.".to_string()
     })?;
     let source = stage.join("*");
-    let mut command = Command::new(executable);
+    let mut command = crate::process_util::hidden_command(executable.to_string_lossy().as_ref());
     command.args([
         OsStr::new("a"),
         OsStr::new("-r"),
@@ -757,8 +757,6 @@ fn create_rar(stage: &Path, destination: &Path) -> Result<(), String> {
         destination.as_os_str(),
         source.as_os_str(),
     ]);
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000);
     let output = command
         .output()
         .map_err(|error| format!("Не удалось запустить WinRAR: {error}"))?;
@@ -803,17 +801,19 @@ fn scan_save_locations_with_options(app: &tauri::AppHandle) -> Result<Vec<SaveLo
             "Добавлено вручную",
         );
     }
-    let mut locations = Vec::new();
-    for candidate in candidates.values() {
-        if options
-            .excluded
-            .iter()
-            .any(|p| normalized_path(Path::new(p)) == normalized_path(&candidate.path))
-        {
-            continue;
-        }
+    let active: Vec<&SaveCandidate> = candidates
+        .values()
+        .filter(|candidate| {
+            !options
+                .excluded
+                .iter()
+                .any(|p| normalized_path(Path::new(p)) == normalized_path(&candidate.path))
+        })
+        .collect();
+    // Многопоточный подсчёт размеров всех найденных папок сохранений
+    let locations = crate::http_pool::parallel_map(&active, 8, |candidate| {
         let (file_count, total_bytes, modified_unix) = directory_stats(&candidate.path);
-        locations.push(SaveLocation {
+        SaveLocation {
             id: format!("save-{:x}", stable_hash(&candidate.path)),
             label: candidate.label.clone(),
             category: candidate.category.clone(),
@@ -821,8 +821,8 @@ fn scan_save_locations_with_options(app: &tauri::AppHandle) -> Result<Vec<SaveLo
             file_count,
             total_bytes,
             modified_unix,
-        });
-    }
+        }
+    });
     Ok(locations)
 }
 #[tauri::command]
