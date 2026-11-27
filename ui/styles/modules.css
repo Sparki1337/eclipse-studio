@@ -2352,18 +2352,19 @@ html[data-theme="oled"] .files-sort-item.active::before {
   .local-cloud-path > button { width: 100%; }
 }
 
+/* ── Панель резервного патча appcache: спокойный вторичный блок, пока выключен */
+.steam-patch-panel { gap: 10px; padding: 16px 22px; }
+.steam-patch-panel:not([data-state="patched"]):not([data-state="partial"]) { opacity: 0.9; }
+.steam-patch-panel:not([data-state="patched"]):not([data-state="partial"]):hover { opacity: 1; }
+.steam-patch-panel:not([data-state="patched"]):not([data-state="partial"]) .millennium-plugin-icon { opacity: 0.72; }
+
 /* ── Пометка о мастерской Steam: пока патч активен, моды не скачиваются */
-.steam-patch-note { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1.6; }
+.steam-patch-note { display: flex; align-items: flex-start; gap: 9px; margin: 0; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1.6; }
 .steam-patch-note svg { flex: 0 0 14px; width: 14px; height: 14px; margin-top: 1px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .steam-patch-note span { min-width: 0; overflow-wrap: anywhere; }
 /* Активный патч делает пометку заметной: именно тогда мастерская не работает */
 .steam-patch-panel[data-state="patched"] .steam-patch-note,
 .steam-patch-panel[data-state="partial"] .steam-patch-note { color: var(--tone-warn, var(--k-warn, #f5a524)); }
-
-/* ── Патч appcache: окно первого запуска новой версии */
-.steam-patch-modal { width: min(470px, calc(100vw - 40px)); }
-.steam-patch-modal h3 { margin-bottom: 8px; }
-.steam-patch-modal p { margin-bottom: 18px; }
 
 /* ── Окно обновления DLL локального облака: текст слева, действия внизу */
 .modal.lc-update-modal { width: min(560px, calc(100vw - 40px)); padding: 30px; text-align: left; align-items: flex-start; overflow-y: auto; }

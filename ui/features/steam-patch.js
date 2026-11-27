@@ -8,7 +8,8 @@
   const invoke = window.cgsApi?.invoke;
   // Команды, после которых меняется состояние загрузчика или Steam
   const REFRESH_COMMANDS = new Set(["luatools_apply_loader", "luatools_set_loader_source", "luatools_update_loader", "luatools_restart_steam", "luatools_close_steam"]);
-  const PROMPT_KEY = "cgs-steam-patch-prompt-version";
+  // Однократный сброс патча при переходе на 10.4.0 (в обновлённой DLL проблема решена)
+  const AUTO_DISABLE_KEY = "cgs-steam-patch-reset-10.4.0";
   let busy = false;
   let loaded = false;
   let applying = false;
@@ -16,19 +17,14 @@
   let failure = "";
   let sequence = 0;
   let timer = 0;
-  let promptShown = false;
-  let promptAttempts = 0;
-  let promptTimer = 0;
-  let previousFocus = null;
+  let autoDisableAttempted = false;
+  let autoResetMessage = false;
 
   const errorText = (error) => String(error?.message || error || "Неизвестная ошибка");
   const t = (text) => (window.cgsI18n?.t ? window.cgsI18n.t(text) : text);
   const steamPath = () => $("lua-steam-path")?.value.trim() || window.cgsStorage?.getItem("luaSteamPath") || null;
   const luaActive = () => $("view-lua")?.classList.contains("active");
   const patchEnabled = () => result?.state === "patched" || result?.state === "partial";
-  const appVersion = () => (document.querySelector(".titlebar-version")?.textContent || document.getElementById("about-app-version")?.textContent || "").trim();
-  const promptBackdrop = $("sp-prompt-backdrop");
-  const promptOpen = () => Boolean(promptBackdrop && !promptBackdrop.classList.contains("hidden"));
 
   function message(text, kind = "info") {
     const node = $("sp-status");
@@ -56,6 +52,7 @@
     if (!result.appcacheFound) return message(t("В папке Steam не найден appcache. Запустите Steam и нажмите «Проверить»."), "warning");
     if (result.state === "patched") return message(t("Патч активен"));
     if (result.state === "partial") return message(t("Патч активен частично"), "warning");
+    if (autoResetMessage) return message(t("Патч отключён после обновления до 10.4.0. При необходимости его можно включить снова."), "info");
     message(t("Патч не активен"));
   }
 
@@ -77,6 +74,36 @@
     render();
   }
 
+  function autoDisableDone() {
+    try {
+      return window.cgsStorage?.getItem(AUTO_DISABLE_KEY) === "1";
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function markAutoDisableDone() {
+    try {
+      window.cgsStorage?.setItem(AUTO_DISABLE_KEY, "1");
+    } catch (_) {}
+  }
+
+  // Однократно отключает старый патч после обновления до 10.4.0, оставляя возможность включить вручную
+  async function maybeAutoDisable(data) {
+    if (autoDisableDone() || applying || busy) return false;
+    if (!data?.steamPath || !data?.appcacheFound || data?.state === "unknown") return false;
+    if (data.state === "stock") {
+      markAutoDisableDone();
+      return false;
+    }
+    if ((data.state === "patched" || data.state === "partial") && !autoDisableAttempted) {
+      autoDisableAttempted = true;
+      await apply(false, { autoReset: true });
+      return true;
+    }
+    return false;
+  }
+
   async function refresh() {
     if (!invoke || busy) return;
     const ticket = ++sequence;
@@ -87,9 +114,9 @@
       result = data;
       loaded = true;
       failure = "";
+      if (await maybeAutoDisable(data)) return;
       render();
       statusMessage();
-      maybePrompt();
     } catch (error) {
       if (ticket !== sequence || busy) return;
       loaded = false;
@@ -105,78 +132,9 @@
     timer = setTimeout(refresh, 60);
   }
 
-  function promptSeen() {
-    try {
-      return window.cgsStorage?.getItem(PROMPT_KEY) === appVersion();
-    } catch (_) {
-      return false;
-    }
-  }
-
-  function markPromptSeen() {
-    try {
-      window.cgsStorage?.setItem(PROMPT_KEY, appVersion());
-    } catch (_) {}
-  }
-
-  function showPrompt() {
-    if (!promptBackdrop || promptOpen()) return;
-    promptShown = true;
-    previousFocus = document.activeElement;
-    promptBackdrop.classList.remove("hidden");
-    $("sp-prompt-skip").focus({ preventScroll: true });
-  }
-
-  function closePrompt() {
-    if (!promptBackdrop || !promptOpen()) return;
-    promptBackdrop.classList.add("hidden");
-    if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
-    previousFocus = null;
-  }
-
-  // Окно показывается один раз на версию программы, только если патч не активен
-  function maybePrompt() {
-    if (promptShown || !loaded || applying || busy || !promptBackdrop) return;
-    if (result?.state === "patched") {
-      // Патч уже активен — для этой версии окно не нужно
-      if (!promptSeen()) markPromptSeen();
-      return;
-    }
-    if (!result?.appcacheFound || !result?.canApply) return;
-    const version = appVersion();
-    if (!version || promptSeen()) return;
-    // Не перекрываем заставку, выбор языка и другие модальные окна
-    if (document.querySelector(".modal-backdrop:not(.hidden), dialog[open]")) {
-      if (++promptAttempts > 120) return;
-      clearTimeout(promptTimer);
-      promptTimer = setTimeout(maybePrompt, 1000);
-      return;
-    }
-    const splash = $("app-splash");
-    if (splash && !splash.classList.contains("hidden")) {
-      if (++promptAttempts > 120) return;
-      clearTimeout(promptTimer);
-      promptTimer = setTimeout(maybePrompt, 800);
-      return;
-    }
-    showPrompt();
-  }
-
-  function skipPrompt() {
-    markPromptSeen();
-    closePrompt();
-    statusMessage();
-  }
-
-  async function applyFromPrompt() {
-    markPromptSeen();
-    closePrompt();
-    // Частично применённый патч доводим до полного: бэкенд сохраняет оригиналы и заменяет оставшийся файл
-    if (result?.state !== "patched") await apply(true);
-  }
-
-  async function apply(enabled) {
+  async function apply(enabled, options = {}) {
     if (busy || !invoke) return;
+    const autoReset = Boolean(options.autoReset);
     applying = true;
     ++sequence;
     setBusy(true);
@@ -188,18 +146,26 @@
       result = data?.status || data || result;
       loaded = true;
       failure = "";
+      markAutoDisableDone();
       const restarted = Boolean(data?.steamRestarted);
       if (enabled) {
+        autoResetMessage = false;
         message(t(restarted
           ? "Патч применён. Steam запущен снова."
           : "Патч применён. Запустите Steam, чтобы применить изменения."), "ok");
         window.cgsToast?.(t("Патч appcache включён"), "success");
+      } else if (autoReset) {
+        autoResetMessage = true;
+        message(t("Патч отключён после обновления до 10.4.0. При необходимости его можно включить снова."), "info");
+        window.cgsToast?.(t("Патч appcache отключён после обновления до 10.4.0"), "info");
       } else if (data?.usedBackup) {
+        autoResetMessage = false;
         message(t(restarted
           ? "Патч отключён. Оригинальные файлы восстановлены, Steam запущен снова."
           : "Патч отключён. Оригинальные файлы восстановлены. Запустите Steam."), "ok");
         window.cgsToast?.(t("Патч appcache отключён"), "success");
       } else {
+        autoResetMessage = false;
         message(t("Патч отключён. Steam восстановит стандартные файлы при запуске."), "ok");
         window.cgsToast?.(t("Патч appcache отключён"), "success");
       }
@@ -220,7 +186,7 @@
     await apply(enabled);
   });
 
-  $("sp-refresh").addEventListener("click", () => refresh());
+  $("sp-refresh").addEventListener("click", () => { autoResetMessage = false; refresh(); });
   $("lua-steam-path")?.addEventListener("change", scheduleRefresh);
   window.addEventListener("cgs:view-changed", (event) => {
     if (event.detail === "lua") scheduleRefresh();
@@ -232,25 +198,6 @@
   window.addEventListener("cgs:language-changed", () => {
     render();
     if (!applying) statusMessage();
-    setTimeout(maybePrompt, 300);
-  });
-  window.addEventListener("splash-finished", () => setTimeout(maybePrompt, 300));
-
-  // Окно первого запуска: «Применить», «Пропустить», Esc и клавиатурный фокус
-  $("sp-prompt-skip")?.addEventListener("click", skipPrompt);
-  $("sp-prompt-apply")?.addEventListener("click", applyFromPrompt);
-  promptBackdrop?.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      skipPrompt();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const controls = [...promptBackdrop.querySelectorAll("button:not(:disabled)")].filter((node) => node.getClientRects().length);
-    if (!controls.length) return;
-    const index = controls.indexOf(document.activeElement);
-    event.preventDefault();
-    controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length].focus();
   });
 
   window.cgsSteamPatch = { refresh: scheduleRefresh, apply, get state() { return result?.state || null; }, get busy() { return busy; } };

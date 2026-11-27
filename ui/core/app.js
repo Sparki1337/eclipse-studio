@@ -20,7 +20,7 @@
   window.addEventListener("cgs:busy-changed", ({ detail }) => reportOperation(detail?.id, detail?.busy, "button"));
 
   const state = {
-    version: "10.3.0",
+    version: "10.4.0",
     gameDir: "",
     appid: null,
     gameName: "",
@@ -608,7 +608,7 @@
     // Версия без суффикса Portable x64 — других сборок нет
     const appVerEl = $("#about-app-version");
     if (appVerEl) {
-      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "10.3.0";
+      const currentVer = state.version || $("#update-current-version")?.textContent?.trim() || $(".titlebar-version")?.textContent?.trim() || "10.4.0";
       state.version = currentVer;
       appVerEl.textContent = currentVer;
     }
@@ -620,7 +620,7 @@
         try {
           const hvStatus = await call("eclipse_hv_status");
           if (hvStatus && hvStatus.installed) {
-            const rawVer = hvStatus.version || "10.3.0";
+            const rawVer = hvStatus.version || "10.4.0";
             hvVerEl.textContent = rawVer.replace(/^v/i, "");
           } else {
             hvVerEl.textContent = "Не установлен";
@@ -1104,7 +1104,7 @@
     updateRyuuKeyStatus();
     renderLoaderInfo();
     updateAboutInfo();
-    log("Eclipse Studio 10.3.0 инициализирован", "system");
+    log("Eclipse Studio 10.4.0 инициализирован", "system");
     log(invoke ? "Все компоненты готовы к работе" : "Запустите установленное приложение", invoke ? "success" : "error");
 
     // Страховочный показ окна, если заставка отключена

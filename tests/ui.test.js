@@ -21,8 +21,6 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
 async function open({ storage = {}, mock = {}, view = "home", viewport = { width: 1440, height: 900 }, reducedMotion = "no-preference" } = {}) {
   // Тесты по умолчанию работают на русском; English-first проверяется отдельным сценарием
   if (!Object.prototype.hasOwnProperty.call(storage, "cgs-language")) storage = { ...storage, "cgs-language": "ru" };
-  // Окно первого запуска патча не должно перекрывать остальные сценарии
-  if (!Object.prototype.hasOwnProperty.call(storage, "cgs-steam-patch-prompt-version")) storage = { ...storage, "cgs-steam-patch-prompt-version": APP_VERSION };
   const context = await browser.newContext({ viewport, reducedMotion });
   // Подменяем внешние обложки, чтобы тесты не зависели от CDN Steam
   await context.route(/^https?:\/\//, route => route.request().resourceType() === "image"
@@ -112,10 +110,10 @@ async function run() {
     assert(missing.length === 0, "Не зарегистрированы: " + missing.join(", "));
   });
 
-  await test("Запуск без ошибок JS, версия 10.3.0", async () => {
+  await test("Запуск без ошибок JS, версия 10.4.0", async () => {
     const { page, context, errors } = await open();
     const version = await page.textContent(".titlebar-version");
-    assert(version.trim() === "10.3.0", "версия " + version);
+    assert(version.trim() === "10.4.0", "версия " + version);
     assert(errors.length === 0, errors.join("\n"));
     await context.close();
   });
@@ -156,7 +154,7 @@ async function run() {
     assert((await calls(page, "update_launch_ready")).length === 0, "старый экземпляр подтвердил чужой запуск");
   });
   await test("Админ-запуск: переданный и проверяемый после обновления процессы не перезапускаются", async () => {
-    for (const extra of [{ elevatedHandoff: true }, { launchOutcome: { success: true, message: "Обновление подтверждено", version: "10.3.0" } }]) {
+    for (const extra of [{ elevatedHandoff: true }, { launchOutcome: { success: true, message: "Обновление подтверждено", version: "10.4.0" } }]) {
       const { page, context } = await open({ mock: { admin: false, ...extra } });
       assert(await page.evaluate(() => window.__startupAdminAttempts || 0) === 0, "создан повторный процесс при передаче/проверке обновления");
       assert((await calls(page, "update_launch_ready")).length === 1, "не выполнен обычный handshake обновления");
@@ -2450,7 +2448,7 @@ async function run() {
     assert(await page.isEnabled("#sp-enabled"), "переключатель патча недоступен");
     assert((await page.textContent("#sp-status")) === "Патч не активен", "нет стокового статуса");
     assert(await page.getAttribute("#sp-status", "data-kind") === "info", "статус окрашен без причины");
-    assert(await page.isHidden("#sp-prompt-backdrop"), "окно патча показано повторно");
+    assert((await page.locator("#sp-prompt-backdrop").count()) === 0, "удалённое окно навязчивого предложения не должно существовать");
     // Пометка о мастерской Steam видна всегда: активный патч блокирует загрузку модов
     const note = await page.textContent("#sp-workshop-note");
     assert(note.includes("мастерская") && note.includes("временно отключите патч"), "нет пометки о мастерской Steam: " + note);
@@ -2478,46 +2476,34 @@ async function run() {
     assert(errors.length === 0, errors.join("\n"));
   });
 
-  await test("Патч appcache: окно первого запуска новой версии", async () => {
-    const { page, errors } = await open({ view: "lua", storage: { "cgs-steam-patch-prompt-version": "" } });
-    const prompt = page.locator("#sp-prompt-backdrop");
-    await prompt.waitFor({ state: "visible" });
-    assert((await page.textContent("#sp-prompt-title")) === "Патч не активен", "неверный заголовок окна патча");
-    assert((await page.textContent("#sp-prompt-description")).includes("0 байт"), "нет описания ошибки 0 байт");
-    await page.click("#sp-prompt-skip");
-    await prompt.waitFor({ state: "hidden" });
-    assert((await calls(page, "steam_patch_apply")).length === 0, "«Пропустить» применил патч");
-    // Повторный запуск той же версии не показывает окно
-    await reload(page);
-    await page.waitForTimeout(700);
-    assert(await prompt.isHidden(), "окно повторилось в той же версии");
-    assert(errors.length === 0, errors.join("\n"));
-  });
-
-  await test("Патч appcache: окно первого запуска применяет патч", async () => {
-    const { page, errors } = await open({ view: "lua", storage: { "cgs-steam-patch-prompt-version": "" } });
-    await page.locator("#sp-prompt-backdrop").waitFor({ state: "visible" });
-    await page.click("#sp-prompt-apply");
+  await test("Патч appcache: после обновления до 10.4.0 активный патч отключается автоматически, но его можно включить", async () => {
+    const { page, errors } = await open({
+      view: "lua",
+      mock: { steamPatch: { state: "patched" } },
+    });
+    await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч выключен");
+    assert((await calls(page, "steam_patch_restore")).length === 1, "активный патч не отключился автоматически после обновления");
+    assert(!(await page.isChecked("#sp-enabled")), "переключатель остался включённым");
+    assert((await page.textContent("#sp-status")).includes("10.4.0"), "нет сообщения об отключении после обновления");
+    // Пользователь может включить патч снова вручную, и при перезапуске он больше не сбрасывается
+    await page.click("#sp-enabled");
     await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч активен");
-    assert((await calls(page, "steam_patch_apply")).length === 1, "патч не применён из окна");
-    assert(await page.isHidden("#sp-prompt-backdrop"), "окно не закрылось после применения");
+    assert((await calls(page, "steam_patch_apply")).length === 1, "патч не удалось включить вручную");
+    await reload(page);
+    await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч активен");
+    assert(await page.isChecked("#sp-enabled"), "повторно включённый патч сбросился после перезапуска");
+    assert((await calls(page, "steam_patch_restore")).length === 0, "повторный сброс сработал после ручного включения");
     assert(errors.length === 0, errors.join("\n"));
   });
 
-  await test("Патч appcache: частичный патч доводится до полного из окна", async () => {
+  await test("Патч appcache: частичный патч также отключается при обновлении до 10.4.0", async () => {
     const { page, errors } = await open({
       view: "lua",
       mock: { steamPatch: { state: "partial" } },
-      storage: { "cgs-steam-patch-prompt-version": "" },
     });
-    const prompt = page.locator("#sp-prompt-backdrop");
-    await prompt.waitFor({ state: "visible" });
-    assert((await calls(page, "steam_patch_apply")).length === 0, "патч применён до нажатия");
-    // «Применить» при частичном патче обязан довести его до полного, а не просто закрыть окно
-    await page.click("#sp-prompt-apply");
-    await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч активен");
-    assert((await calls(page, "steam_patch_apply")).length === 1, "частичный патч не доведён до полного");
-    assert(await prompt.isHidden(), "окно не закрылось после применения");
+    await page.waitForFunction(() => document.querySelector("#sp-badge")?.textContent === "Патч выключен");
+    assert((await calls(page, "steam_patch_restore")).length === 1, "частичный патч не отключился после обновления");
+    assert(!(await page.isChecked("#sp-enabled")), "переключатель не выключился");
     assert(errors.length === 0, errors.join("\n"));
   });
 
@@ -2560,7 +2546,7 @@ async function run() {
   });
 
   const UPDATE_RELEASE = {
-    available: true, currentVersion: "10.3.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
+    available: true, currentVersion: "10.4.0", latestVersion: "9.1.0", title: "Eclipse Studio 9.1.0",
     notes: "## Что нового\n- Локальное облако\n- Обновление с перезапуском",
     releaseUrl: "https://github.com/Sparki1337/eclipse-studio/releases/tag/v9.1.0",
     installerUrl: null, portableUrl: "https://github.com/Sparki1337/eclipse-studio/releases/download/v9.1.0/EclipseStudio.exe",
@@ -2671,9 +2657,9 @@ async function run() {
     const { page, errors } = await open({
       view: "settings",
       storage: { "cgs-update-snooze-launches": "5", "cgs-language": "en" },
-      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 10.3.0.", version: "10.3.0" } }),
+      mock: updateMock({ sessionId: "launch-2", launchOutcome: { success: true, message: "Eclipse Studio обновлён до версии 10.4.0.", version: "10.4.0" } }),
     });
-    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 10.3.0."));
+    await page.waitForFunction(() => document.querySelector("#toast-stack").textContent.includes("Eclipse Studio has been updated to version 10.4.0."));
     // Успешная установка сбрасывает откладывание, поэтому новое окно показывается сразу
     await dialogOpen(page);
     assert(await page.evaluate(() => cgsStorage.getItem("cgs-update-snooze-launches")) === null, "откладывание не сброшено после успешной установки");
